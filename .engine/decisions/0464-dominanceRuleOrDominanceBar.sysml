@@ -21,6 +21,9 @@ package Decision0464 {
     }
     #DependsOn dependency from d0464 to d0364;
     #DependsOn dependency from d0464 to d0365;
+    // option B taken 2026-09-13 (d0464AcceptR1): the no-regression clause of D0364 and the 1.25-chosen-under-it clause of D0365 are reversed by the weighted rule; both Decisions otherwise stand
+    #SupersedeClause dependency from d0464 to d0364;
+    #SupersedeClause dependency from d0464 to d0365;
 
     // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
     verification d0464Accept : Test { :>> id = "ce97aaf3-b223-4112-938f-de6237a325ae"; :>> method = VerificationMethod::confirmation; :>> procedureText = "Selected on the decision brief copy-out (nineteenth publish), pasted into chat 2026-09-13; d0464 option B chosen, the recommended course. - their words, verbatim: “Option B: the rule gains a weight - the near arm's hits and mean rows hold and its median may move by at most one, only where the far arm gains three or more hits; 1.25 stands (recommended)”"; }

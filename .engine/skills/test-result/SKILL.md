@@ -36,12 +36,17 @@ is the latest verdict. The query layer always takes the most-recent result.
 ## Anti-Pattern Watchlist
 
 1. **Editing an existing TestResult** — always forbidden; append a new one.
-2. **Missing commit SHA** — `judgedAgainst` must be the actual HEAD at test
-   time, not a placeholder or a future commit.
+2. **Missing or borrowed commit SHA** — `judgedAgainst` is the HEAD the tree stood at
+   when the judgment was made, never a placeholder or a commit that does not exist yet;
+   a pass recorded on a dirty tree names that HEAD and BINDS to the commit that lands
+   the work once `judgedAgainst` is that commit's ancestor (dcResultBindsToItsLandingCommit,
+   D0308).
 3. **method=confirmation without explicit human sign-off** — record ONLY on
    the human's explicit attestation of that specific claim (decision 0016).
-4. **Wall-clock as the validity signal** — `judgedAt` is display; `judgedAgainst`
-   commit ancestry is the validity signal (decision 0005).
+4. **Wall-clock or HEAD-equality as the validity signal** — `judgedAt` is display; the
+   validity signal is the BINDING commit's ancestry, and a result is suspect when a
+   dependency or its own DoD changed since that commit (`keel show suspect . --explain`),
+   not when `judgedAgainst` differs from HEAD, which every result does one commit later.
 
 ## Behavioral Instructions
 

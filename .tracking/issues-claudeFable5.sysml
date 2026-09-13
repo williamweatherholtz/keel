@@ -1082,4 +1082,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcBuildStampSeesSourceEdits to issue516;
+
+    part issue517 : Issue {
+        :>> id = "6793886d-56c2-409e-b9bd-d8c3613df5c9";
+        :>> title = "keystone lock cannot be satisfied by an accepted process-change Decision applied in a later commit";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The keystone lock (guard process-change, keel-cli/src/guards.rs keystone_violations) authorises a locked-surface edit only by a marked Decision file among the commit's own changed files, so a process-change Decision the human accepted in an earlier commit cannot authorise the edit it decided. Found 2026-09-13 applying D0460 (accepted 2026-09-13 at 8469f80, marker #ProspectiveChange, its consequence being exactly three skill-wording edits): with .engine/skills/test-result/SKILL.md and .engine/skills/sprint-standup/SKILL.md staged, keel gate guard --no-receipt printed - locked file(s) changed (.engine/skills/sprint-standup/SKILL.md, .engine/skills/test-result/SKILL.md) with NO co-committed process-change Decision - and [guard:process-change] FAIL, 1 violation. The same lock is satisfied by a marked Decision that is merely PROPOSED in the commit (the guard reads the marker, never the acceptance), so the control is inverted at the boundary D0337 created: a held-for-the-human Decision must be accepted before its edit, and once accepted its edit has no path through the lock except re-touching the Decision's file, which is a change made to satisfy a guard. Sprint 624 met the first half of this (the edits refused, deferred to dcTestResultSkillNamesTheBinding); this is the second half, found when the deferred edit came due. Resolver: dcAcceptedCharterAuthorisesTheLockedEdit.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcAcceptedCharterAuthorisesTheLockedEdit to issue517;
+
+    part issue518 : Issue {
+        :>> id = "c788b952-f4b7-4399-89d1-b45ac6b3b308";
+        :>> title = "D0465 charter path unprobed when the charter's acceptance is uncommitted";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The D0465 second authorising source (accepted_charters in keel-cli/src/guards.rs) reads a charter Decision's acceptance from the file on disk. Sprint 693's live pair read a charter whose acceptance was committed (d0460 at 8469f80). The case where the acceptance is staged or in the working tree but uncommitted was not probed, so the guard's behaviour there is asserted from the code, not established by a run - the D0388 class. Expected: PASS in both Index and working-tree reads (a human acceptance is a human act regardless of commit state); if it does not, the held-then-accepted-then-applied path D0465 exists for fails exactly when the acceptance and the edit share a commit.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcStagedAcceptanceIsProbedAsACharter to issue518;
 }

@@ -37,7 +37,7 @@ lightweight — the goal is a 2-minute orient, not a planning session.
 3. **Check for blockers.** Scan the backlog for:
    - Items in the ready frontier that have an unresolved `dependency`
    - Any TestResult with `outcome = fail` in the current sprint
-   - Any suspect items (judgedAgainst commit ≠ current HEAD)
+   - Any suspect items - a dependency or own-DoD change since the result's binding commit (`keel show suspect . --explain`), not judgedAgainst != HEAD
 
 4. **State next action.** One concrete step within the active Implement phase.
    Not a plan, not a proposal — the NEXT thing you will do.

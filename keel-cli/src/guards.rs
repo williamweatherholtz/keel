@@ -1220,10 +1220,13 @@ fn is_decision_file_at_any_depth(p: &str) -> bool {
 #[must_use]
 pub fn staged_marked_decision(root: &Path) -> bool {
     let read = ChangeRead::current();
+    // Either source of the keystone (D0465): a marked Decision in the commit, or a sprint record in
+    // the commit chartered by a marked Decision the human has accepted.
     changed_files(root, read)
         .iter()
         .filter(|p| is_decision_file_at_any_depth(p))
         .any(|p| has_process_marker(&changed_text(root, p, read)))
+        || !accepted_charters(root, read).is_empty()
 }
 
 fn is_decision_file(p: &str) -> bool {
@@ -1270,9 +1273,67 @@ fn is_engine_resync(root: &Path, path: &str, read: ChangeRead) -> bool {
     !ours.is_empty() && expected.replace("\r\n", "\n") == ours.replace("\r\n", "\n")
 }
 
-fn keystone_violations(changed: &[String], decision_texts: &[(String, String)]) -> Vec<String> {
+/// The `dNNNN` targets of a sprint record's line-anchored `#CharteredBy dependency from <story> to
+/// dNNNN;` edges - the engine's own statement of which Decision the work executes (D0068), which is
+/// the second authorising source of the keystone lock (D0465).
+fn charter_targets(sprint_text: &str) -> Vec<String> {
+    sprint_text
+        .lines()
+        .filter_map(|line| {
+            let rest = line.trim_start_matches(is_space).strip_prefix("#CharteredBy dependency from ")?;
+            let (_, target) = rest.split_once(" to ")?;
+            let target = target.trim().trim_end_matches(';').trim();
+            let digits = target.strip_prefix('d')?;
+            (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then(|| target.to_string())
+        })
+        .collect()
+}
+
+/// Does a Decision's text authorise a locked edit as a CHARTER (D0465)? Marked AND accepted by a
+/// human - a passing `AcceptR` whose `Accept` Test is not `AUTO-ACCEPTED`. A proposed, rejected,
+/// auto-accepted (standing consent never reaches the enforcement surface, D0337) or unmarked
+/// Decision authorises nothing.
+fn is_authorising_charter(decision_text: &str, dname: &str) -> bool {
+    has_process_marker(decision_text) && acceptance_kind(decision_text, dname) == Some(Acceptance::Human)
+}
+
+fn is_sprint_record(p: &str) -> bool {
+    let s = p.replace('\\', "/");
+    is_sysml(p) && (s.starts_with(".tracking/delivery/") || s.contains("/.tracking/delivery/"))
+}
+
+/// `(decision, sprint path)` for every changed sprint record whose charter authorises the lock.
+///
+/// The Decision is read from the PROJECT that owns the sprint file - the path prefix before
+/// `.tracking/` - so a workspace with several projects cannot borrow another project's Decision.
+/// Read from disk, not the index: an accepted charter is almost always a Decision committed earlier
+/// (its acceptance is why the edit is only now being made); one changed in this commit and marked is
+/// already the first source.
+fn accepted_charters(root: &Path, read: ChangeRead) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for p in changed_files(root, read).into_iter().filter(|p| is_sprint_record(p)) {
+        let s = p.replace('\\', "/");
+        let project = s.split(".tracking/").next().unwrap_or_default();
+        let decisions = root.join(project).join(".engine").join("decisions");
+        for dname in charter_targets(&changed_text(root, &p, read)) {
+            let needle = format!("part {dname} : Decision");
+            let authorises = crate::collect_sysml(&decisions)
+                .iter()
+                .filter_map(|f| crate::corpus::read_to_string(f).ok())
+                .any(|t| t.contains(&needle) && is_authorising_charter(&t, &dname));
+            if authorises {
+                out.push((dname, p.clone()));
+            }
+        }
+    }
+    out
+}
+
+fn keystone_violations(changed: &[String], decision_texts: &[(String, String)], charters: &[(String, String)]) -> Vec<String> {
     // The keystone covers process DEFINITION (D0070) AND the ENFORCEMENT SURFACE (D0209 clause 2):
-    // guard source, hook config, CI workflows. A change to either needs a co-committed marked Decision.
+    // guard source, hook config, CI workflows. A change to either needs a co-committed marked Decision
+    // - or (D0465) a co-committed sprint record chartered by a marked Decision a HUMAN has accepted,
+    // which is the path the held-then-accepted process change of D0337 takes.
     let mut locked: Vec<&str> = changed
         .iter()
         .map(String::as_str)
@@ -1283,11 +1344,11 @@ fn keystone_violations(changed: &[String], decision_texts: &[(String, String)]) 
         return Vec::new(); // nothing under the lock changed — guard is silent
     }
     let marked = decision_texts.iter().any(|(p, t)| is_decision_file(p) && has_process_marker(t));
-    if marked {
+    if marked || !charters.is_empty() {
         return Vec::new();
     }
     vec![format!(
-        "locked file(s) changed ({}) with NO co-committed process-change Decision (a #ProspectiveChange/#SafetyChange-marked .engine/decisions/*.sysml). HARD LOCK: process definitions (D0070) AND the enforcement surface — guard source, hook config, CI workflows (D0209 clause 2) — may change only with a human-signed Decision, because a silently self-modified control is the issue236 self-modification class. Record one with `keel record decision --process-change ...` (the flag emits the marker; issue213).",
+        "locked file(s) changed ({}) with NO co-committed process-change Decision (a #ProspectiveChange/#SafetyChange-marked .engine/decisions/*.sysml) and NO co-committed sprint record chartered by a marked Decision the human has ACCEPTED (D0465). HARD LOCK: process definitions (D0070) AND the enforcement surface — guard source, hook config, CI workflows (D0209 clause 2) — may change only with a human-signed Decision, because a silently self-modified control is the issue236 self-modification class. Record one with `keel record decision --process-change ...` (the flag emits the marker; issue213), or land the edit in a sprint whose #CharteredBy names the accepted Decision.",
         locked.join(", ")
     )]
 }
@@ -1415,9 +1476,17 @@ pub fn process_change(root: &Path) -> GuardReport {
         .filter(|p| is_decision_file(p))
         .map(|p| (p.clone(), changed_text(root, p, read)))
         .collect();
-    let violations = keystone_violations(&changed, &decision_texts);
+    // D0465: the second source - a co-committed sprint record chartered by a marked Decision the
+    // human has ACCEPTED. Named in a warning line so the authorisation is visible in the gate output.
+    let charters = accepted_charters(root, read);
+    let violations = keystone_violations(&changed, &decision_texts, &charters);
     let scanned = changed.iter().filter(|p| is_locked_path(p)).count() + resynced.len();
     let mut warnings = vec![read_line(read)];
+    if violations.is_empty() && changed.iter().any(|p| is_locked_path(p)) {
+        for (dname, sprint) in &charters {
+            warnings.push(format!("locked edit authorised by {dname}, a marked Decision the human accepted, cited as the charter of the co-committed sprint record {sprint} (D0465)"));
+        }
+    }
     if !resynced.is_empty() {
         warnings.push(format!(
             "engine resync: {} locked file(s) carry the text of the engine embedded in this binary and are outside the lock (D0441) - the engine arriving, not a control edited: {}",
@@ -7336,16 +7405,19 @@ mod tests {
         let pos = keystone_violations(
             &[".engine/workflows/delivery.sysml".to_string(), ".engine/decisions/0099-x.sysml".to_string()],
             &[(".engine/decisions/0099-x.sysml".to_string(), marked.to_string())],
+            &[],
         );
         let neg = keystone_violations(
             &[".engine/processes/agile-workflow.sysml".to_string(), ".engine/decisions/0098-y.sysml".to_string()],
             &[(".engine/decisions/0098-y.sysml".to_string(), plain.to_string())],
+            &[],
         );
-        let neg2 = keystone_violations(&[".engine/processes/agile-workflow.sysml".to_string()], &[]);
-        let neutral = keystone_violations(&[".tracking/backlog.sysml".to_string()], &[]);
+        let neg2 = keystone_violations(&[".engine/processes/agile-workflow.sysml".to_string()], &[], &[]);
+        let neutral = keystone_violations(&[".tracking/backlog.sysml".to_string()], &[], &[]);
         let prose_only = keystone_violations(
             &[".engine/workflows/delivery.sysml".to_string(), ".engine/decisions/0097-z.sysml".to_string()],
             &[(".engine/decisions/0097-z.sysml".to_string(), prose.to_string())],
+            &[],
         );
 
         assert!(pos.is_empty(), "marked Decision co-committed -> pass");
@@ -7353,6 +7425,32 @@ mod tests {
         assert_eq!(neg2.len(), 1, "no Decision -> fail");
         assert!(neutral.is_empty(), "no process-def -> silent");
         assert_eq!(prose_only.len(), 1, "prose marker does NOT count");
+    }
+
+    /// D0465 / issue517, the D0388 pair. Positive: a locked edit with a co-committed sprint record
+    /// chartered by a marked Decision a HUMAN accepted passes. Negative: the same charter proposed,
+    /// auto-accepted under standing consent, or unmarked authorises nothing, and the lock refuses.
+    #[test]
+    fn keystone_accepts_a_human_accepted_marked_charter_and_nothing_weaker() {
+        let sprint = "package S {\n    private import EngineRelationships::*;\n    #CharteredBy dependency from story to d0900;\n    part story : Story { :>> id = \"s\"; }\n}";
+        assert_eq!(charter_targets(sprint), vec!["d0900".to_string()], "the charter edge names its Decision");
+        assert!(charter_targets("package S {\n    :>> decision = \"#CharteredBy dependency from story to d0900;\";\n}").is_empty(), "prose is not an edge");
+
+        let human = "package D {\n    #ProspectiveChange part d0900 : Decision { :>> id = \"x\"; :>> status = DecisionStatus::accepted; }\n    verification d0900Accept : Test { :>> method = VerificationMethod::confirmation; :>> procedureText = \"their words: 'yes, do it'\"; }\n    part d0900AcceptR1 : TestResult { :>> outcome = VerdictKind::pass; :>> judgedBy = \"person\"; }\n}";
+        let auto = human.replace("their words: 'yes, do it'", "AUTO-ACCEPTED under standing consent (D0291)");
+        let proposed = "package D {\n    #ProspectiveChange part d0900 : Decision { :>> id = \"x\"; :>> status = DecisionStatus::proposed; }\n}";
+        let unmarked = human.replace("#ProspectiveChange part", "part");
+        assert!(is_authorising_charter(human, "d0900"), "known-positive: marked and human-accepted");
+        assert!(!is_authorising_charter(&auto, "d0900"), "known-negative: auto-accepted confers nothing");
+        assert!(!is_authorising_charter(proposed, "d0900"), "known-negative: proposed is a plan");
+        assert!(!is_authorising_charter(&unmarked, "d0900"), "known-negative: an unmarked Decision is not a process change");
+
+        let locked = [".engine/skills/test-result/SKILL.md".to_string(), ".tracking/delivery/sprint692_x.sysml".to_string()];
+        let charter = [("d0900".to_string(), ".tracking/delivery/sprint692_x.sysml".to_string())];
+        assert!(keystone_violations(&locked, &[], &charter).is_empty(), "accepted charter co-committed -> pass");
+        let refused = keystone_violations(&locked, &[], &[]);
+        assert_eq!(refused.len(), 1, "no charter, no Decision -> fail");
+        assert!(refused[0].contains("D0465"), "the refusal names the second path");
     }
 
     #[test]

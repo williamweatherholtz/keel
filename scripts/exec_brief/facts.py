@@ -1554,6 +1554,195 @@ fact("dominanceSweep", {
     "barText": _bar.group(1) if _bar else None,
 } if _hop1 and _hop2 and _hand else None, "the D0464 sweep, the constant in force, the bar's text", SW_HOW)
 
+# ================================================================ 21. the twentieth publish's asks
+# The keystone's second source (D0465), the sample the weighted rule reads at (D0466), the retro discharge
+# preference (D0467), and the retro note (st122) that bears on D0461. Every number is read from the source,
+# the record or the Decision's own RESEARCH line - never retyped.
+
+# --- D0465: the working-tree guards.rs - does the second authorising source exist, and how many keystone tests hold it
+_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_kv = re.search(r"fn keystone_violations\((.*?)\) -> ", _gr)
+fact("keystoneCharterPath", {
+    "acceptedChartersFn": bool(re.search(r"^\s*fn accepted_charters\(", _gr, re.M)),
+    "charterTargetsFn": bool(re.search(r"^\s*fn charter_targets\(", _gr, re.M)),
+    "isAuthorisingCharterFn": bool(re.search(r"^\s*fn is_authorising_charter\(", _gr, re.M)),
+    "keystoneTakesCharters": bool(_kv and re.search(r"\bcharters\s*:", _kv.group(1))),
+    "keystoneTests": len(re.findall(r"#\[test\]\s*\n\s*fn keystone_\w+", _gr)),
+} if _gr else None, "the second source in the guard source",
+     "regex over the WORKING TREE keel-cli/src/guards.rs: `^\\s*fn accepted_charters(`, `^\\s*fn charter_targets(`, "
+     "`^\\s*fn is_authorising_charter(` (line-anchored, present or not); keystoneTakesCharters = the parameter list of "
+     "`fn keystone_violations(...)` names `charters:`; keystoneTests = count of `#[test]` immediately followed by "
+     "`fn keystone_...`. The tree is HEAD plus the uncommitted guards.rs edit (treeUncommitted).")
+
+# --- D0465: the marked Decisions and how each stands - the population the second source can read
+_MARK_RE = re.compile(r"^\s*#(?:ProspectiveChange|SafetyChange)\s+part\s+(d\d{4})\s*:\s*Decision", re.M)
+_marked = {}
+for _fn in sorted(os.listdir(DEC_DIR)):
+    if not _fn.endswith(".sysml"):
+        continue
+    _t = read(os.path.join(DEC_DIR, _fn)) or ""
+    for _dn in _MARK_RE.findall(_t):
+        # mirrors guards.rs acceptance_kind: a passing `part dNNNNAcceptR... : TestResult {...}` segment, and the
+        # `verification dNNNNAccept : Test {...}` segment's text marked AUTO-ACCEPTED or not
+        _pass = any("VerdictKind::pass" in _t[m.end():].split("}", 1)[0]
+                    for m in re.finditer(r"part " + _dn + r"AcceptR\w*\s*:\s*TestResult\s*\{", _t))
+        _acc = re.search(r"verification " + _dn + r"Accept\s*:\s*Test\s*\{", _t)
+        _auto = bool(_acc and "AUTO-ACCEPTED" in _t[_acc.end():].split("}", 1)[0])
+        _marked[_dn] = "human" if _pass and not _auto else "auto" if _pass else "none"
+_MC_HOW = ("over .engine/decisions/*.sysml: a marked Decision is a line `#ProspectiveChange part dNNNN : Decision` or "
+           "`#SafetyChange part dNNNN : Decision` (line-anchored); its acceptance mirrors guards.rs acceptance_kind - "
+           "humanAccepted = a `part dNNNNAcceptR<n> : TestResult {` segment carrying VerdictKind::pass whose "
+           "`verification dNNNNAccept : Test {` segment does NOT contain AUTO-ACCEPTED; autoAccepted = the same with "
+           "AUTO-ACCEPTED; noAcceptResult = no passing AcceptR segment (proposed, held or rejected). Retired Decisions "
+           "are counted like any other; the marker is what the keystone reads.")
+fact("markedDecisionCensus", {
+    "marked": len(_marked),
+    "humanAccepted": sum(1 for k in _marked.values() if k == "human"),
+    "autoAccepted": sum(1 for k in _marked.values() if k == "auto"),
+    "noAcceptResult": sum(1 for k in _marked.values() if k == "none"),
+} if _marked else None, "marked Decisions by how they stand", _MC_HOW)
+
+# --- D0465: the #CharteredBy edges in the delivery records, and how many name a marked Decision
+_CH_RE = re.compile(r"^\s*#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+(d\d{4})\s*;", re.M)
+_ch_targets = []
+for _fn in sorted(os.listdir(os.path.join(REPO, ".tracking", "delivery"))):
+    if _fn.endswith(".sysml"):
+        _ch_targets += _CH_RE.findall(read(os.path.join(REPO, ".tracking", "delivery", _fn)) or "")
+fact("charterEdgesToMarked", {
+    "edges": len(_ch_targets),
+    "toMarked": sum(1 for d in _ch_targets if d in _marked),
+    "toHumanAcceptedMarked": sum(1 for d in _ch_targets if _marked.get(d) == "human"),
+    "toUnacceptedMarked": sum(1 for d in _ch_targets if _marked.get(d) == "none"),
+} if _ch_targets else None, "charter edges and their targets",
+     "over .tracking/delivery/*.sysml: every line matching `#CharteredBy dependency from <story> to dNNNN;` (the "
+     "line-anchored form guards.rs charter_targets reads; an edge quoted inside a string is on no line of its own); "
+     "toMarked / toHumanAcceptedMarked / toUnacceptedMarked classify the target by markedDecisionCensus above.")
+
+# --- D0465: the live pair, quoted from sprint 693's implement gate
+_s693 = read(os.path.join(REPO, ".tracking", "delivery", "sprint693_acceptedCharterAuthorisesTheLockedEdit.sysml")) or ""
+_ig = re.search(r"ImplementGate\s*:\s*Test\s*\{[^}]*?procedureText\s*=\s*\"(.*?)\";", _s693, re.DOTALL)
+_lp = re.search(r"LIVE: (.*?FAIL[^.]*\.)", _ig.group(1)) if _ig else None
+fact("keystoneLivePair", _lp.group(1) if _lp else None, "the guard's own two verdicts",
+     ".tracking/delivery/sprint693_acceptedCharterAuthorisesTheLockedEdit.sysml: the implement gate's procedureText, "
+     "the substring from `LIVE: ` to the end of the sentence containing FAIL (regex `LIVE: (.*?FAIL[^.]*\\.)`) - the "
+     "PASS with a human-accepted charter and the FAIL with the same sprint chartered by a proposed Decision, quoted."
+     + ("" if _lp else " Not found: " + ("no implement gate procedureText" if not _ig else "no LIVE...FAIL sentence in it")))
+
+# --- D0466: the two sweeps, quoted from the Decision's RESEARCH line, and the weighted rule read at each
+_d0466 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0466-"):
+        _d0466 = read(os.path.join(DEC_DIR, _fn))
+_rl6 = re.search(r"// RESEARCH: (.*)", _d0466)
+_research6 = _rl6.group(1) if _rl6 else ""
+_blk50 = re.search(r"Default sample, 50 cases, tree (\w+), one-hop then two-hop: (.*?)\. Verdict lines", _research6)
+_blk100 = re.search(r"100 cases \(--cases 100\), tree (\w+) \([^)]*\), one-hop then two-hop: (.*?)\. Verdict lines", _research6)
+_ROW_RE = re.compile(
+    r"([0-9.]+) -> (?:hits )?(\d+)/(\d+) median(?: position)? (\d+) top-3 (\d+)/(\d+)(?: (?:mean )?rows (\d+))?, "
+    r"then (\d+)/(\d+) median(?: position)? (\d+) top-3 (\d+)/(\d+)(?: (?:mean )?rows (\d+))?")
+
+
+def _sample(block):
+    rows = {}
+    for m in _ROW_RE.finditer(block or ""):
+        rows[m.group(1)] = {
+            "hop1": {"hits": int(m.group(2)), "n": int(m.group(3)), "median": int(m.group(4)),
+                     "top3": int(m.group(5)), "top3Of": int(m.group(6)),
+                     "rows": int(m.group(7)) if m.group(7) else None},
+            "hop2": {"hits": int(m.group(8)), "n": int(m.group(9)), "median": int(m.group(10)),
+                     "top3": int(m.group(11)), "top3Of": int(m.group(12)),
+                     "rows": int(m.group(13)) if m.group(13) else None},
+        }
+    return rows
+
+
+def _weighted_rule(rows):
+    """D0464 option B as accepted: the highest two-hop hit count among settings whose one-hop hits and mean rows
+    hold against setting 0 and whose one-hop median moves by at most one - a move of one only where the two-hop
+    arm gains at least three hits. Rows are compared only where both readings state them."""
+    if "0" not in rows:
+        return {"admissible": [], "refused": list(rows), "winner": None}
+    off = rows["0"]
+    adm, why = [], {}
+    for s, r in rows.items():
+        h1, h2 = r["hop1"], off["hop1"]
+        dmed = h1["median"] - h2["median"]
+        gain = r["hop2"]["hits"] - off["hop2"]["hits"]
+        hits_ok = h1["hits"] >= h2["hits"]
+        rows_ok = h1["rows"] is None or h2["rows"] is None or h1["rows"] == h2["rows"]
+        med_ok = dmed == 0 or (abs(dmed) == 1 and gain >= 3)
+        why[s] = {"medianMove": dmed, "twoHopGain": gain, "hitsHeld": hits_ok, "rowsHeld": rows_ok, "medianWithinRule": med_ok}
+        if hits_ok and rows_ok and med_ok:
+            adm.append(s)
+    best = max((rows[s]["hop2"]["hits"] for s in adm), default=None)
+    winners = [s for s in adm if rows[s]["hop2"]["hits"] == best]
+    return {"admissible": sorted(adm, key=float), "refused": sorted((s for s in rows if s not in adm), key=float),
+            "winner": winners[0] if len(winners) == 1 else None, "tied": winners if len(winners) > 1 else [],
+            "readings": why}
+
+
+_r50, _r100 = _sample(_blk50.group(2) if _blk50 else ""), _sample(_blk100.group(2) if _blk100 else "")
+_hand6 = {}
+for m in re.finditer(r"([0-9.]+) bar (MET|NOT MET) (\d)/(\d), (?:the rebase question's )?d0129 (?:at position (\d+)|absent)", _research6):
+    _hand6[m.group(1)] = {"bar": m.group(2), "reachable": int(m.group(3)), "of": int(m.group(4)),
+                          "d0129Position": int(m.group(5)) if m.group(5) else None}
+_kn6 = read(os.path.join(REPO, "keel-cli", "src", "view", "knowledge.rs")) or ""
+_const6 = re.search(r"const DOMINANCE: f64 = ([0-9.]+);", _kn6)
+SS_HOW = ("regex over the `// RESEARCH:` line of .engine/decisions/0466-*.sysml: the 50-case block is the text between "
+          "`Default sample, 50 cases, tree <sha>, one-hop then two-hop: ` and `. Verdict lines`; the 100-case block the "
+          "text between `100 cases (--cases 100), tree <sha> (...), one-hop then two-hop: ` and `. Verdict lines`; in each, "
+          "one row per `<setting> -> [hits ]h/N median[ position] m top-3 t/h[ [mean ]rows r], then h/N median m top-3 t/h[ rows r]` "
+          "(rows absent where the line states none). handSet = each `<setting> bar MET|NOT MET k/n, d0129 at position p|absent`. "
+          "ruleAt50 / ruleAt100 apply D0464 option B IN CODE to those rows: admissible when one-hop hits >= setting 0's, "
+          "one-hop mean rows equal where both stated, and the one-hop median moves by 0, or by exactly 1 where the two-hop arm "
+          "gains >= 3 hits; winner = the admissible setting with the most two-hop hits (null on a tie). "
+          "`constant` = regex `const DOMINANCE: f64 = N;` over keel-cli/src/view/knowledge.rs. Re-runnable with "
+          ".engine/tools/recall_bench.py --sweep [--cases 100].")
+fact("sampleSplit", {
+    "at50": {"tree": _blk50.group(1) if _blk50 else None, "rows": _r50, "rule": _weighted_rule(_r50)},
+    "at100": {"tree": _blk100.group(1) if _blk100 else None, "rows": _r100, "rule": _weighted_rule(_r100)},
+    "handSet": _hand6,
+    "constant": float(_const6.group(1)) if _const6 else None,
+} if _r50 and _r100 and _hand6 else None, "the two sweeps and the rule read at each", SS_HOW)
+
+# --- D0461 / D0467: the human's retro note, verbatim from the Statement that holds it
+_st = read(os.path.join(REPO, ".tracking", "intake", "intake-2026-09-13.sysml")) or ""
+_st122 = re.search(r"part st122\s*:\s*Statement\s*\{(.*?)\n\s*\}", _st, re.DOTALL)
+_st_text = re.search(r':>>\s*text\s*=\s*"(.*?)";', _st122.group(1), re.DOTALL) if _st122 else None
+_st_by = re.search(r':>>\s*saidBy\s*=\s*"([^"]*)";\s*:>>\s*saidAt\s*=\s*"([^"]*)";', _st122.group(1)) if _st122 else None
+fact("retroNoteStatement", {
+    "text": _st_text.group(1).encode("utf-8").decode("unicode_escape") if _st_text else None,
+    "saidBy": _st_by.group(1) if _st_by else None, "saidAt": _st_by.group(2) if _st_by else None,
+} if _st_text else None, "their words on retros, verbatim",
+     ".tracking/intake/intake-2026-09-13.sysml: the `text`, `saidBy` and `saidAt` fields of `part st122 : Statement` "
+     "(the note written on the nineteenth-publish copy-out), quoted; the SysML `\\n` escapes are decoded, nothing else changes.")
+
+# --- D0467: what retros in the tree discharge themselves with - an Issue, a task, or a Decision only
+_rd = {"retros": 0, "namingIssue": 0, "namingTask": 0, "namingDecision": 0, "decisionOnly": 0, "namingNone": 0}
+for _fn in os.listdir(os.path.join(REPO, ".tracking", "delivery")):
+    if not _fn.endswith(".sysml"):
+        continue
+    _t = read(os.path.join(REPO, ".tracking", "delivery", _fn)) or ""
+    for _c in re.split(r"\n(?=\s*(?:verification|part)\s)", _t):
+        if not re.match(r"\s*verification\s+\w*Retro\w*\s*:\s*Test", _c):
+            continue
+        _rd["retros"] += 1
+        _iss = bool(re.search(r"(?<![A-Za-z0-9])issue\d+(?![A-Za-z0-9])", _c))
+        _tsk = bool(re.search(r"(?<![A-Za-z0-9])dc[A-Z][A-Za-z0-9]+", _c))
+        _dec = bool(re.search(r"(?<![A-Za-z0-9])[dD]0\d{3}(?![A-Za-z0-9])", _c))
+        _rd["namingIssue"] += _iss
+        _rd["namingTask"] += _tsk
+        _rd["namingDecision"] += _dec
+        _rd["decisionOnly"] += (_dec and not _iss and not _tsk)
+        _rd["namingNone"] += (not _dec and not _iss and not _tsk)
+fact("retroDischargeCensus", _rd if _rd["retros"] else None, "retro gates by the item form they name",
+     "over .tracking/delivery/*.sysml: every record starting at a line `verification <name>Retro<...> : Test` (read to the "
+     "next `verification`/`part` line, as guards.rs retro_texts does); namingIssue = text carries `issue` + digits at a word "
+     "boundary; namingTask = `dc` + an uppercase letter at a word boundary (the task form named_items reads); namingDecision = "
+     "`d0`/`D0` + three digits at a word boundary (the retro template's own citation of the retro rule counts, as the guard "
+     "counts it); decisionOnly = namingDecision and NEITHER of the other two; namingNone = none of the three. A retro can "
+     "count in both namingIssue and namingTask.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
