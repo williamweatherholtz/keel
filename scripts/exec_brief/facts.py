@@ -2116,6 +2116,175 @@ if _s697 is not None:
 else:
     fact("measuredCostSprint", {"exists": False}, "the delivery record", "the file " + _s697p + " does not exist")
 
+# ================================================================ 24. the reject verdict's human-judgment layers (D0470)
+# --- D0470: the Decision's own fields, read from its file the way the guard reads them
+_d0470 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0470-"):
+        _d0470 = read(os.path.join(DEC_DIR, _fn)) or ""
+_dec0 = _guard_field(_d0470, "d0470", "decision")
+_rat0 = _guard_field(_d0470, "d0470", "rationale")
+_con0 = _guard_field(_d0470, "d0470", "consequences")
+_ctx0 = _guard_field(_d0470, "d0470", "context")
+fact("rejectVerdictDecision", {
+    "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0470) or [None, None])[1],
+    "createdAt": _guard_field(_d0470, "d0470", "createdAt") or None,
+    "marker": "#SafetyChange" if re.search(r"^\s*#SafetyChange\s+part\s+d0470\s*:", _d0470, re.M) else None,
+    "acceptance": _acceptance_kind(_d0470, "d0470"),
+    "notAFork": "NOT A FORK" in _dec0,
+    "decision": _dec0, "rationale": _rat0, "consequences": _con0, "context": _ctx0,
+    "namesIssue526": "issue526" in _ctx0 or "issue526" in _con0,
+    "namesTheTwoRejected": "d0376" in _ctx0 and "d0463" in _ctx0,
+    "safetyChangeWords": bool(re.search(r"safety-change", _dec0 + _rat0 + _con0 + _ctx0)),
+} if _d0470 else None, "the Decision's fields as the guard reads them",
+     "regex over .engine/decisions/0470-*.sysml: status from `DecisionStatus::x`; marker = a line `#SafetyChange part d0470 :`; "
+     "acceptance mirrors guards.rs acceptance_kind (None = no passing AcceptR segment); the four fields read as guards.rs "
+     "unmeasured_path_decisions reads a field; notAFork = the literal `NOT A FORK` in the decision text; namesIssue526 / "
+     "namesTheTwoRejected = those names in the context (or consequences); safetyChangeWords = `safety-change` anywhere in the four.")
+
+# --- D0470: the three layers in source - the refusal inside each verdict's lock, and the two command lists
+_wr = read(os.path.join(REPO, "keel-cli", "src", "write.rs")) or ""
+_cs = read(os.path.join(REPO, "keel-cli", "src", "view", "control_structure.rs")) or ""
+_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+
+
+def _fn_body(text, name):
+    """The text from `fn name(` to the next line that is exactly `}` at column 0."""
+    s = text.find("fn " + name + "(")
+    if s < 0:
+        return ""
+    e = text.find("\n}\n", s)
+    return text[s:] if e < 0 else text[s:e]
+
+
+def _refuses_before_read(body):
+    """True when refuse_ai_judgment( sits before the first read_to_string( inside the function body."""
+    r, f = body.find("refuse_ai_judgment("), body.find("read_to_string(")
+    return r >= 0 and (f < 0 or r < f)
+
+
+def _const_list(text, name):
+    m = re.search(r"const " + name + r"\s*:\s*\[&str;\s*(\d+)\]\s*=\s*\[([^\]]*)\]", text)
+    if not m:
+        return None
+    return {"declared": int(m.group(1)), "members": re.findall(r'"([^"]+)"', m.group(2))}
+
+
+_acc_body, _rej_body = _fn_body(_wr, "accept_decision_locked"), _fn_body(_wr, "reject_decision_locked")
+_wl, _cl = _const_list(_wr, "HUMAN_ONLY_WRITE_COMMANDS"), _const_list(_cs, "HUMAN_AUTHORITY_COMMANDS")
+_loop = re.search(r'\[\s*\("confirmationAuthenticityRule",\s*"accepted",\s*"acceptance"\),\s*\("rejectionAuthenticityRule",\s*"rejected",\s*"rejection"\),?\s*\]', _gr)
+fact("rejectVerdictLayers", {
+    "acceptRefusesBeforeRead": _refuses_before_read(_acc_body),
+    "rejectRefusesBeforeRead": _refuses_before_read(_rej_body),
+    "rejectRefusalWhat": (re.search(r'refuse_ai_judgment\(path, judged_by, "([^"]+)"\)', _rej_body) or [None, None])[1],
+    "writeList": _wl, "authorityList": _cl,
+    "listsAgree": bool(_wl and _cl and _wl["members"] == _cl["members"]),
+    "guardReadsBothRules": bool(_loop),
+    "refuseAiJudgmentCallers": len(re.findall(r"^\s*refuse_ai_judgment\(path, judged_by,", _wr, re.M)),
+} if _wr and _cs and _gr else None, "the write path, the command lists and the guard as the source reads",
+     "keel-cli/src/write.rs: the body of `fn accept_decision_locked(` / `fn reject_decision_locked(` up to the next `\\n}\\n`; a "
+     "layer refuses when `refuse_ai_judgment(` precedes the first `read_to_string(` in that body; rejectRefusalWhat = the "
+     "third argument of that call; writeList = `const HUMAN_ONLY_WRITE_COMMANDS: [&str; N] = [..]` (declared N and the quoted "
+     "members); authorityList = the same over `const HUMAN_AUTHORITY_COMMANDS` in view/control_structure.rs; "
+     "guardReadsBothRules = guards.rs holds the two-tuple array pairing confirmationAuthenticityRule/accepted with "
+     "rejectionAuthenticityRule/rejected; refuseAiJudgmentCallers = call sites `refuse_ai_judgment(path, judged_by,` in write.rs.")
+
+# --- D0470: the two authenticity rules as declared, and as the rules gate evaluates them on this tree
+_rules = read(os.path.join(REPO, ".engine", "rules", "rules.sysml")) or ""
+
+
+def _rule_decl(name):
+    s = _rules.find("part " + name + " : ElementRule")
+    if s < 0:
+        return None
+    body = _rules[s:_rules.find("\n    }", s)]
+    g = lambda k: (re.search(k + r'\s*=\s*"?([^";\n]+)"?;', body) or [None, None])[1]
+    return {"predicate": g("predicate"), "appliesWhen": g("appliesWhen"), "severity": g("severity"),
+            "onViolation": g("onViolation"),
+            "justifiedBy": (re.search(r"#JustifiedBy dependency from " + name + r" to (d\d{4});", _rules) or [None, None])[1]}
+
+
+ok, out = run([KEEL, "gate", "rules", "."], timeout=180)
+_rj = as_json(out) if ok else None
+_eval = {}
+if isinstance(_rj, dict):
+    for r in _rj.get("rules", []) if isinstance(_rj.get("rules"), list) else []:
+        if r.get("rule") in ("confirmationAuthenticityRule", "rejectionAuthenticityRule"):
+            _eval[r["rule"]] = {"evaluated": r.get("evaluated"), "violations": len(r.get("violations") or []),
+                                "severity": r.get("severity"), "scope": r.get("scope")}
+fact("authenticityRules", {
+    "confirmation": {"declared": _rule_decl("confirmationAuthenticityRule"), "live": _eval.get("confirmationAuthenticityRule")},
+    "rejection": {"declared": _rule_decl("rejectionAuthenticityRule"), "live": _eval.get("rejectionAuthenticityRule")},
+} if _rules else None, "the two rules, declared and evaluated",
+     "declared: .engine/rules/rules.sysml, the `part <name> : ElementRule {` body's predicate / appliesWhen / severity / "
+     "onViolation and the `#JustifiedBy dependency from <name> to dNNNN;` edge; live: `keel gate rules .` JSON, the rows "
+     "named confirmationAuthenticityRule and rejectionAuthenticityRule (evaluated, violation count, severity, scope)"
+     + ("" if _eval else "; the rules gate did not return JSON rows: " + (out or "")[:200]))
+
+# --- D0470: every rejected Decision in the tree, and who judged each rejection - the rule's population
+_actors = read(os.path.join(REPO, ".tracking", "actors.sysml")) or ""
+_persons = set(re.findall(r"part (\w+) : Person\b", _actors))
+_ai = set(re.findall(r"part (\w+) : Actor\b", _actors))
+_rejected = []
+for _fn in sorted(os.listdir(DEC_DIR)):
+    if not _fn.endswith(".sysml"):
+        continue
+    _t = read(os.path.join(DEC_DIR, _fn)) or ""
+    _m = re.search(r"part (d\d{4}) : Decision\b", _t)
+    if not _m:
+        continue
+    _dn = _m.group(1)
+    if not re.search(r"part " + _dn + r" : Decision\s*\{[^}]*?status\s*=\s*DecisionStatus::rejected", _t, re.S):
+        continue
+    _judges = re.findall(r"part " + _dn + r"RejectR\d+ : TestResult\s*\{[^}]*?judgedBy\s*=\s*\"([^\"]+)\"", _t, re.S)
+    _rejected.append({"decision": _dn, "rejectResults": len(_judges),
+                      "judgedBy": sorted(set(_judges)),
+                      "allHuman": bool(_judges) and all(j in _persons for j in _judges),
+                      "anyAi": any(j in _ai for j in _judges)})
+fact("rejectedDecisionCensus", {
+    "rejected": len(_rejected), "rows": _rejected,
+    "allHumanJudged": all(r["allHuman"] for r in _rejected),
+    "persons": sorted(_persons), "aiActors": sorted(_ai),
+}, "the rule's population",
+     "every .engine/decisions/*.sysml whose `part dNNNN : Decision {` body carries `status = DecisionStatus::rejected` (the "
+     "status member itself, not prose naming it); judgedBy = the `judgedBy = \"x\"` of each `part dNNNNRejectR<n> : TestResult` "
+     "segment; a judge is human when .tracking/actors.sysml declares `part x : Person`, AI when `part x : Actor`.")
+
+# --- D0470: the Issue the Decision resolves, and the sprint record that delivered the layers
+_iss = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_i526 = re.search(r"part issue526 : Issue\s*\{(.*?)\n    \}", _iss, re.S)
+_i526b = _i526.group(1) if _i526 else ""
+fact("rejectVerdictIssue", {
+    "exists": bool(_i526),
+    "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _i526b) or [None, None])[1],
+    "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _i526b) or [None, None])[1],
+    "resolver": (re.search(r"#Resolves dependency from (\w+) to issue526;", _iss) or [None, None])[1],
+    "title": (re.search(r'title\s*=\s*"([^"]+)"', _i526b) or [None, None])[1],
+} if _iss else None, "the origin Issue",
+     ".tracking/issues-claudeFable5.sysml: the `part issue526 : Issue {` body's severity / createdAt / title and the "
+     "`#Resolves dependency from <task> to issue526;` edge.")
+
+_s702p = os.path.join(REPO, ".tracking", "delivery", "sprint702_rejectIsHumanJudgedWhereAnAcceptanceIs.sysml")
+_s702 = read(_s702p) if os.path.exists(_s702p) else None
+if _s702 is not None:
+    _res = re.findall(r"part \w+\s*:\s*TestResult\s*\{[^}]*?outcome\s*=\s*VerdictKind::(\w+)", _s702)
+    _pair = re.search(r"reject_decision_refuses accept_decision_refuses human_authority_commands -> positive \(refusal removed\): FAILED ([^;]+); negative \(restored\): PASS ok\. (\d+) passed; (\d+) failed", _s702)
+    fact("rejectVerdictSprint", {
+        "exists": True, "results": len(_res),
+        "byOutcome": {o: _res.count(o) for o in sorted(set(_res))},
+        "ranReceipts": len(re.findall(r"// RAN:", _s702)),
+        "probePair": {"positiveMessage": _pair.group(1).strip(), "negativePassed": int(_pair.group(2)),
+                      "negativeFailed": int(_pair.group(3))} if _pair else None,
+        "chartersD0470": bool(re.search(r"#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+d0470\s*;", _s702)),
+        "namesIssue529": "issue529" in _s702, "namesIssue530": "issue530" in _s702,
+    }, "the delivery record",
+         ".tracking/delivery/sprint702_rejectIsHumanJudgedWhereAnAcceptanceIs.sysml: results = `part x : TestResult {` segments "
+         "and their `VerdictKind::x`; ranReceipts = `// RAN:` lines; probePair parsed from the receipt line naming the three "
+         "unit tests (the positive's panic message, the negative's passed/failed); chartersD0470 = a `#CharteredBy dependency "
+         "from <story> to d0470;` line; the two retro Issues by name.")
+else:
+    fact("rejectVerdictSprint", {"exists": False}, "the delivery record", "the file " + _s702p + " does not exist")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
