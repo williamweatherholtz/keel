@@ -1049,4 +1049,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRecordedDoDsCarryTheirDate to issue513;
+
+    part issue514 : Issue {
+        :>> id = "cef43f67-57f9-4e52-9939-e200cca2646b";
+        :>> title = "The brief's one notes box cannot say which ask a note is for";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The decision brief's copy-out has one notes box for the whole sheet. On the nineteenth publish (2026-09-13) the human wrote a note meant for the retro ask and had to ask whether it applied to all four asks; the page could not say, so the recorder attached it by their word alone. A note the surface cannot bind to its ask is a gesture citation typed by hand rather than written by the surface that saw it (D0411). Resolver: dcBriefNotesArePerAsk - a notes field per ask, the copy-out names the ask per note, check_templates refuses a sheet-wide notes control.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcBriefNotesArePerAsk to issue514;
 }
