@@ -1743,6 +1743,164 @@ fact("retroDischargeCensus", _rd if _rd["retros"] else None, "retro gates by the
      "counts it); decisionOnly = namingDecision and NEITHER of the other two; namingNone = none of the three. A retro can "
      "count in both namingIssue and namingTask.")
 
+# ================================================================ 22. the twenty-first publish's ask
+# The two host-cost indicators and their thresholds (D0468): the live values and trigger state from the indicators
+# lens, the two numbers from the triggers contract, the last-25 stop-fire distribution and its critical path from the
+# ledger, the anchors from the Decision's own text, and the tracked Issue the trigger surfaces. Nothing here is retyped
+# from the Decision's RESEARCH line: the ledger is re-read, so a fire that landed after the Decision moves the number.
+
+# --- D0468: the indicators lens - the two live values and whether each trigger is crossed
+_IND_HOW = ("`" + KEEL + " show indicators .` - JSON; `indicators[]` rows with `indicator` in {hookLatencyIndicator, "
+            "gitFactsSizeIndicator}: `latest` parsed as a float, `trigger.threshold` quoted, `trigger.crossed` as read; "
+            "`triggered` = the indicator's name is in the top-level `triggered[]` list.")
+ok, out = run([KEEL, "show", "indicators", "."], timeout=120)
+_ind = as_json(out) if ok else None
+_host = {}
+if _ind and isinstance(_ind.get("indicators"), list):
+    _trig_names = {t.get("indicator") for t in _ind.get("triggered") or []}
+    for _row in _ind["indicators"]:
+        if _row.get("indicator") in ("hookLatencyIndicator", "gitFactsSizeIndicator"):
+            _tr = _row.get("trigger") or {}
+            try:
+                _lat = float(_row["latest"]) if _row.get("latest") is not None else None
+            except (TypeError, ValueError):
+                _lat = None
+            _host[_row["indicator"]] = {"latest": _lat, "threshold": _tr.get("threshold"),
+                                        "crossed": _tr.get("crossed"), "triggered": _row["indicator"] in _trig_names}
+fact("hostCostIndicators", _host if len(_host) == 2 else None, "the two indicators as the lens reads them",
+     _IND_HOW + ("" if len(_host) == 2 else " Not both present: " + (out[:200] if ok else out)))
+
+# --- D0468: the two thresholds as the contract declares them
+_trg = read(os.path.join(REPO, ".engine", "contracts", "indicator-triggers.toml")) or ""
+_thr = {}
+for _sec in re.finditer(r"^\[(\w+)\]\s*\n(.*?)(?=^\[|\Z)", _trg, re.M | re.DOTALL):
+    if _sec.group(1) in ("hookLatencyIndicator", "gitFactsSizeIndicator"):
+        _ab = re.search(r"^above\s*=\s*([0-9.]+)", _sec.group(2), re.M)
+        _sf = re.search(r'^surfaces\s*=\s*"(.*?)"', _sec.group(2), re.M)
+        _thr[_sec.group(1)] = {"above": float(_ab.group(1)) if _ab else None,
+                               "surfaces": _sf.group(1) if _sf else None}
+fact("hostCostThresholds", _thr if len(_thr) == 2 else None, "the declared triggers",
+     "regex over .engine/contracts/indicator-triggers.toml: in the `[hookLatencyIndicator]` and `[gitFactsSizeIndicator]` "
+     "sections (a section runs from its `[name]` line to the next `[`), `above = N` parsed as a float and the `surfaces` "
+     "string quoted. Comment lines are not read - the anchors come from the Decision (hostCostAnchors).")
+
+# --- D0468: the last 25 stop fires - the distribution the hook indicator binds, re-read from the ledger
+_SLOW_MS = 3000
+_ledger = read(os.path.join(REPO, ".keel", "metrics", "hooks.jsonl")) or ""
+_stops = []
+for _ln in _ledger.splitlines():
+    _e = as_json(_ln.strip()) if _ln.strip() else None
+    if isinstance(_e, dict) and _e.get("event") == "stop" and isinstance(_e.get("ms"), (int, float)):
+        _stops.append(_e)
+_last = _stops[-25:]
+_ms = sorted(int(e["ms"]) for e in _last)
+_slow = [e for e in _last if e["ms"] >= _SLOW_MS]
+_crit = {}
+for _e in _slow:
+    _names = [str(p.get("name", "")) for p in (_e.get("phases") or []) if isinstance(p, dict)]
+    _cp = next((n for n in _names if n.endswith("(critical path)")), None)
+    _key = _cp.replace(" (critical path)", "") if _cp else "none attributed"
+    _crit[_key] = _crit.get(_key, 0) + 1
+_ds_ms = [int(p["ms"]) for e in _slow for p in (e.get("phases") or [])
+          if isinstance(p, dict) and p.get("name") == "guard:decision-scaffolding (critical path)" and isinstance(p.get("ms"), (int, float))]
+
+
+def _rank(sorted_ms, q):
+    """Nearest-rank percentile: the value at ceil(q * n), 1-based - the rule D0468 names for the indicator."""
+    import math
+    return sorted_ms[max(0, math.ceil(q * len(sorted_ms)) - 1)] if sorted_ms else None
+
+
+fact("stopFireTail", {
+    "fires": len(_last), "ledgerStopFires": len(_stops),
+    "p90": _rank(_ms, 0.9), "median": _rank(_ms, 0.5), "min": _ms[0] if _ms else None, "max": _ms[-1] if _ms else None,
+    "slowFireMs": _SLOW_MS, "pastReceipt": len(_slow), "fromReceipt": len(_last) - len(_slow),
+    "receiptMs": [int(e["ms"]) for e in _last if e["ms"] < _SLOW_MS],
+    "slowMs": sorted(int(e["ms"]) for e in _slow),
+    "criticalPath": _crit,
+    "decisionScaffoldingLed": _crit.get("guard:decision-scaffolding", 0),
+    "decisionScaffoldingMs": {"min": min(_ds_ms) if _ds_ms else None, "max": max(_ds_ms) if _ds_ms else None},
+    "aboveTenSeconds": sum(1 for m in _ms if m > 10000),
+    "lastTs": _last[-1].get("ts") if _last else None,
+} if len(_last) == 25 else None, "the last 25 stop-hook fires",
+     ".keel/metrics/hooks.jsonl, one JSON object per line: the last 25 lines with `event` == \"stop\" and a numeric `ms`. "
+     f"p90 / median by nearest rank (the value at ceil(q*25), the rule the indicator binds); pastReceipt = fires with ms >= {_SLOW_MS} "
+     "(D0414 SLOW_FIRE_MS - a fire that answers from the green receipt runs no guard); fromReceipt = the rest. criticalPath = "
+     "for each slow fire the one `phases[].name` ending `(critical path)`, counted by name without the suffix; "
+     "decisionScaffoldingLed = that count for guard:decision-scaffolding; decisionScaffoldingMs = min/max of that phase's ms "
+     "over the slow fires; aboveTenSeconds = fires with ms > 10000. Read at run time, so a fire after the Decision's RESEARCH "
+     "line moves these numbers and the page carries the ledger's, not the Decision's.")
+
+# --- D0468: the cache file as it sits on disk
+_gf = os.path.join(REPO, ".keel", "cache", "git-facts.toml")
+fact("gitFactsCacheBytes", os.path.getsize(_gf) if os.path.exists(_gf) else 0, "bytes",
+     "os.path.getsize(.keel/cache/git-facts.toml), 0 when absent - the rule the indicator's metric states.")
+
+# --- D0468: the anchors, quoted from the Decision's own text, and the Decision's fields
+_d0468 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0468-"):
+        _d0468 = read(os.path.join(DEC_DIR, _fn)) or ""
+
+
+def _field(name):
+    m = re.search(r':>>\s*' + name + r'\s*=\s*"(.*?)"\s*;', _d0468, re.DOTALL)
+    return m.group(1) if m else None
+
+
+_rat = _field("rationale") or ""
+_ctx = _field("context") or ""
+_dec8 = _field("decision") or ""
+_a_med = re.search(r"known positive was a (\d+) ms MEDIAN", _rat)
+_a_single = re.search(r"an (\d+) ms single fire", _rat)
+_a_slow = re.search(r"one fire slow at (\d+) ms", _rat)
+_a_trig = re.search(r"triggers on the tree that declares it \((\d+) > (\d+)\)", _rat)
+_a_all = re.search(r"\((\d+) fires, p99 ([\d ]+)\)", _rat)
+_rl8 = re.search(r"// RESEARCH: (.*)", _d0468)
+_res8 = _rl8.group(1) if _rl8 else ""
+_a_cache = re.search(r"git-facts\.toml ([\d ]+) bytes after", _res8)
+_a_found = re.search(r"([\d.]+) MB with ([\d.]+) MB dead", _res8)
+_a_slowset = re.search(r"(\d+) of the (\d+) fires past the receipt", _res8)
+_a_p90 = re.search(r"p90 (\d+) ms, median (\d+)", _res8)
+fact("hostCostAnchors", {
+    "issue442MedianMs": int(_a_med.group(1)) if _a_med else None,
+    "issue441SingleFireMs": int(_a_single.group(1)) if _a_single else None,
+    "slowFireMs": int(_a_slow.group(1)) if _a_slow else None,
+    "atDeclaration": {"p90": int(_a_trig.group(1)), "threshold": int(_a_trig.group(2))} if _a_trig else None,
+    "allTime": {"fires": int(_a_all.group(1)), "p99": int(_a_all.group(2).replace(" ", ""))} if _a_all else None,
+    "researchP90": int(_a_p90.group(1)) if _a_p90 else None,
+    "researchMedian": int(_a_p90.group(2)) if _a_p90 else None,
+    "researchScaffoldingLed": {"led": int(_a_slowset.group(1)), "of": int(_a_slowset.group(2))} if _a_slowset else None,
+    "cacheBytesAfterCut": int(_a_cache.group(1).replace(" ", "")) if _a_cache else None,
+    "issue440Mb": float(_a_found.group(1)) if _a_found else None,
+    "issue440DeadMb": float(_a_found.group(2)) if _a_found else None,
+    "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0468) or [None, None])[1],
+    "createdAt": _field("createdAt"),
+    "marker": "#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+d0468", _d0468, re.M) else None,
+    "notAFork": _dec8.lstrip().startswith("NOT A FORK"),
+    "gatesNothing": "gates nothing" in _dec8,
+    "keystonePath": "keystone-locked path" in _ctx,
+} if _d0468 else None, "the Decision's own anchors and fields",
+     "regex over .engine/decisions/0468-*.sysml: from the `rationale` field `known positive was a N ms MEDIAN`, `an N ms single "
+     "fire`, `one fire slow at N ms`, `triggers on the tree that declares it (N > M)`, `(N fires, p99 N)`; from the "
+     "`// RESEARCH:` line `p90 N ms, median N`, `N of the M fires past the receipt`, `git-facts.toml N bytes after`, `N MB with "
+     "N MB dead`; status from `DecisionStatus::x`; marker = a line `#ProspectiveChange part d0468`; notAFork = the `decision` "
+     "field opens NOT A FORK; gatesNothing / keystonePath = those phrases in the decision / context fields. Digit groups "
+     "written with spaces are joined.")
+
+# --- D0468: the Issue the hook trigger surfaces, and its resolver edge
+_iss = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_i520 = re.search(r"part issue520\s*:\s*Issue\s*\{(.*?)\n\s*\}", _iss, re.DOTALL)
+_i520_title = re.search(r':>>\s*title\s*=\s*"(.*?)";', _i520.group(1), re.DOTALL) if _i520 else None
+_i520_res = re.search(r"#Resolves\s+dependency\s+from\s+(\w+)\s+to\s+issue520\s*;", _iss)
+fact("hookCriticalPathIssue", {
+    "title": _i520_title.group(1) if _i520_title else None,
+    "resolver": _i520_res.group(1) if _i520_res else None,
+    "namedBySurfaces": "issue520" in (_thr.get("hookLatencyIndicator") or {}).get("surfaces", "") if _thr else None,
+} if _i520_title else None, "the tracked Issue the trigger points at",
+     ".tracking/issues-claudeFable5.sysml: the `title` of `part issue520 : Issue`, the `from` of `#Resolves dependency from "
+     "<task> to issue520;`, and whether the hookLatencyIndicator `surfaces` line in indicator-triggers.toml names issue520.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

@@ -5053,6 +5053,16 @@ pub fn decision_scaffolding(root: &Path) -> GuardReport {
             "{grandfathered} compound Decision(s) recorded before {COMPOUND_DECISION_CUTOFF} enumerate several clauses - grandfathered under D0303 option C; their partial delivery is not visible to this guard, and re-splitting history is the D0129 class, so they are counted, not reported"
         )));
     }
+    // D0469 (issue444): a gate was asked for at a fixture's price - D0421 said "seconds" and the first
+    // live set cost 528 s. A PROPOSED marked Decision that names the land/push path in its decision text
+    // carries a MEASURED: token in its rationale (the run, the host, the seconds on a live set) or is
+    // named here. Accepted Decisions are the human's word already; the rule is inert until D0469 is
+    // human-accepted (D0337) - an auto-accept confers nothing (D0291).
+    if texts.iter().any(|(_, t)| acceptance_kind(t, "d0469") == Some(Acceptance::Human)) {
+        warnings.extend(unmeasured_path_decisions(&texts).into_iter().map(|(d, words)| format!(
+            "{d}: a PROPOSED process-change Decision whose text names the land/push path ({words}) with no MEASURED: token in its rationale - the human would be asked to accept a control at an unmeasured price (issue444: D0421 said seconds, the first live set cost 528 s). Run the control on a live set and put MEASURED: <run>, <host>, <seconds> in the rationale before the ask (D0469)."
+        )));
+    }
     GuardReport { name: "decision-scaffolding", scanned, warnings, violations }
 }
 
@@ -5129,6 +5139,88 @@ mod compound_decision_tests {
         let (forward, grandfathered) = compound_decisions(&texts, "2026-09-05");
         assert_eq!(forward, vec![("d0901".to_string(), 2)]);
         assert_eq!(grandfathered, 1);
+    }
+}
+
+/// The words that put a Decision on the land/push path (D0469, issue444): whole words, any case.
+const PATH_WORDS: [&str; 4] = ["land", "push", "refuse", "gate"];
+
+/// Pure core (D0469 / issue444): every PROPOSED `#ProspectiveChange` Decision whose `decision` text
+/// names one of [`PATH_WORDS`] as a whole word and whose `rationale` carries no `MEASURED:` token, as
+/// `(name, the words matched)`. A Decision with a passing `AcceptR` in its file is not proposed.
+fn unmeasured_path_decisions(texts: &[(String, String)]) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (_, t) in texts {
+        for line in t.lines() {
+            let Some(rest) = line.trim_start().strip_prefix("#ProspectiveChange part ") else { continue };
+            let Some((name, tail)) = rest.split_once(':') else { continue };
+            if !tail.trim_start().starts_with("Decision") {
+                continue;
+            }
+            let name = name.trim();
+            if acceptance_kind(t, name).is_some() {
+                continue;
+            }
+            let Some(start) = t.find(&format!("part {name} : Decision")) else { continue };
+            let body = &t[start..];
+            let body = body.find("\n    }").map_or(body, |e| &body[..e]);
+            let field = |key: &str| -> &str {
+                body.find(&format!("{key} = \"")).map_or("", |s| {
+                    let v = &body[s + key.len() + 4..];
+                    v.find('"').map_or(v, |e| &v[..e])
+                })
+            };
+            let decision = field("decision").to_ascii_lowercase();
+            let mut words: Vec<&str> = decision
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .filter(|w| PATH_WORDS.contains(w))
+                .collect();
+            words.sort_unstable();
+            words.dedup();
+            if words.is_empty() || field("rationale").contains("MEASURED:") {
+                continue;
+            }
+            out.push((name.to_string(), words.join("/")));
+        }
+    }
+    out.sort();
+    out
+}
+
+#[cfg(test)]
+mod unmeasured_path_tests {
+    use super::unmeasured_path_decisions;
+
+    fn decision(name: &str, decision: &str, rationale: &str, accepted: bool) -> String {
+        let accept = if accepted {
+            format!("        verification {name}Accept : Test {{ :>> method = VerificationMethod::confirmation; }}\n        part {name}AcceptR : TestResult {{ :>> outcome = VerdictKind::pass; :>> judgedAt = \"2026-09-10\"; :>> judgedBy = \"human\"; }}\n")
+        } else {
+            String::new()
+        };
+        format!(
+            "package X {{\n    #ProspectiveChange part {name} : Decision {{\n        :>> id = \"x\";\n        :>> title = \"t\";\n        :>> createdAt = \"2026-09-13\";\n        :>> decision = \"{decision}\";\n        :>> rationale = \"{rationale}\";\n    }}\n{accept}}}\n"
+        )
+    }
+
+    /// D0388 trio from the definition of done: the guard warns on a proposed Decision with the path words and no token
+    /// (known positive); it is silent on D0421's shape as corrected - path words, MEASURED: token - and on
+    /// a proposed Decision with no path words (known negatives). An accepted Decision with the words and
+    /// no token is the human's word already and is not named; the match is a whole word, any case.
+    #[test]
+    fn a_proposed_path_decision_without_a_measured_cost_is_named() {
+        let texts = vec![
+            ("p".to_string(), decision("d0901", "keel land will refuse the push until the touched set passes", "the set of one runs in about two seconds", false)),
+            ("n1".to_string(), decision("d0902", "keel land refuses the push until the touched set passes", "MEASURED: 5fbe410, this host, 528 s wall on the first live set", false)),
+            ("n2".to_string(), decision("d0903", "retro findings are Issues, not Decisions", "empirical findings name a defect", false)),
+            ("acc".to_string(), decision("d0904", "the push GATE refuses a red tree", "no token, but accepted", true)),
+            ("sub".to_string(), decision("d0905", "the landing and the pushed tree and the gateway and what refuses are not the words", "no token", false)),
+            ("case".to_string(), decision("d0906", "Land and PUSH, in any case", "no token", false)),
+        ];
+        assert_eq!(
+            unmeasured_path_decisions(&texts),
+            vec![("d0901".to_string(), "land/push/refuse".to_string()), ("d0906".to_string(), "land/push".to_string())]
+        );
+        assert!(unmeasured_path_decisions(&[]).is_empty());
     }
 }
 
