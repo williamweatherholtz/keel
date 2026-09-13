@@ -1060,4 +1060,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcBriefNotesArePerAsk to issue514;
+
+    part issue515 : Issue {
+        :>> id = "e737ea92-c610-4f47-8702-a6de250083e8";
+        :>> title = "Two clones allocated st121 on the same day; sync stopped instead of renumbering";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Two writers allocated st121 on 2026-09-13: the CI currency pass (21e43e6, GH#71 pulled untrusted) and this session (the human's note on the retro ask). Both opened .tracking/intake/intake-2026-09-13.sysml for the first time; keel sync's merge stopped at AA and the resolution - renumber the session's Statement to st122 and move us110's #DerivedFrom edge - was hand work in the merge commit 25e4c04. The sequential short name is allocated from the local tree alone, so any two clones writing the same day collide; the write API cannot see origin's counter and sync does not yet repair the collision it can recognise. Resolver: dcSyncRenumbersACollidingIntakeName.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcSyncRenumbersACollidingIntakeName to issue515;
+
+    part issue516 : Issue {
+        :>> id = "1dc24172-b0e9-463f-84ab-a84efc722069";
+        :>> title = "The build stamp re-derives only on a git metadata change, so an edit-and-build binary certifies a tree it was not compiled from (DOMINANCE 1.5 served as 33c398a for nine hours)";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The build stamp keel version prints is re-derived only when .git/HEAD or .git/index changes (keel-cli/build.rs names those two paths as its rerun triggers), so a source edit followed by a build with no git operation between them produces a binary whose stamp certifies a tree it was not compiled from. Found 2026-09-13 through recall_bench.py: two plain runs of the binary stamped 33c398a read 46/50 median 3 top-3 30/46 and 20/50 median 5 top-3 2/20, the sweep's DOMINANCE=0 rows, while the same binary with KEEL_RECALL_DOMINANCE=1.25 set read 46/50 top-3 27/46 and 23/50 median 4, and an unparseable value (which falls back to the compiled default) read the same as unset. The binary was built at 22:20 on 2026-09-12 from knowledge.rs patched to DOMINANCE 1.5 during sprint 691 research; the post-commit land run of 33c398a had already re-stamped the build script on a clean tree eleven minutes before the patch, the patch touched no git metadata, so the stamp stayed 33c398a with no +dirty; the source was reverted with git checkout at 22:30 and the binary was never rebuilt. Rebuilt from HEAD at 07:40 the plain runs read the 1.25 rows exactly. Consequences: keel.exe, keel-serve.exe and .keel/bin/keel.exe ran with DOMINANCE 1.5 (the mechanism silent on both generated arms) from 22:25 to 07:40, so every hook recall in that window used a setting no commit holds; the binary-identity control from issue406 printed a true HEAD and still could not see it, because the stamp reads git, not the sources. A second defect in the same file: the helper maps a failed git status to the clean SHA (the None arm of the match), while its own comment says a failed status call must not produce a clean-looking claim. Resolver: dcBuildStampSeesSourceEdits.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcBuildStampSeesSourceEdits to issue516;
 }
