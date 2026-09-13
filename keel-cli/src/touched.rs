@@ -13,8 +13,12 @@
 //! module and are reported as unattributed rather than matched against every test that says `main`.
 //! An integration test is touched when its text carries a stem as a whole word (`keel_cli::sync::`,
 //! `keel sync`, `sync.rs` all count; `synced` does not), or when the test file itself changed.
-//! Over-inclusion costs a test run; under-inclusion is the CI red this replaces, so the match is
-//! generous and pure (`names_stem`, `touched_tests` - unit-tested below).
+//! A changed path under `.engine/` contributes the stem `init` (`embedded_stem`): that tree is
+//! embedded in the binary and `keel init` ships it, so every test that scaffolds a project reads
+//! it - 58 of 71 on 2026-09-13, when a skill's check landed under `.engine/skills/`, the receipt
+//! read 570/0 over an empty stem set, and CI went red on `init_smoke` (issue524). Over-inclusion
+//! costs a test run; under-inclusion is the CI red this replaces, so the match is generous and pure
+//! (`names_stem`, `touched_tests` - unit-tested below).
 //!
 //! THE BASE is `origin/<branch>` when it resolves (what the push will land on), else the head the
 //! last suite receipt recorded, else `HEAD~1`; a tree with none of those reads every tracked module
@@ -52,6 +56,22 @@ pub fn module_stem(path: &str) -> Option<String> {
         return None;
     }
     Some(stem.to_string())
+}
+
+/// The stem a changed path under the EMBEDDED tree contributes: `init`, the command that ships it.
+///
+/// `.engine/**` is compiled into the binary (`embedded::ENGINE_DIR`) and every test that runs `keel init`
+/// reads it, so a change there touches those tests as surely as a change to `init`'s own source would.
+/// Pure: `.engine/skills/x/references/check.py` -> `init`; `.engine/` alone, `.tracking/x.sysml`,
+/// `keel-cli/src/init.rs` -> `None` (the last is `module_stem`'s to name).
+#[must_use]
+pub fn embedded_stem(path: &str) -> Option<String> {
+    let p = path.replace('\\', "/");
+    let rel = p.strip_prefix(".engine/")?;
+    if rel.is_empty() {
+        return None;
+    }
+    Some("init".to_string())
 }
 
 /// Is this a changed path that names no module but is still deliverable code (`main.rs`, `lib.rs`)?
@@ -223,11 +243,13 @@ fn base_ref(repo: &Path) -> Option<String> {
 pub fn compute(repo: &Path) -> Result<Touched, String> {
     let (base, changed): (String, Vec<String>) = if let Some(b) = base_ref(repo) {
         // The merge-base, so a remote that moved ahead does not read as our change; then the diff
-        // from it to the WORKING TREE (no second revision), plus the untracked files under the crate -
-        // a new module or test file is a change the diff of tracked paths cannot see.
+        // from it to the WORKING TREE (no second revision), plus the untracked files under the crate
+        // AND under the embedded tree - a new module, test file or engine file is a change the diff of
+        // tracked paths cannot see (sprint 699's new skill under `.engine/skills/` was untracked when
+        // the verifier ran, so it was in neither list; issue524).
         let from = git_out(repo, &["merge-base", &b, "HEAD"]).unwrap_or_else(|| b.clone());
         let out = git_out(repo, &["diff", "--name-only", &from]).ok_or_else(|| format!("git diff --name-only {from} failed"))?;
-        let untracked = git_out(repo, &["ls-files", "--others", "--exclude-standard", "--", "keel-cli"]).unwrap_or_default();
+        let untracked = git_out(repo, &["ls-files", "--others", "--exclude-standard", "--", "keel-cli", ".engine"]).unwrap_or_default();
         let mut paths: Vec<String> = out.lines().chain(untracked.lines()).filter(|l| !l.is_empty()).map(str::to_string).collect();
         paths.sort();
         paths.dedup();
@@ -237,6 +259,8 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
         ("(no base: every tracked module)".to_string(), out.lines().map(str::to_string).collect())
     };
     let mut stems: Vec<String> = changed.iter().filter_map(|p| module_stem(p)).collect();
+    let embedded: Vec<String> = changed.iter().filter_map(|p| embedded_stem(p)).collect();
+    stems.extend(embedded.iter().cloned());
     stems.sort();
     stems.dedup();
     let unattributed: Vec<String> = changed.iter().filter(|p| is_unattributed_source(p)).cloned().collect();
@@ -255,6 +279,8 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
         }
     }
     let tests = touched_tests(&tests, &stems, &changed_tests);
+    // The lib is in the set when any source changed - and the embedded tree IS source: its bytes are
+    // in the binary and the lib's own tests read `ENGINE_DIR` (issue524).
     let lib = !stems.is_empty() || !unattributed.is_empty();
     // issue478: the endings are read with the set, before any decision to run - the receipt this
     // computation writes must be able to say `eol-mismatch` in place of a verdict cargo never reached.
@@ -619,7 +645,7 @@ mod tests {
         assert!(text.contains("\"scaffold\"") && text.contains("lib = true"), "the stub carries the set it is running:\n{text}");
         assert!(!text.contains("\"pass\""), "{text}");
     }
-    use super::{compute, failing_binaries, module_stem, names_stem, render_receipt, test_name, text_carries_acceptance, touched_tests, Phase, Run, Touched};
+    use super::{compute, embedded_stem, failing_binaries, module_stem, names_stem, render_receipt, test_name, text_carries_acceptance, touched_tests, Phase, Run, Touched};
 
     #[test]
     fn a_stem_is_the_module_a_path_names() {
@@ -632,6 +658,18 @@ mod tests {
         assert_eq!(module_stem(".engine/tools/x.rs"), None);
         assert_eq!(test_name("keel-cli/tests/land_gate.rs"), Some("land_gate".to_string()));
         assert_eq!(test_name("keel-cli/tests/common/mod.rs"), None);
+    }
+
+    /// issue524: the path that went red on CI under a 570/0 receipt is the known positive; a path the
+    /// binary does not embed is the known negative - chosen before the rule was written (D0388).
+    #[test]
+    fn a_change_under_the_embedded_tree_names_init() {
+        assert_eq!(embedded_stem(".engine/skills/delegated-ceremony/references/check_report.py"), Some("init".to_string()));
+        assert_eq!(embedded_stem(".engine\\processes\\delegated-ceremony.sysml"), Some("init".to_string()));
+        assert_eq!(embedded_stem(".tracking/backlog.sysml"), None);
+        assert_eq!(embedded_stem("keel-cli/src/init.rs"), None);
+        assert_eq!(embedded_stem(".engine/"), None);
+        assert_eq!(embedded_stem(".engineering/x"), None);
     }
 
     #[test]
@@ -716,6 +754,16 @@ mod tests {
         assert_eq!(dirty.stems, vec!["foo".to_string(), "newmod".to_string()], "known-positive: the uncommitted edit and the untracked module are the change");
         assert!(dirty.lib, "a source path changed, so the lib's own tests run");
         assert_eq!(dirty.tests, vec!["foo_bites".to_string()], "the test naming the changed stem is in the set");
+
+        // issue524: an UNTRACKED new file under the embedded tree is a change too, and it names `init`
+        // - sprint 699's skill was exactly this when the verifier ran, and the set had no way to see it.
+        std::fs::create_dir_all(dir.join(".engine").join("skills").join("x")).unwrap();
+        std::fs::write(dir.join(".engine").join("skills").join("x").join("check.py"), "print(1)\n").unwrap();
+        std::fs::write(dir.join("keel-cli").join("tests").join("scaffolds.rs"), "// runs keel init over the tree\n").unwrap();
+        let embedded = compute(&dir).unwrap();
+        assert_eq!(embedded.stems, vec!["foo".to_string(), "init".to_string(), "newmod".to_string()], "the untracked engine file contributes init");
+        assert!(embedded.changed.iter().any(|c| c.ends_with(".engine/skills/x/check.py")), "the untracked engine file is in the changed set: {:?}", embedded.changed);
+        assert!(embedded.tests.contains(&"scaffolds".to_string()), "the test that runs keel init is in the set: {:?}", embedded.tests);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

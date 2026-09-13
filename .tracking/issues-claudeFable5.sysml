@@ -1159,4 +1159,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcStaleBinaryNamesItself to issue523;
+
+    part issue524 : Issue {
+        :>> id = "51412437-a589-4eac-af16-20b521dbd7ef";
+        :>> title = "A change under .engine names no touched test; CI went red on init_smoke under a 570/0 receipt";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "On 2026-09-13 commit df713de landed .engine/skills/delegated-ceremony/references/check_report.py under a land touched receipt of 570 passed, 0 failed, and CI run 34775521516 went red on init_smoke::init_scaffolds_a_working_project: the scaffold shipped check_report.py (migrate.rs is_engine_dev_only excludes only a tools/ or __pycache__ component or a .pyc, so a skill's references/ ships with the skill - correctly, the recorder brief runs it by path) and the test's exact list of shipped python did not name it. The control gap beneath the symptom: touched::compute mapped only keel-cli/src paths to stems, so a changed path under .engine/ contributed nothing to the set, and the 58 of 71 integration tests that run keel init over the embedded tree were never candidates - the receipt was green over a red the set could not see. Resolver: dcEngineTreeChangesTouchTheScaffoldTests.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcEngineTreeChangesTouchTheScaffoldTests to issue524;
+
+    part issue525 : Issue {
+        :>> id = "94dd611e-d673-4668-a5d9-130221a7948d";
+        :>> title = "A green touched receipt over an unseen change does not say which changed paths it could not see";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The sprint 699 verifier receipt (2026-09-13, head b9754c5) read stems=[] beside a six-path changed list, outcome=pass 570/0 and DISCREPANCIES: NONE, and every line was honest - yet the commit it cleared went red on CI (issue524) because the set could not see the class of path that changed. The touched receipt names unattributed source (main.rs, lib.rs) but no other changed path that contributed nothing to the set, so neither the verifier nor the reader of its receipt had a line on which to notice that the change under .engine/ had named no test. A receipt that is green over an unseen change should say what it did not see. Resolver: dcTouchedReceiptNamesTheUnmatchedPaths.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcTouchedReceiptNamesTheUnmatchedPaths to issue525;
 }

@@ -64,14 +64,16 @@ fn init_scaffolds_a_working_project() {
     // EXCEPT the tools a shipped process deploys BY PATH: the two obligation-review deck tools (D0171)
     // and the stpa-diagram renderer (D0285). Guard 39 (tool-reference) fails a scaffold whose process
     // references a tool it never received - which CI caught on the guard's first landing, and again
-    // the day stpa-diagram landed without its tool on this list. Exactly these, nothing else.
+    // the day stpa-diagram landed without its tool on this list. A skill's own `references/` check
+    // ships with the skill (delegated-ceremony's check_report.py, D0425 - the recorder brief runs it by
+    // path; CI caught its absence from this list the day it landed). Exactly these, nothing else.
     let py: Vec<String> = walk_paths(&dir.join(".engine"), &|p| p.extension().is_some_and(|e| e == "py" || e == "pyc"));
     let mut names: Vec<&str> = py.iter().map(|p| p.rsplit(['/', '\\']).next().unwrap_or(p)).collect();
     names.sort_unstable();
     assert_eq!(
         names,
-        vec!["deck_inbox_record.py", "test_deck_e2e.py"],
-        "scaffolded python must be exactly the tools shipped processes deploy by path; got {names:?}"
+        vec!["check_report.py", "deck_inbox_record.py", "test_deck_e2e.py"],
+        "scaffolded python must be exactly the tools shipped processes and skills deploy by path; got {names:?}"
     );
     // D0174/P0: the in-loop enforcement surface ships with init — five hook events, the output
     // style, one skill per registry entry (counts asserted equal), the declared adoption profile,
