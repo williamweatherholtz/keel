@@ -1,0 +1,5 @@
+RECORDER REPORT  2026-09-10  receipt=scratch/s647/verifier-receipt.txt  sprint=.tracking/delivery/sprint647_refusalsAreLedgerFacts.sysml
+WROTE: keel record gate-result --file .tracking/delivery/sprint647_refusalsAreLedgerFacts.sysml --gate refusalsAreLedgerFactsCloseOutGate --sha 94a7f0b --judged-at 2026-09-10 -> appended refusalsAreLedgerFactsCloseOutGateR1
+Added the resolution edge the receipt asked for by editing the sprint file:
+#Addresses dependency from refusalsAreLedgerFactsStory to obligation7d57a5b8;
+All issues resolved. Tree is clean and ready for commit.

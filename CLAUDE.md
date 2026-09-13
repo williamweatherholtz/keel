@@ -135,9 +135,13 @@ Change Request cross-cuts and is itself frozen.
 - Authoring friction is the #1 risk (D0054).
 
 **Subagents (D0425)**
-- Primary does substance. VERIFIER (haiku, skill `test-verify`, D0438) runs `keel suite --touched` DETACHED,
-  `gate validate`, `gate check-engine`, `gate guard --no-receipt`, the D0388 pair; writes a receipt only. RECORDER (haiku)
-  writes ceremony from that receipt ONLY. Neither reads the other's conclusion as fact.
+- Primary does substance. Process `delegated-ceremony` (skill of the same name carries both briefs; dispatch by
+  pointing at it, agent types `verifier`/`recorder` in `.claude/agents/`). VERIFIER (haiku, skill `test-verify`,
+  D0438) runs `keel suite --touched` DETACHED, `gate validate`, `gate check-engine`, `gate guard --no-receipt`,
+  clippy, the D0388 pair; writes a receipt only. RECORDER (haiku, no Write/Edit tool) writes ceremony through
+  `keel record` from that receipt ONLY; a marker/edge the API lacks is a `REFUSED:` report line, never typed; its
+  report ends with the last line of `keel gate --fast .` (`references/check_report.py` refuses otherwise). A
+  recorder that leaves the tree red is ledgered `recorder:tree-red`. Neither reads the other's conclusion as fact.
 
 **Git**
 - `main` only, commit directly. Never rebase/squash/force-push (D0129): rewriting history orphans

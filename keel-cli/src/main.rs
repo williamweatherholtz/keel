@@ -820,8 +820,32 @@ fn hook_subagent_stop(payload: &serde_json::Value, root: &Path, session: &str) -
     if baseline.trim() == keel_cli::perf::phase("hook:fingerprint", || keel_cli::fingerprint::of(root)).to_string() {
         return 0; // wrote nothing — pays nothing
     }
-    // The tree changed under this subagent: same gate as the turn boundary.
-    hook_stop(payload, root)
+    // The tree changed under this subagent: same gate as the turn boundary. A block for a RECORDER
+    // (dcDelegatedCeremonyIsASkill clause d) is ledgered under `recorder:tree-red`, so the census
+    // counts how often the D0425 recorder role leaves a red tree; the payload's `agent_type` is the
+    // custom agent's name (Claude Code 2.1.270: SubagentStop carries agent_id, agent_type,
+    // agent_transcript_path, stop_hook_active). Any other agent keeps the control the gate named.
+    let code = hook_stop(payload, root);
+    if let Ok(mut g) = EMITTED_VERDICT.lock() {
+        if let Some((decision, control)) = g.as_mut() {
+            if decision == "block" {
+                let relabelled = subagent_block_control(payload.get("agent_type").and_then(serde_json::Value::as_str), control);
+                *control = relabelled;
+            }
+        }
+    }
+    code
+}
+
+/// The control a subagent-stop BLOCK is ledgered under: `recorder:tree-red` when the stopped agent's
+/// type is `recorder` (the D0425 recorder, `.claude/agents/recorder.md`), otherwise the control the
+/// gate itself named. Pure, so the pair is pinned without a tree or a hook fire.
+fn subagent_block_control(agent_type: Option<&str>, gate_control: &str) -> String {
+    if agent_type == Some("recorder") {
+        "recorder:tree-red".to_string()
+    } else {
+        gate_control.to_string()
+    }
 }
 
 /// `PreToolUse` on Bash: advise on host/shell adaptation before the command runs (issue094).
@@ -5624,6 +5648,24 @@ fn main() {
         eprintln!("{r}");
     }
     process::exit(code);
+}
+
+#[cfg(test)]
+mod subagent_block_control_tests {
+    use super::subagent_block_control;
+
+    /// D0388 pair for dcDelegatedCeremonyIsASkill clause (d): a block under a `recorder` agent is
+    /// `recorder:tree-red` whatever the gate named (known positive); a general-purpose agent, an
+    /// absent `agent_type` and a `verifier` keep the gate's own control (known negative) - the
+    /// verifier writes nothing, so a red under it is the primary's red, not a recorder's.
+    #[test]
+    fn a_recorder_block_is_counted_as_recorder_tree_red_and_nothing_else_is() {
+        assert_eq!(subagent_block_control(Some("recorder"), "in-loop-gate"), "recorder:tree-red");
+        assert_eq!(subagent_block_control(Some("recorder"), "edit-gate"), "recorder:tree-red");
+        assert_eq!(subagent_block_control(Some("general-purpose"), "in-loop-gate"), "in-loop-gate");
+        assert_eq!(subagent_block_control(Some("verifier"), "in-loop-gate"), "in-loop-gate");
+        assert_eq!(subagent_block_control(None, "in-loop-gate"), "in-loop-gate");
+    }
 }
 
 #[cfg(test)]

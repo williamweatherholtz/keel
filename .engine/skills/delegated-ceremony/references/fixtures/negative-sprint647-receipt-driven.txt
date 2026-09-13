@@ -1,0 +1,7 @@
+RECORDER REPORT  2026-09-10  receipt=scratch/s647/verifier-receipt.txt  sprint=.tracking/delivery/sprint647_refusalsAreLedgerFacts.sysml
+WROTE: keel record gate-result --file .tracking/delivery/sprint647_refusalsAreLedgerFacts.sysml --gate refusalsAreLedgerFactsCloseOutGate --sha 94a7f0b --judged-at 2026-09-10 --evidence "keel gate validate . -> 612 files validated clean; exit=0" -> appended refusalsAreLedgerFactsCloseOutGateR1
+WROTE: keel record result --file .tracking/delivery/sprint647_refusalsAreLedgerFacts.sysml --task storyRefusalsAreLedgerFacts --sha 94a7f0b --judged-at 2026-09-10 --evidence "cargo test --release --test refusal_ledger -> 4 passed 0 failed; exit=0" -> appended storyRefusalsAreLedgerFactsDoDR2
+The obligation the receipt names under OWED WRITES (obligation7d57a5b8, untriaged) needs a #Resolves edge from a resolver whose text names it; the write API offers no verb for that edge on an existing item.
+REFUSED: #Resolves edge for obligation7d57a5b8 - not typed; the primary triages it (record issue --resolver, or a DoD sentence naming it).
+DISCREPANCIES: NONE
+gate: fast gate clean (612 file(s))

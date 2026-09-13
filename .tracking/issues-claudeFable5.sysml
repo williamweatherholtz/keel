@@ -1126,4 +1126,37 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcDecisionScaffoldingIndexesItsEdgesOnce to issue520;
+
+    part issue521 : Issue {
+        :>> id = "7c106121-8342-49e0-8137-1f71887318d5";
+        :>> title = "The recorder checks its own report; the subagent-stop hook does not";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The D0425 recorder checks its own report. Sprint 699 deployed delegated-ceremony with clause (c) - the report ends with the verbatim last line of keel gate --fast . - enforced by references/check_report.py, which the RECORDER runs on itself before returning. A recorder that skips the check, or edits the report after it, returns a summary that outran the gate and nothing outside the recorder sees it: the subagent-stop hook gates the TREE (fingerprint changed) but not the REPORT. The SubagentStop payload carries last_assistant_message (Claude Code 2.1.270), so the same check can run in the hook over what the recorder actually said. Found by sprint 699's review pass as its stated residual; the recorder's discipline is not a control (D0047).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcSubagentStopChecksTheRecorderReport to issue521;
+
+    part issue522 : Issue {
+        :>> id = "fcbb8dc4-cd22-423a-ae09-eff0841b976a";
+        :>> title = "An unsourced file under the generated .claude/skills surface passes the drift guard";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A tracked file under the generated .claude/skills/ surface with no engine source passes the drift guard. .claude/skills/brand-watch/check_manifest.py is tracked in git; there is no .engine/skills/brand-watch/ directory for sync-claude to deploy it from (ls .engine/skills/ | grep brand-watch -> nothing). keel sync-claude . reported 47/47 skills and keel gate guard claude-surface-drift PASSED over it (sprint 699, working tree at b9754c5). The surface is generated (D0379): a file the generator does not own is either a stray from a deleted skill or a hand edit that the next sync silently keeps - either way it is drift the guard was built to name and does not.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcClaudeSurfaceNamesUnsourcedFiles to issue522;
+
+    part issue523 : Issue {
+        :>> id = "cdd494ec-cfdc-47d1-affa-1c722e085c06";
+        :>> title = "A stale release copy answers as the engine; its phantom reds carry no build stamp";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A stale release copy answers as the engine and its phantom reds arrive without a build stamp. Sprint 699's D0425 verifier was told the binary (target/release/keel-serve.exe, build b9754c5) and ran target/release/keel-gate.exe instead - a copy left in target/release on 2026-09-07 at build e0624f3+dirty. That binary reported guard FAIL with 35 ceremony + 11 viewpoint-renderer + 108 cli-surface-declared violations and sync-claude --check DRIFT (output-styles/keel.md differs from the embedded response contract) over a tree on which keel-serve.exe, target/release/keel.exe, .keel/bin/keel.exe and the PATH keel (all sha256 f445d9e0a81d, build b9754c5) read ALL PASS and 'keel-owned subset matches'. The receipt shape (test-verify skill) carries head= but no bin= or build=, so the primary could not tell a stale engine from a red tree until it asked the agent which binary it ran; ten such copies (keel-gate, keel-verify, keel-suite, keel-test, keel-work, five keel-prefold*) sat beside the current one, deleted this sprint. Only the engine can say it is stale (D0047: not a reminder to verifiers).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcStaleBinaryNamesItself to issue523;
 }
