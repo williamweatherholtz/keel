@@ -702,7 +702,7 @@ fn model_root_of(target: &Path) -> Option<std::path::PathBuf> {
 /// They are the HUMAN's control actions even when typed in the agent's shell. Read by the computed
 /// control structure (`view::control_structure`), whose test holds the two lists equal: a command
 /// listed there without a refusal here would be a label, not a fact.
-pub const HUMAN_ONLY_WRITE_COMMANDS: [&str; 2] = ["accept", "judge-set"];
+pub const HUMAN_ONLY_WRITE_COMMANDS: [&str; 3] = ["accept", "reject", "judge-set"];
 
 /// One write-path refusal: the ledger control `verb:check` and the code that refuses it.
 ///
@@ -2215,6 +2215,7 @@ fn rebind_acceptance_locked(
 /// the human's explicit action ARE the attestation (D0106 — never fabricated). Does NOT auto-commit.
 ///
 /// # Errors
+/// `WriteError::Parse` when `judged_by` is an AI-kind or unregistered actor (D0178/K6, issue526);
 /// `WriteError::TaskNotFound` if the decision part or a `proposed` status is not present; `WriteError::Io`
 /// on filesystem errors.
 pub fn reject_decision(
@@ -2239,6 +2240,9 @@ fn reject_decision_locked(
     recorded_by: &str,
     rationale: &str,
 ) -> Result<String, WriteError> {
+    // issue526: a rejection is the human's word exactly as an acceptance is - the same write-layer
+    // refusal, under the same lock, before the file is read.
+    refuse_ai_judgment(path, judged_by, "rejecting a Decision")?;
     let content = std::fs::read_to_string(path)?;
     if !content.contains(&format!("part {decision} : Decision")) {
         return Err(WriteError::TaskNotFound(decision.to_owned()));
@@ -2421,6 +2425,28 @@ mod tests {
         assert!(nobody.is_err(), "an unregistered judge must be refused");
         let human = super::accept_decision(&d, "d1", "abc1234", "2026-08-21", "hum", "hum", "their words");
         assert!(human.is_ok(), "a registered Person accepts: {human:?}");
+    }
+
+    /// issue526 write layer: rejecting a Decision refuses an AI-kind actor and an unregistered name
+    /// exactly as accepting one does, and a refused write leaves the file byte-for-byte; a registered
+    /// Person rejects and the file carries the `Reject` event and the `rejected` status.
+    #[test]
+    fn reject_decision_refuses_ai_and_unregistered_judges() {
+        let root = k6_root("reject");
+        let d = root.join(".engine").join("decisions").join("0002-t.sysml");
+        let body = "package D2 {\n    part d2 : Decision { :>> id = \"e2e00000-0000-4000-8000-00000000d002\"; :>> status = DecisionStatus::proposed; }\n}\n";
+        std::fs::write(&d, body).expect("decision");
+        let before = std::fs::read(&d).expect("read");
+        let ai = super::reject_decision(&d, "d2", "abc1234", "2026-09-13", "bot", "bot", "not this way");
+        assert!(ai.is_err(), "an AI-kind judge must be refused");
+        assert!(format!("{}", ai.unwrap_err()).contains("AI actor"), "the refusal names the cause");
+        let nobody = super::reject_decision(&d, "d2", "abc1234", "2026-09-13", "ghost", "ghost", "not this way");
+        assert!(nobody.is_err(), "an unregistered judge must be refused");
+        assert_eq!(std::fs::read(&d).expect("read"), before, "a refused rejection leaves the file byte-for-byte");
+        let human = super::reject_decision(&d, "d2", "abc1234", "2026-09-13", "hum", "hum", "not this way");
+        assert!(human.is_ok(), "a registered Person rejects: {human:?}");
+        let after = std::fs::read_to_string(&d).expect("read");
+        assert!(after.contains("DecisionStatus::rejected") && after.contains("d2RejectR1"), "the rejection lands as status + event");
     }
 
     /// K6/D0178 write layer: a `method=confirmation` result refuses an AI-kind judge; an ordinary

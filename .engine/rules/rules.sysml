@@ -119,6 +119,22 @@ package EngineRuleSet {
     }
     #JustifiedBy dependency from confirmationAuthenticityRule to d0106;
 
+    // issue526: the rejected branch of the same review loop (D0121/D0122). `keel reject` writes a
+    // `{decision}Reject` confirmation event whose result must be judged by a HUMAN - the write layer
+    // refuses an AI-kind judge (write::reject_decision) and this rule holds the recorded tree to the
+    // same claim. GATING - the guard `confirmation-authenticity` reads this rule beside the accepted one.
+    part rejectionAuthenticityRule : ElementRule {
+        :>> id = "50348cb4-e974-46c9-ba19-169cf6a9c25a";
+        :>> title = "A rejected Decision's rejection must be human-judged (never AI-fabricated)";
+        :>> subjectType = "Decision";
+        :>> predicate = "resultJudgedByHuman(Reject)";
+        :>> severity = RuleSeverity::blocking;
+        :>> onViolation = ViolationKind::block;
+        :>> appliesWhen = "whereStatus(rejected)";
+        :>> exemptions = "";
+    }
+    #JustifiedBy dependency from rejectionAuthenticityRule to d0470;
+
     // D0192 OPTION A (the delegation clause, srK06aDelegatedRecording): an acceptance recorded under
     // the declared recording delegation must EVIDENCE its channel - quote the human's conversational
     // words verbatim (a single-quoted span) or cite a human surface gesture (deck/console/GitHub comment,

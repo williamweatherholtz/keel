@@ -1203,4 +1203,37 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcEveryRegisteredRefusalLedgersAFire to issue527;
+
+    part issue528 : Issue {
+        :>> id = "a648d062-6f63-4c10-b23a-2426051e6fae";
+        :>> title = "The living doc surface names retired top-level verbs and nothing holds it to the CLI surface";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Ten sites in three engine skills (test-verify SKILL.md:83-85,140-142 `KEEL validate|check-engine|guard`; knowledge-graph-memory SKILL.md:98,101 `keel why`, `keel knowledge`; build SKILL.md:4 and registry.sysml:15 `keel workspace`) name top-level verbs the binary no longer dispatches: each was folded under a router (D0452 gate, show; projects) and `keel <verb> .` now prints the top-level usage and exits 2. cli_surface::COMMAND_NAMES (keel-cli/src/cli_surface.rs:23) is the declared surface and the cli-surface-declared guard holds facts = help = dispatch, but nothing holds the LIVING DOC SURFACE to it - tool-reference (guards.md:77) checks .engine/tools/<file> paths only. Consequence observed 2026-09-13: the sprint 701 VERIFIER followed test-verify verbatim, its three gate commands exited 2 with a usage dump, and the receipt came back with no validate / check-engine / guard lines and DISCREPANCIES: NONE - a control (D0425) whose procedure had silently stopped naming real commands. Found by running the skill's own lines against keel-serve.exe.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcLivingDocsNameOnlyDeclaredCliVerbs to issue528;
+
+    part issue529 : Issue {
+        :>> id = "7ea45fd4-49d2-48f1-a452-ffcb03d527ae";
+        :>> title = "The human-authority list test runs in one direction: a verdict command in neither list is invisible to it";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The control_structure test human_authority_commands_refuse_an_ai_actor (keel-cli/src/view/control_structure.rs:1366) holds every command in HUMAN_AUTHORITY_COMMANDS to the write layer's HUMAN_ONLY_WRITE_COMMANDS, so a command listed in both is checked and a command listed in neither is invisible to it: `keel reject` sat outside both lists from D0393 (2026-09-08) until sprint 702 (2026-09-13) while its declared synopsis in .engine/cli/commands.sysml (cliReject) said 'record a human's rejection ... the same channel rules as accept'. The CLI facts already state which commands record a human's verdict - accept, reject and judge-set all open their synopsis with 'record a human's' - and D0271 makes those facts the authority, but nothing reads them back against the two Rust lists. The test runs in one direction only: list -> write layer, never facts -> list. Found at sprint 702's retro (D0131).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcVerdictCommandsAreReadBackIntoTheAuthorityLists to issue529;
+
+    part issue530 : Issue {
+        :>> id = "59321477-ab29-4488-a351-7d77ff36dace";
+        :>> title = "The verifier recomputes the touched receipt's stem attribution from a rule that moved: a correct receipt over an .engine change reads MISMATCH";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The test-verify skill's receipt-honesty table (.engine/skills/test-verify/SKILL.md:126) defines `stems` as the sorted set of `<stem>` for every changed keel-cli/src/<stem>.rs, and the verifier is told to write MATCH or MISMATCH from that comparison. touched.rs (keel-cli/src/touched.rs:16, 63-74, embedded_stem) has since made a changed path under .engine/ contribute the stem `init`, because that tree is compiled into the binary and every test that runs `keel init` reads it. The sprint 702 VERIFIER followed the skill verbatim over a diff that touched .engine/rules/rules.sysml, computed the expected set from `git diff origin/main -- keel-cli/src` alone, and wrote `stems=[control_structure, guards, init, write] changed=[control_structure, guards, write] MISMATCH` with a DISCREPANCIES line naming init - a correct receipt reported as dishonest. The verifier recomputes what the binary already knows: the receipt carries `stems` and `unattributed` but not the changed paths it attributed them from, so the reader has no way to check the attribution except by re-deriving the rule, and the rule moved. Same class as issue528 (a control's procedure names something the binary no longer does) in the other direction (the binary does something the procedure does not know). Found at sprint 702's verification (D0131).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcTouchedReceiptStatesItsOwnAttribution to issue530;
 }

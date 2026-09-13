@@ -341,27 +341,33 @@ pub fn actors(root: &Path) -> GuardReport {
 
 // ── acceptance-events guard (accepted Decision has a passing acceptance event) ─────────────────
 
-/// Guard: an accepted Decision's acceptance event must be HUMAN-judged (D0106/issue059).
+/// Guard: an accepted Decision's acceptance event - and a rejected Decision's rejection event
+/// (issue526) - must be HUMAN-judged (D0106/issue059).
 ///
 /// The enforceable slice of strict process-boundedness (a sign-off is never AI-fabricated). Rule-sourced
-/// from `confirmationAuthenticityRule` (the CONTRACT pattern). D0106's conversational parse-first part is
-/// inherently un-gatable at commit and stays reminder-enforced.
+/// from `confirmationAuthenticityRule` and `rejectionAuthenticityRule` (the CONTRACT pattern). D0106's
+/// conversational parse-first part is inherently un-gatable at commit and stays reminder-enforced.
 #[must_use]
 pub fn confirmation_authenticity(root: &Path) -> GuardReport {
-    let mut report = match crate::view::rule_violations_opt(root, "confirmationAuthenticityRule") {
-        Ok(Some((scanned, bad))) => {
-            let violations = bad
-                .into_iter()
-                .map(|d| format!("{d}: accepted but its acceptance event is not human-judged — a sign-off must be a real human attestation, never AI-fabricated (D0106/D0016)"))
-                .collect();
-            GuardReport { name: "confirmation-authenticity", scanned, warnings: Vec::new(), violations }
+    let mut report = GuardReport { name: "confirmation-authenticity", scanned: 0, warnings: Vec::new(), violations: Vec::new() };
+    for (rule, verdict, event) in [
+        ("confirmationAuthenticityRule", "accepted", "acceptance"),
+        ("rejectionAuthenticityRule", "rejected", "rejection"),
+    ] {
+        match crate::view::rule_violations_opt(root, rule) {
+            Ok(Some((scanned, bad))) => {
+                report.scanned += scanned;
+                report.violations.extend(bad.into_iter().map(|d| {
+                    format!("{d}: {verdict} but its {event} event is not human-judged — a sign-off must be a real human attestation, never AI-fabricated (D0106/D0016)")
+                }));
+            }
+            // D0136/issue090: an ABSENT rule means the project has not ADOPTED this control —
+            // it has not violated it. Warn (never silent, so deleting a rule to dodge the gate is
+            // visible) and pass; a MALFORMED rule still fails via Err below.
+            Ok(None) => report.warnings.push(format!("declared rule `{rule}` is not present — this control is NOT ADOPTED by this project, so nothing was checked (D0136/issue090)")),
+            Err(e) => report.violations.push(format!("error reading {rule}: {e}")),
         }
-                // D0136/issue090: an ABSENT rule means the project has not ADOPTED this control —
-        // it has not violated it. Warn (never silent, so deleting a rule to dodge the gate is
-        // visible) and pass; a MALFORMED rule still fails via Err below.
-        Ok(None) => GuardReport { name: "confirmation-authenticity", scanned: 0, warnings: vec!["declared rule `confirmationAuthenticityRule` is not present — this control is NOT ADOPTED by this project, so nothing was checked (D0136/issue090)".to_string()], violations: Vec::new() },
-Err(e) => GuardReport { name: "confirmation-authenticity", scanned: 0, warnings: Vec::new(), violations: vec![format!("error reading confirmation-authenticity rule: {e}")] },
-    };
+    }
     // D0192 OPTION A substance half: when the attestation policy DECLARES a recording delegation for
     // acceptances, a delegated record must actually quote the human's conversational words. Sourced
     // from `delegatedAcceptanceSubstanceRule` (CONTRACT pattern, forward-only per the rule's cutoff).
