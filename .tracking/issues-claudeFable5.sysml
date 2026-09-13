@@ -1104,4 +1104,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcStagedAcceptanceIsProbedAsACharter to issue518;
+
+    part issue519 : Issue {
+        :>> id = "055bf761-0e68-4882-aa40-e7874bba6303";
+        :>> title = "The routing rig's sandbox removes the instrument the intake prefix's procedure runs, so every intake-prefixed sample spends turns on a search the real agent never makes";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The routing rig (.engine/tools/routing_probe.py) runs each probe session with Bash, Write, Edit and NotebookEdit disallowed so the session cannot write to the tree. Intake is the one declared prefix (D0418) and its deployed procedure tells the agent to run keel record statement - a Bash call. FOUND 2026-09-13, sprint 695, the release case re-run at --turns 6 --samples 3 after the budget verdict landed (issue432): every sample routed, and every sample's transcript was Skill(intake), then one or two ToolSearch calls, then Skill(release) - the agent hunting for the instrument the prefix's procedure names before it could go on. At 3 turns that search consumed the budget (3/3 none on 2026-09-09, 1 routed / 2 none on 2026-09-10, issue456's cause); at 6 turns the route survives it but the cost is paid on every intake-prefixed sample of every case, about one to two turns and their seconds and dollars (measured per run 66.8s, 1.3165 USD against 47.2s, 1.2352 USD at 3 turns). The real agent never makes that search: it has Bash. So the rig's samples carry a cost and a hazard the thing under test does not, and a larger --turns hides rather than removes it. Not in-field: found reading the rig's own transcripts. RESOLVER: dcRigSandboxKeepsThePrefixInstrument - the probe session gets a non-writing way to complete the prefix, verified to have written nothing, so the prefix completes in one turn.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRigSandboxKeepsThePrefixInstrument to issue519;
 }

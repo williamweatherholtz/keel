@@ -12,7 +12,12 @@ WHAT IS READ, per sample - the WHOLE turn, not its first Skill call (issue415):
   wrong      a skill that is neither accepted nor intake was invoked - worse than silence, because the
              agent proceeded confidently under the wrong procedure, whether or not the intended skill
              followed it
-  none       the intended skill never appeared (an intake-only turn is `none` with its prefix shown)
+  budget     a declared prefix was invoked, the intended skill never appeared, and the sample used its
+             whole turn budget - the CHECK ran out, not the route (issue432: 3/3 `none` at 3 turns with
+             intake in every sample and tool calls to the last turn was reading the budget)
+  none       the intended skill never appeared and the turn stopped short of its budget (an intake-only
+             turn that stopped is `none` with its prefix shown; a turn with no Skill call at all is `none`
+             whatever it spent - nothing was on its way)
   error      the run itself failed (reported, never read as a verdict)
 
 WHY INTAKE IS THE ONE DECLARED PREFIX. The rig's first investigation (2026-09-08) read the release case
@@ -101,13 +106,15 @@ def short(skill):
     return skill.split(":")[-1]
 
 
-def score(skills, accept):
+def score(skills, accept, turns_used=0, turns=0):
     """The verdict over EVERY Skill call of a turn, in order -> (verdict, skill_seen, prefix).
 
     routed: an accepted skill appears and everything before it is a declared prefix; skill_seen is the
     accepted name, prefix the calls before it. wrong: a skill that is neither accepted nor a declared
-    prefix appears anywhere; skill_seen is the first such name. none: no accepted skill and nothing
-    wrong - an empty turn, or an intake-only turn (prefix shows it). Pure, so `--probe` can read it.
+    prefix appears anywhere; skill_seen is the first such name. budget: a declared prefix was invoked,
+    nothing accepted followed, and the turn used its whole budget (`turns_used >= turns`, both known) -
+    the check ran out, not the route (issue432). none: no accepted skill and nothing wrong - an empty
+    turn, or a prefix-only turn that stopped short of the budget. Pure, so `--probe` can read it.
     """
     prefix = []
     for name in (short(s) for s in skills):
@@ -117,6 +124,8 @@ def score(skills, accept):
             prefix.append(name)
             continue
         return "wrong", name, prefix
+    if prefix and turns and turns_used >= turns:
+        return "budget", None, prefix
     return "none", None, prefix
 
 
@@ -130,10 +139,16 @@ def probe():
         ("intake alone = none, prefix shown", ["intake"], ["release"], ("none", None, ["intake"])),
         ("intake then stpa, release never = wrong", ["intake", "stpa"], ["release"], ("wrong", "stpa", ["intake"])),
         ("a namespaced call scores by its short name", ["projectSettings:intake", "projectSettings:release"], ["release"], ("routed", "release", ["intake"])),
+        # issue432: the same Skill calls, told apart by the budget - the two the DoD names, then the edges
+        ("intake, then two non-Skill turns to a 3-turn budget = budget", ["intake"], ["release"], ("budget", None, ["intake"]), (3, 3)),
+        ("intake alone with one turn left = none", ["intake"], ["release"], ("none", None, ["intake"]), (2, 3)),
+        ("no Skill call at all to the budget = none, nothing was on its way", [], ["release"], ("none", None, []), (3, 3)),
+        ("intake then release at the budget = routed, the route beat the budget", ["intake", "release"], ["release"], ("routed", "release", ["intake"]), (3, 3)),
+        ("intake then stpa at the budget = wrong, not budget", ["intake", "stpa"], ["release"], ("wrong", "stpa", ["intake"]), (3, 3)),
     ]
     ok = True
-    for what, skills, accept, want in cases:
-        got = score(skills, accept)
+    for what, skills, accept, want, *budget in cases:
+        got = score(skills, accept, *(budget[0] if budget else ()))
         held = got == want
         ok &= held
         print(f"[probe] {'PASS' if held else 'FAIL'} {what}\n        -> {got}" + ("" if held else f" wanted {want}"))
@@ -469,7 +484,7 @@ def run_one(accept, prompt, turns, model):
     except subprocess.TimeoutExpired:
         return "error", None, [], [], [], time.time() - started, 0.0, "timed out after 240s"
 
-    skills, tools, cost = [], [], 0.0
+    skills, tools, cost, turns_used = [], [], 0.0, 0
     for line in proc.stdout.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -479,6 +494,7 @@ def run_one(accept, prompt, turns, model):
         except json.JSONDecodeError:
             continue
         if ev.get("type") == "assistant":
+            turns_used += 1  # one assistant message per turn; the result event's num_turns overrides
             for block in ev.get("message", {}).get("content", []):
                 if block.get("type") == "tool_use":
                     tool = block.get("name", "")
@@ -487,12 +503,14 @@ def run_one(accept, prompt, turns, model):
                         skills.append(str(block.get("input", {}).get("skill", "")))
         elif ev.get("type") == "result":
             cost = float(ev.get("total_cost_usd") or 0.0)
+            if ev.get("num_turns"):
+                turns_used = int(ev["num_turns"])
 
     seconds = time.time() - started
     if proc.returncode != 0 and not tools:
         return "error", None, [], skills, tools, seconds, cost, (proc.stderr or "")[:160]
-    verdict, seen, prefix = score(skills, accept)
-    return verdict, seen, prefix, skills, tools, seconds, cost, ""
+    verdict, seen, prefix = score(skills, accept, turns_used, turns)
+    return verdict, seen, prefix, skills, tools, seconds, cost, (f"{turns_used}/{turns} turns" if verdict == "budget" else "")
 
 
 def last_measured():
@@ -523,12 +541,15 @@ def finding(name, verdicts, samples):
             return f"1 sample   {name}: routed once - a single sample; run --samples {samples if samples > 1 else 3} to establish it"
         return (f"SUSPICION  {name}: {v} on ONE sample - not a finding of not-routing (issue392); "
                 f"re-run with --samples 3")
-    counts = {v: read.count(v) for v in ("routed", "wrong", "none") if read.count(v)}
+    counts = {v: read.count(v) for v in ("routed", "wrong", "budget", "none") if read.count(v)}
     tail = f" ({errored} errored)" if errored else ""
     if len(counts) == 1:
         v, n = next(iter(counts.items()))
         if v == "routed":
             return f"ROUTED     {name}: {n}/{n} samples agree{tail}"
+        if v == "budget":
+            return (f"BUDGET     {name}: {n}/{n} samples spent the turn budget after a declared prefix{tail} - the CHECK "
+                    f"ran out, not the route (issue432): re-run with a larger --turns before reading this case")
         return (f"NOT ROUTING {name}: {n}/{n} samples {v}{tail} - a finding: record an Issue "
                 f"carrying the prompt that missed (dcSkillsRouteBehaviourally VERIFY)")
     spread = ", ".join(f"{n} {v}" for v, n in counts.items())
@@ -618,7 +639,7 @@ def main():
             rows[name].append({"sample": i, "verdict": verdict, "skillInvoked": seen, "prefix": prefix,
                                "skillsInvoked": skills, "tools": tools[:8], "seconds": round(secs, 1),
                                "costUsd": round(cost, 4), "note": note})
-            mark = {"routed": "ROUTED", "wrong": "WRONG ", "none": "none  ", "error": "ERROR "}[verdict]
+            mark = {"routed": "ROUTED", "wrong": "WRONG ", "budget": "BUDGET", "none": "none  ", "error": "ERROR "}[verdict]
             extra = f" -> {' then '.join(skills)}" if verdict == "wrong" else (f"  {note}" if note else "")
             if prefix:
                 extra = f" prefix {' then '.join(prefix)}" + extra
