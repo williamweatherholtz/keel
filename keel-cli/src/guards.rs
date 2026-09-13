@@ -5011,19 +5011,12 @@ pub fn decision_scaffolding(root: &Path) -> GuardReport {
         }
     }
     let scanned = candidates.len();
-    // Reachability: any inbound tracked-item edge (charteredby/derivedfrom/resolves) or satisfy.
-    let reachable = |d: &str| -> bool {
-        let charter = "#CharteredBy dependency from ";
-        texts.iter().any(|(_, t)| {
-            t.lines().any(|l| {
-                let l = l.trim_start();
-                ((l.starts_with(charter) || l.starts_with("#DerivedFrom dependency from ") || l.starts_with("#Resolves dependency from "))
-                    && l.trim_end().trim_end_matches(';').ends_with(&format!(" to {d}")))
-                    || l.starts_with(&format!("satisfy {d} by "))
-            })
-        })
-    };
-    let mut bare: Vec<(String, String)> = candidates.into_iter().filter(|(d, _)| !reachable(d)).collect();
+    // Reachability: any inbound tracked-item edge (charteredby/derivedfrom/resolves) or satisfy. The
+    // targets are collected ONCE (issue520): the per-candidate rescan of every corpus line, with two
+    // string allocations per line, put this guard at 4645-12463 ms per fire and led 14 of the stop
+    // hook's 15 slow fires. One pass, one set, one lookup per candidate; the verdicts are unchanged.
+    let targets = inbound_edge_targets(&texts);
+    let mut bare: Vec<(String, String)> = unreached(candidates, &targets);
     // Landing-sprint grace: the newest violator by acceptance date is exempt.
     bare.sort_by(|a, b| a.1.cmp(&b.1));
     if !bare.is_empty() {
@@ -5139,6 +5132,98 @@ mod compound_decision_tests {
         let (forward, grandfathered) = compound_decisions(&texts, "2026-09-05");
         assert_eq!(forward, vec![("d0901".to_string(), 2)]);
         assert_eq!(grandfathered, 1);
+    }
+}
+
+/// Pure core (issue520): the inbound tracked-item edge targets of a corpus, read once - the `X` of
+/// every `#CharteredBy` / `#DerivedFrom` / `#Resolves dependency from ... to X;` line and the `X` of
+/// every `satisfy X by ...` line, each read at the start of its line. `decision_scaffolding` answers a
+/// candidate's reachability with one lookup in this set instead of rescanning the corpus per candidate.
+fn inbound_edge_targets(texts: &[(String, String)]) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for (_, t) in texts {
+        for line in t.lines() {
+            let l = line.trim_start();
+            if l.starts_with("#CharteredBy dependency from ")
+                || l.starts_with("#DerivedFrom dependency from ")
+                || l.starts_with("#Resolves dependency from ")
+            {
+                if let Some((_, to)) = l.trim_end().trim_end_matches(';').rsplit_once(" to ") {
+                    out.insert(to.to_string());
+                }
+            } else if let Some(rest) = l.strip_prefix("satisfy ") {
+                if let Some((subject, _)) = rest.split_once(" by ") {
+                    out.insert(subject.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The candidates no inbound edge reaches, before the landing-sprint grace - `(decision, acceptedAt)`
+/// in candidate order. Separated from the grace so the known positive (a bare Decision beside a
+/// chartered one is named) can be pinned: through the public guard a lone bare Decision is always the
+/// newest violator and the grace exempts it.
+fn unreached(candidates: Vec<(String, String)>, targets: &HashSet<String>) -> Vec<(String, String)> {
+    candidates.into_iter().filter(|(d, _)| !targets.contains(d.as_str())).collect()
+}
+
+#[cfg(test)]
+mod inbound_edge_tests {
+    use super::{decision_scaffolding, inbound_edge_targets, unreached};
+
+    const EDGES: &str = "package P {\n    #CharteredBy dependency from storyA to d0901;\n    #DerivedFrom dependency from us9 to st9;\n        #Resolves dependency from dcFix to issue903;;\n    satisfy nNeed by srReq;\n    :>> decision = \"#CharteredBy dependency from s to d0904;\";\n    #CharteredBy dependency from storyB to d0905 ;\n    dependency from x to d0906;\n}\n";
+
+    /// D0388 pair on the pure core: the four edge shapes are read at the start of a line (with a
+    /// trailing `;;` and a nested indent); a prose line quoting an edge and an untyped dependency are
+    /// not targets, and a head followed by a space before its `;` reaches no name (the set holds the
+    /// bytes as written, which is what the per-candidate `ends_with` also saw).
+    #[test]
+    fn the_targets_are_the_edge_heads_read_once() {
+        let texts = vec![("a.sysml".to_string(), EDGES.to_string())];
+        let t = inbound_edge_targets(&texts);
+        for hit in ["d0901", "st9", "issue903", "nNeed"] {
+            assert!(t.contains(hit), "{hit} missing from {t:?}");
+        }
+        for miss in ["d0904", "d0905", "d0906", "storyA", "srReq"] {
+            assert!(!t.contains(miss), "{miss} wrongly in {t:?}");
+        }
+        assert!(inbound_edge_targets(&[]).is_empty());
+        let cands = vec![("d0901".to_string(), "2026-09-10".to_string()), ("d0904".to_string(), "2026-09-11".to_string())];
+        assert_eq!(unreached(cands, &t), vec![("d0904".to_string(), "2026-09-11".to_string())], "the bare one is named, the chartered one is not");
+    }
+
+    fn decision(name: &str, accepted_at: &str) -> String {
+        format!(
+            "    #ProspectiveChange part {name} : Decision {{ :>> id = \"00000000-0000-4000-8000-00000000{}\"; :>> title = \"t\"; :>> status = DecisionStatus::accepted; }}\n    part {name}AcceptR : TestResult {{ :>> outcome = VerdictKind::pass; :>> judgedAt = \"{accepted_at}\"; :>> judgedBy = \"human\"; }}\n",
+            &name[1..]
+        )
+    }
+
+    fn run(tag: &str, body: &str) -> Vec<String> {
+        let root = std::env::temp_dir().join(format!("keel-inbound-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
+        let boundary = "    part d0188AcceptR : TestResult { :>> outcome = VerdictKind::pass; :>> judgedAt = \"2026-01-01\"; }\n";
+        std::fs::write(root.join(".tracking/fx.sysml"), format!("package Fx {{\n{boundary}{body}}}\n")).expect("write");
+        let r = decision_scaffolding(&root);
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(r.violations.is_empty(), "{:?}", r.violations);
+        r.warnings
+    }
+
+    /// Through the public guard: two bare accepted Decisions beside a chartered one - the OLDER bare
+    /// one is named and the newest is exempt under the landing-sprint grace (known positive); one
+    /// bare Decision that is the newest violator names nothing (known negative).
+    #[test]
+    fn the_guard_reads_the_same_verdicts_from_the_set() {
+        let chartered = format!("{}    #CharteredBy dependency from story to d0901;\n", decision("d0901", "2026-09-10"));
+        let w = run("pos", &format!("{chartered}{}{}", decision("d0902", "2026-09-11"), decision("d0903", "2026-09-12")));
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].starts_with("d0902 (accepted 2026-09-11)"), "{w:?}");
+        let w = run("neg", &format!("{chartered}{}", decision("d0902", "2026-09-11")));
+        assert!(w.is_empty(), "{w:?}");
     }
 }
 

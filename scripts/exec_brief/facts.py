@@ -1901,6 +1901,221 @@ fact("hookCriticalPathIssue", {
      ".tracking/issues-claudeFable5.sysml: the `title` of `part issue520 : Issue`, the `from` of `#Resolves dependency from "
      "<task> to issue520;`, and whether the hookLatencyIndicator `surfaces` line in indicator-triggers.toml names issue520.")
 
+# ================================================================ 23. the twenty-second publish's ask
+# The measured-cost token (D0469): the pending set as the authority lens computes it, the Decision's own fields read
+# from its file, the census of marked Decisions the guard clause would read on acceptance - mirrored in python from
+# guards.rs unmeasured_path_decisions so the page states a live consequence it computed, not one it copied - the
+# MEASURED figures parsed from the rationale, the 528 s origin from the Issue's text, and the sprint record.
+
+# --- D0469: the pending set from the authority queue - the assessment the surfacing skill reads (D0359)
+_AQ_HOW = ("`" + KEEL + " show authority-queue .` - JSON; `awaiting[]` rows whose `kind` is decisionAcceptance, their `item` "
+           "in the lens's order. Rows of other kinds (findingDisposition) are counted, not listed.")
+ok, out = run([KEEL, "show", "authority-queue", "."], timeout=120)
+_aq = as_json(out) if ok else None
+if _aq and isinstance(_aq.get("awaiting"), list):
+    _aq_rows = [a for a in _aq["awaiting"] if isinstance(a, dict)]
+    fact("authorityQueuePending", {
+        "decisions": [a.get("item") for a in _aq_rows if a.get("kind") == "decisionAcceptance"],
+        "otherKinds": len([a for a in _aq_rows if a.get("kind") != "decisionAcceptance"]),
+        "asOf": _aq.get("asOf"),
+    }, "Decisions awaiting the human's acceptance", _AQ_HOW)
+else:
+    fact("authorityQueuePending", None, "Decisions awaiting the human's acceptance",
+         _AQ_HOW + " Command failed or not JSON: " + (out[:200] if ok else out))
+
+# --- D0469: the Decision's own fields, read from its file the way the guard reads them
+_d0469 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0469-"):
+        _d0469 = read(os.path.join(DEC_DIR, _fn)) or ""
+_PATH_WORDS = ("land", "push", "refuse", "gate")
+
+
+def _guard_field(text, dname, key):
+    """guards.rs unmeasured_path_decisions' field read: the body from `part dNNNN : Decision` to the first `\\n    }`,
+    the value from `key = "` to the next double quote."""
+    s = text.find("part " + dname + " : Decision")
+    if s < 0:
+        return ""
+    body = text[s:]
+    e = body.find("\n    }")
+    body = body if e < 0 else body[:e]
+    k = body.find(key + ' = "')
+    if k < 0:
+        return ""
+    v = body[k + len(key) + 4:]
+    q = v.find('"')
+    return v if q < 0 else v[:q]
+
+
+def _path_words(decision_text):
+    """The whole words of PATH_WORDS in the lower-cased text split on every non-alphanumeric character."""
+    return sorted({w for w in re.split(r"[^a-z0-9]", decision_text.lower()) if w in _PATH_WORDS})
+
+
+def _acceptance_kind(text, dname):
+    """guards.rs acceptance_kind: None with no passing AcceptR segment; 'auto' when the Accept Test says AUTO-ACCEPTED."""
+    if not any("VerdictKind::pass" in text[m.end():].split("}", 1)[0]
+               for m in re.finditer(r"part " + dname + r"AcceptR", text)):
+        return None
+    _acc = text.find("verification " + dname + "Accept : Test")
+    return "auto" if _acc >= 0 and "AUTO-ACCEPTED" in text[_acc:].split("}", 1)[0] else "human"
+
+
+_dec9 = _guard_field(_d0469, "d0469", "decision")
+_rat9 = _guard_field(_d0469, "d0469", "rationale")
+_con9 = _guard_field(_d0469, "d0469", "consequences")
+_ctx9 = _guard_field(_d0469, "d0469", "context")
+fact("measuredCostDecision", {
+    "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0469) or [None, None])[1],
+    "createdAt": _guard_field(_d0469, "d0469", "createdAt") or None,
+    "marker": "#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+d0469\s*:", _d0469, re.M) else None,
+    "acceptance": _acceptance_kind(_d0469, "d0469"),
+    "notAFork": _dec9.lstrip().startswith("NOT A FORK"),
+    "decision": _dec9, "rationale": _rat9, "consequences": _con9, "context": _ctx9,
+    "carriesMeasuredToken": "MEASURED:" in _rat9,
+    "ownPathWords": _path_words(_dec9),
+    "isWarning": "WARNS" in _dec9 or "WARNING" in _rat9,
+    "namesIssue444": "issue444" in _ctx9,
+    "dischargesObligation": (re.search(r"discharges (obligation\w+)", _con9) or [None, None])[1],
+    "processChangeWords": bool(re.search(r"process-change", _dec9 + _rat9 + _con9 + _ctx9)),
+} if _d0469 else None, "the Decision's fields as the guard reads them",
+     "regex over .engine/decisions/0469-*.sysml: status from `DecisionStatus::x`; marker = a line `#ProspectiveChange part "
+     "d0469 :`; acceptance mirrors guards.rs acceptance_kind (None = no passing AcceptR segment); decision / rationale / "
+     "consequences / context read as guards.rs unmeasured_path_decisions reads a field - from `key = \"` to the next quote "
+     "inside the body that runs from `part d0469 : Decision` to the first `\\n    }`; carriesMeasuredToken = the literal "
+     "`MEASURED:` in the rationale; ownPathWords = the four PATH_WORDS found as whole words in the lower-cased decision text "
+     "split on every non-alphanumeric character (the guard's own split); isWarning = `WARNS` in the decision or `WARNING` "
+     "in the rationale; dischargesObligation = the word after `discharges ` in consequences.")
+
+# --- D0469: the marked Decisions the clause reads, and the set it would name on acceptance - the guard mirrored
+_pw_rows = []
+_MARK_ANY = re.compile(r"^\s*#(ProspectiveChange|SafetyChange)\s+part\s+(d\d{4})\s*:\s*Decision", re.M)
+for _fn in sorted(os.listdir(DEC_DIR)):
+    if not _fn.endswith(".sysml"):
+        continue
+    _t = read(os.path.join(DEC_DIR, _fn)) or ""
+    for _mk, _dn in _MARK_ANY.findall(_t):
+        _ak = _acceptance_kind(_t, _dn)
+        if _ak is not None:
+            continue                       # accepted, by a human or by consent: the human's word already, not read
+        _dtxt = _guard_field(_t, _dn, "decision")
+        _rtxt = _guard_field(_t, _dn, "rationale")
+        _w = _path_words(_dtxt)
+        _pw_rows.append({
+            "decision": _dn, "marker": "#" + _mk,
+            "status": (re.search(r"part " + _dn + r"\s*:\s*Decision.*?status\s*=\s*DecisionStatus::(\w+)", _t, re.DOTALL) or [None, None])[1],
+            "pathWords": _w, "carriesMeasuredToken": "MEASURED:" in _rtxt,
+            "wouldWarn": _mk == "ProspectiveChange" and bool(_w) and "MEASURED:" not in _rtxt,
+        })
+fact("pathWordCensus", {
+    "unaccepted": len(_pw_rows),
+    "prospective": sum(1 for r in _pw_rows if r["marker"] == "#ProspectiveChange"),
+    "safety": sum(1 for r in _pw_rows if r["marker"] == "#SafetyChange"),
+    "byStatus": {s: sum(1 for r in _pw_rows if r["status"] == s) for s in sorted({r["status"] for r in _pw_rows}, key=str)},
+    "namingAWord": [r["decision"] for r in _pw_rows if r["pathWords"]],
+    "withToken": [r["decision"] for r in _pw_rows if r["carriesMeasuredToken"]],
+    "wouldWarn": sorted(r["decision"] for r in _pw_rows if r["wouldWarn"]),
+    "rows": _pw_rows,
+    "armed": _acceptance_kind(_d0469, "d0469") == "human",
+} if _pw_rows else None, "unaccepted marked Decisions and what the clause would name",
+     "over .engine/decisions/*.sysml, mirroring guards.rs unmeasured_path_decisions + acceptance_kind: every line "
+     "`#ProspectiveChange part dNNNN : Decision` or `#SafetyChange part dNNNN : Decision`; a Decision with a passing "
+     "`part dNNNNAcceptR` segment is dropped (accepted by a human or by consent); for the rest the `decision` field is "
+     "lower-cased, split on every non-alphanumeric character and the whole words land/push/refuse/gate kept; "
+     "carriesMeasuredToken = `MEASURED:` in the `rationale` field; wouldWarn = #ProspectiveChange (the guard reads that "
+     "marker only) AND at least one word AND no token. A REJECTED Decision has no passing AcceptR and is read like a "
+     "proposed one, as the guard reads it. armed = d0469 itself carries a HUMAN acceptance (D0337: the clause is inert "
+     "until then).")
+
+# --- D0469: the MEASURED figures, parsed from the rationale - the cost of the inert clause on this host
+_m_before = re.search(r"before the clause ([\d.]+) s median \(([\d.]+) / ([\d.]+) / ([\d.]+)\)", _rat9)
+_m_with = re.search(r"holding it ([\d.]+) s median \(([\d.]+) / ([\d.]+) / ([\d.]+)\)", _rat9)
+_m_tree = re.search(r"working tree at (\w+) plus this change, host (\w+), (\d{4}-\d{2}-\d{2}), (\w+) runs each", _rat9)
+_m_files = re.search(r"\((\d+) files on this tree\)", _rat9)
+fact("measuredCostFigures", {
+    "run": "keel gate guard --no-receipt" if "keel gate guard --no-receipt" in _rat9 else None,
+    "tree": _m_tree.group(1) if _m_tree else None,
+    "host": _m_tree.group(2) if _m_tree else None,
+    "date": _m_tree.group(3) if _m_tree else None,
+    "runsEach": _m_tree.group(4) if _m_tree else None,
+    "beforeMedianS": float(_m_before.group(1)) if _m_before else None,
+    "beforeRunsS": [float(_m_before.group(i)) for i in (2, 3, 4)] if _m_before else None,
+    "withMedianS": float(_m_with.group(1)) if _m_with else None,
+    "withRunsS": [float(_m_with.group(i)) for i in (2, 3, 4)] if _m_with else None,
+    "markedFilesRead": int(_m_files.group(1)) if _m_files else None,
+    "armedPathMeasured": "not measurable before the acceptance" not in _rat9,
+} if _m_before and _m_with else None, "the Decision's own MEASURED: figures",
+     "regex over the `rationale` field of .engine/decisions/0469-*.sysml after its `MEASURED:` token: `before the clause N s "
+     "median (a / b / c)`, `holding it N s median (a / b / c)`, `working tree at <sha> plus this change, host <id>, <date>, "
+     "<word> runs each`, `(N files on this tree)`; armedPathMeasured = False when the rationale says the armed path is "
+     "`not measurable before the acceptance`. Nothing is re-timed here: the figures are the Decision's, quoted.")
+
+# --- D0469: the origin - the Issue whose text holds the 528 s, and the Decision it corrected
+_iss_o = read(os.path.join(REPO, ".tracking", "issues-claudeOpus5.sysml")) or ""
+_i444 = re.search(r"part issue444\s*:\s*Issue\s*\{(.*?)\n\s*\}", _iss_o, re.DOTALL)
+_i444_body = _i444.group(1) if _i444 else ""
+_i444_title = re.search(r':>>\s*title\s*=\s*"(.*?)";', _i444_body, re.DOTALL)
+_i444_desc = re.search(r':>>\s*description\s*=\s*"(.*?)";', _i444_body, re.DOTALL)
+_i444_d = _i444_desc.group(1) if _i444_desc else ""
+_o_wall = re.search(r"named (\d+) integration binaries plus the lib: (\d+) s wall", _i444_d)
+_o_suite = re.search(r"full suite's (\d+) s at (\w+)", _i444_d)
+_o_split = re.search(r"compile (\d+) s, tests (\d+) s, (\d+) passed", _i444_d)
+_o_fixture = re.search(r"runs in about (\w+) seconds", _i444_d)
+_o_pct = re.search(r"(\d+) percent of the suite", _i444_title.group(1) if _i444_title else "")
+_i444_res = re.search(r"#Resolves\s+dependency\s+from\s+(\w+)\s+to\s+issue444\s*;", _iss_o)
+_d0421 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0421-"):
+        _d0421 = read(os.path.join(DEC_DIR, _fn)) or ""
+fact("landGateFirstLiveSet", {
+    "title": _i444_title.group(1) if _i444_title else None,
+    "liveSetSeconds": int(_o_wall.group(2)) if _o_wall else None,
+    "liveSetBinaries": int(_o_wall.group(1)) if _o_wall else None,
+    "compileSeconds": int(_o_split.group(1)) if _o_split else None,
+    "testSeconds": int(_o_split.group(2)) if _o_split else None,
+    "testsPassed": int(_o_split.group(3)) if _o_split else None,
+    "fullSuiteSeconds": int(_o_suite.group(1)) if _o_suite else None,
+    "fullSuiteTree": _o_suite.group(2) if _o_suite else None,
+    "fixtureWordSeconds": _o_fixture.group(1) if _o_fixture else None,
+    "percentOfSuite": int(_o_pct.group(1)) if _o_pct else None,
+    "resolver": _i444_res.group(1) if _i444_res else None,
+    "d0421Status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0421) or [None, None])[1],
+    "d0421Acceptance": _acceptance_kind(_d0421, "d0421") if _d0421 else None,
+    "d0421PathWords": _path_words(_guard_field(_d0421, "d0421", "decision")) if _d0421 else None,
+    "d0421CarriesToken": "MEASURED:" in _guard_field(_d0421, "d0421", "rationale") if _d0421 else None,
+    "d0421CarriesMeasuredWord": "MEASURED" in _guard_field(_d0421, "d0421", "rationale") if _d0421 else None,
+} if _i444_title and _o_wall else None, "the Issue's figures and the corrected Decision's standing",
+     ".tracking/issues-claudeOpus5.sysml: `part issue444 : Issue { ... }` - title; from description `named N integration "
+     "binaries plus the lib: N s wall`, `compile N s, tests N s, N passed`, `full suite's N s at <sha>`, `runs in about <word> "
+     "seconds`; from the title `N percent of the suite`; resolver = the `from` of `#Resolves dependency from <task> to "
+     "issue444;`. d0421* from .engine/decisions/0421-*.sysml read the way pathWordCensus reads a Decision: status, "
+     "acceptance kind, the path words in its decision text, and whether its rationale carries the literal `MEASURED:` "
+     "(d0421CarriesToken) or the bare word MEASURED (d0421CarriesMeasuredWord) - the corrected text writes the word without "
+     "the colon; accepted, so the guard does not read it either way.")
+
+# --- D0469: the sprint record that delivered the clause
+_s697p = os.path.join(REPO, ".tracking", "delivery", "sprint697_gateDecisionCarriesItsMeasuredCost.sysml")
+_s697 = read(_s697p) if os.path.exists(_s697p) else None
+if _s697 is not None:
+    _res = re.findall(r"part \w+\s*:\s*TestResult\s*\{[^}]*?outcome\s*=\s*VerdictKind::(\w+)", _s697)
+    _trio = re.search(r"unmeasured_path_tests -> (\d+) passed (\d+) failed", _s697)
+    _mirror = re.search(r"on acceptance the guard would name (d\d{4}) \((\w+)\) and no other proposed marked Decision", _s697)
+    fact("measuredCostSprint", {
+        "exists": True, "results": len(_res),
+        "byOutcome": {o: _res.count(o) for o in sorted(set(_res))},
+        "ranReceipts": len(re.findall(r"// RAN:", _s697)),
+        "trioPassed": int(_trio.group(1)) if _trio else None, "trioFailed": int(_trio.group(2)) if _trio else None,
+        "liveMirror": {"names": _mirror.group(1), "word": _mirror.group(2)} if _mirror else None,
+        "chartersD0469": bool(re.search(r"#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+d0469\s*;", _s697)),
+    }, "the delivery record",
+         ".tracking/delivery/sprint697_gateDecisionCarriesItsMeasuredCost.sysml: results = `part x : TestResult {` segments and "
+         "their `VerdictKind::x`; ranReceipts = `// RAN:` lines; from the receipts `unmeasured_path_tests -> N passed N failed` "
+         "and `on acceptance the guard would name dNNNN (word) and no other proposed marked Decision`; chartersD0469 = a "
+         "`#CharteredBy dependency from <story> to d0469;` line.")
+else:
+    fact("measuredCostSprint", {"exists": False}, "the delivery record", "the file " + _s697p + " does not exist")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
