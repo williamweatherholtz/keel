@@ -452,7 +452,25 @@ fn ledger_fire(root: &Path, session: &str, event: &str, exit: i32, ms: u128) {
 /// command; ms is 0 because the refusal is the whole run.
 fn ledger_refused(root: &Path, verb: &str, control: &str) {
     let session = std::env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
-    ledger_line(root, &session, "refused", 1, 0, Some(("refused".to_string(), format!("{verb}:{control}"))));
+    // issue449: the control name is a registry fact (`write::WRITE_PATH_REFUSALS`), not a free string.
+    // A name the registry never declared is still a fire, so it is written - marked, so the census
+    // cannot count it under a row that does not exist.
+    let name = if keel_cli::write::write_path_refusal(verb, control).is_some() {
+        format!("{verb}:{control}")
+    } else {
+        eprintln!("keel: refusal {verb}:{control} is not in the write-path registry (issue449); ledgered as unregistered");
+        format!("unregistered:{verb}:{control}")
+    };
+    ledger_line(root, &session, "refused", 1, 0, Some(("refused".to_string(), name)));
+}
+
+/// `record decision` / `record issue` refused prose that reads as captured tool output (D0224/issue256):
+/// the refusal is a ledger fact - `record:tool-output-prose` is the census row (issue449) - and the
+/// verb's exit code.
+fn refused_injected_prose(root: &Path, e: &dyn std::fmt::Display) -> i32 {
+    ledger_refused(root, "record", "tool-output-prose");
+    eprintln!("error: {e}");
+    1
 }
 /// The commit tier is in the ledger with the in-loop tiers (dcRefusalIsALedgerFact clause d): the
 /// scaffolded pre-commit hook runs `keel gate validate`, `keel gate guard` and `keel gate check-engine` as separate
@@ -3233,6 +3251,7 @@ fn cmd_record(args: &[String]) -> i32 {
     let list = |name: &str| -> Vec<String> { req(name).map(|v| v.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect()).unwrap_or_default() };
     let links = w::DecisionLinks { supersedes: list("supersedes"), supersedes_clause: list("supersedes-clause"), derived_from: list("derived-from") };
     match w::record_decision_with_links(&root, &slug, &title, &date, &author, &context, &decision, &rationale, &consequences, marker, research.as_deref(), &links) {
+        Err(e @ w::WriteError::InjectedToolOutput(..)) => refused_injected_prose(&root, &e),
         Ok((nnnn, path)) => {
             println!("recorded D{nnnn} (proposed) -> {path}");
             for d in &links.supersedes {
@@ -4777,6 +4796,7 @@ fn cmd_record_issue(args: &[String]) -> i32 {
             println!("  run `keel gate validate . && keel gate guard .` to confirm; nothing was committed.");
             0
         }
+        Err(e @ keel_cli::write::WriteError::InjectedToolOutput(..)) => refused_injected_prose(&root, &e),
         Err(e) => { eprintln!("error: {e}"); 1 }
     }
 }

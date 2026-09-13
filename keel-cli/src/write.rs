@@ -704,6 +704,49 @@ fn model_root_of(target: &Path) -> Option<std::path::PathBuf> {
 /// listed there without a refusal here would be a label, not a fact.
 pub const HUMAN_ONLY_WRITE_COMMANDS: [&str; 2] = ["accept", "judge-set"];
 
+/// One write-path refusal: the ledger control `verb:check` and the code that refuses it.
+///
+/// `refuses` names the site as a token the source carries: a `WriteError` variant this module
+/// returns, or the `main.rs` function that returns `Err(1)` before the write. The registry's tests
+/// read both sources and fail on a token they do not find - a refusal that exists only as a row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WritePathRefusal {
+    pub verb: &'static str,
+    pub check: &'static str,
+    pub refuses: &'static str,
+}
+
+/// THE ONE HOME of the write path's refusals (issue449).
+///
+/// The census (`view::census::WRITE_PATH_CHECKS`) declared `append-result:ran-receipt` active for two
+/// days while `append_result_locked` refused nothing: a row is a claim about the code, and nothing
+/// held the claim to the code. Now every census row that is not dissolved must be here, every entry
+/// here must be a census row, and every entry's `refuses` must be a token in the source - three
+/// assertions in `write_path_registry_tests` (end of this file) and `view::census::tests`.
+/// `ledger_refused` (main.rs) reads this too: a control name it does not find here is written to the
+/// ledger as `unregistered:`, so the fire-ledger cannot count a refusal the registry never declared.
+pub const WRITE_PATH_REFUSALS: &[WritePathRefusal] = &[
+    WritePathRefusal { verb: "accept", check: "gesture-word-typed", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "accept", check: "no-quote", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "accept", check: "no-delegation", refuses: "verdict_channel_refusal" },
+    // `keel reject` shares accept's channel (main.rs cmd_reject, D0393); the ledger held a
+    // `reject:no-quote` fire before the census had a row for it - found writing this table.
+    WritePathRefusal { verb: "reject", check: "gesture-word-typed", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "reject", check: "no-quote", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "reject", check: "no-delegation", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "judge-set", check: "no-quote", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "judge-set", check: "no-delegation", refuses: "verdict_channel_refusal" },
+    WritePathRefusal { verb: "append-result", check: "ran-receipt", refuses: "WriteError::ReceiptOwed" },
+    WritePathRefusal { verb: "append-gate-result", check: "ran-receipt", refuses: "WriteError::ReceiptOwed" },
+    WritePathRefusal { verb: "record", check: "tool-output-prose", refuses: "WriteError::InjectedToolOutput" },
+];
+
+/// The registry entry for a ledger control, or `None` for a name the write path never declared.
+#[must_use]
+pub fn write_path_refusal(verb: &str, check: &str) -> Option<&'static WritePathRefusal> {
+    WRITE_PATH_REFUSALS.iter().find(|r| r.verb == verb && r.check == check)
+}
+
 /// D0178/K6 write-layer check: refuse when `judged_by` is a registered AI-kind actor. An
 /// UNREGISTERED name is refused too — an attestation by nobody is not weaker than one by an AI.
 fn refuse_ai_judgment(path: &Path, judged_by: &str, what: &str) -> Result<(), WriteError> {
@@ -3145,4 +3188,68 @@ fn sanitize_name(v: &str) -> String {
         out.push_str("actor");
     }
     out
+}
+
+#[cfg(test)]
+mod write_path_registry_tests {
+    use super::{write_path_refusal, WRITE_PATH_REFUSALS};
+
+    /// Every `refuses` token is in the source that owns it: a `WriteError::X` is a variant this module
+    /// declares and returns; a bare name is a `fn` in main.rs whose body calls `ledger_refused` with
+    /// exactly this check. A token found nowhere is a row with no refusal behind it (issue449).
+    #[test]
+    fn every_registered_refusal_has_a_site_in_the_source() {
+        let write_src = std::fs::read_to_string("src/write.rs").expect("write.rs is readable");
+        let main_src = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let mut missing = Vec::new();
+        for r in WRITE_PATH_REFUSALS {
+            let ok = r.refuses.strip_prefix("WriteError::").map_or_else(
+                || {
+                    let in_fn = main_src.contains(&format!("fn {}(", r.refuses));
+                    let ledgered = main_src.contains(&format!("\"{}\")", r.check));
+                    in_fn && ledgered
+                },
+                |variant| {
+                    let declared = write_src.contains(&format!("    {variant}(")) || write_src.contains(&format!("    {variant},"));
+                    let returned = write_src.contains(&format!("WriteError::{variant}("));
+                    declared && returned
+                },
+            );
+            if !ok {
+                missing.push(format!("{}:{} -> {}", r.verb, r.check, r.refuses));
+            }
+        }
+        assert!(missing.is_empty(), "registered refusals with no site in the source: {missing:?}");
+    }
+
+    /// Every `ledger_refused(.., "<verb>", "<check>")` literal pair in main.rs is a registry entry:
+    /// a refusal the ledger counts that the registry never declared is a fact with no row (issue449).
+    /// Sites whose verb is a variable (`verb`) are covered by the entries naming their function.
+    #[test]
+    fn every_ledgered_refusal_in_main_is_registered() {
+        let main_src = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let mut unregistered = Vec::new();
+        for (i, line) in main_src.lines().enumerate() {
+            let Some(rest) = line.trim_start().strip_prefix("ledger_refused(") else { continue };
+            let args: Vec<&str> = rest.trim_end_matches(';').trim_end_matches(')').split(',').map(str::trim).collect();
+            if args.len() != 3 {
+                continue;
+            }
+            let check = args[2].trim_matches('"');
+            if let Some(verb) = args[1].strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+                if write_path_refusal(verb, check).is_none() {
+                    unregistered.push(format!("main.rs:{}: {verb}:{check}", i + 1));
+                }
+            } else if !WRITE_PATH_REFUSALS.iter().any(|r| r.check == check) {
+                unregistered.push(format!("main.rs:{}: <{}>:{check}", i + 1, args[1]));
+            }
+        }
+        assert!(unregistered.is_empty(), "ledgered refusals the registry does not declare: {unregistered:?}");
+    }
+
+    #[test]
+    fn a_lookup_finds_a_registered_pair_and_not_a_fictional_one() {
+        assert!(write_path_refusal("append-gate-result", "ran-receipt").is_some());
+        assert!(write_path_refusal("append-result", "fictional").is_none());
+    }
 }

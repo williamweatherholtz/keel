@@ -1181,4 +1181,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcTouchedReceiptNamesTheUnmatchedPaths to issue525;
+
+    part issue526 : Issue {
+        :>> id = "a8ed91ad-664c-4dfb-8fb0-1336c4d23d88";
+        :>> title = "keel reject records a human's rejection with nothing refusing an AI-kind judge at the write, the command lists or the rule";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel reject records a HUMAN's rejection of a proposed Decision (D0106; commands.sysml cliReject: 'the same channel rules as accept'), but nothing refuses an AI-kind judgedBy: write.rs reject_decision_locked calls no refuse_ai_judgment where accept_decision does (write.rs:1935); reject is in neither HUMAN_ONLY_WRITE_COMMANDS (write.rs:705) nor HUMAN_AUTHORITY_COMMANDS (control_structure.rs:210), so the computed control structure labels the rejection the agent's action; and confirmationAuthenticityRule reads resultJudgedByHuman(Accept) only (rules.sysml:114), so an AI-judged RejectR1 passes the guard too. A rejection attestation can therefore be fabricated by an AI actor with no control refusing it at any layer - the D0051/D0106 class. Found 2026-09-13 while enumerating the write path's refusals for issue449 (the ledger held a reject:no-quote fire the census had no row for). Resolver: dcRejectIsHumanJudgedAtTheWriteAndTheRule.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcRejectIsHumanJudgedAtTheWriteAndTheRule to issue526;
+
+    part issue527 : Issue {
+        :>> id = "98bdc6dd-78af-4c9a-a789-1101f67f7e55";
+        :>> title = "A registered write-path refusal whose path never calls ledger_refused is invisible to the fire-ledger and to the registry's source tests";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The write-path registry (write.rs WRITE_PATH_REFUSALS, issue449) is held to code by reading the source: an entry's WriteError variant must be declared and returned in write.rs, a bare token must be a fn in main.rs whose check literal reaches ledger_refused. That reads the refusal into existence but not the ledger line: record:tool-output-prose was a real refusal (WriteError::InjectedToolOutput, issue255/issue256) with NO ledger_refused call on its path, so the fire-ledger (.keel/metrics/hooks.jsonl) held zero record:tool-output-prose lines across both incidents and keel show enforcement-report / control-census could count nothing for a control that had fired twice. Sprint 701 adds the two match arms by hand; nothing would catch the next registered refusal whose path forgets to ledger. Resolver: dcEveryRegisteredRefusalLedgersAFire.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcEveryRegisteredRefusalLedgersAFire to issue527;
 }

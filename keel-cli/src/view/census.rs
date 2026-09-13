@@ -136,6 +136,10 @@ pub struct Row {
 /// Declared in code because the subject is knowable nowhere else: the verb tells whose act is being
 /// recorded. A dissolved check stays in the table so its history classes - the human asked which
 /// controls gatekept them, and a control that was dissolved for doing so is the answer's exemplar.
+///
+/// A row that is not dissolved is a CLAIM that the write path refuses something, and the claim is
+/// held to `crate::write::WRITE_PATH_REFUSALS` by `tests::every_live_row_has_a_refusal_and_every_refusal_a_row`
+/// (issue449: `append-result:ran-receipt` sat here active for two days before the write refused it).
 const WRITE_PATH_CHECKS: &[(&str, Subject, &str, &str, &[&str])] = &[
     (
         "accept:delegated-words",
@@ -171,6 +175,27 @@ const WRITE_PATH_CHECKS: &[(&str, Subject, &str, &str, &[&str])] = &[
         "active",
         "a `--by <human>` from a session with no delegatedRecording grant: the act refused is the agent recording for a person who did not delegate",
         &["no-delegation", "delegatedRecording"],
+    ),
+    (
+        "reject:gesture-word-typed",
+        Subject::Ai,
+        "kept by D0427 (proposed): the human never types a gesture citation",
+        "a delegated rejection note whose only evidence is a gesture word: the act refused is the agent typing a citation it did not observe (D0411; reject shares accept's channel, D0393)",
+        &["reject gesture word", "reject:gesture-word-typed"],
+    ),
+    (
+        "reject:no-quote",
+        Subject::Ai,
+        "active",
+        "an unquoted delegated rejection note: the act refused is the agent paraphrasing the human INTO a rejection (D0198; reject shares accept's channel, D0393)",
+        &["reject no-quote", "reject:no-quote"],
+    ),
+    (
+        "reject:no-delegation",
+        Subject::Ai,
+        "active",
+        "a `--by <human>` reject from a session with no delegatedRecording grant: the act refused is the agent recording a rejection for a person who did not delegate (D0393)",
+        &["reject no-delegation", "reject:no-delegation"],
     ),
     (
         "judge-set:no-quote",
@@ -688,6 +713,28 @@ pub fn control_census(root: &Path) -> Result<String, ViewError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// issue449, both directions. Known positive (D0388): remove the registry entry for
+    /// `append-gate-result:ran-receipt` and this fails naming that row; add a census row
+    /// `append-result:fictional` and it fails naming it. On the real tree it passes.
+    #[test]
+    fn every_live_row_has_a_refusal_and_every_refusal_a_row() {
+        let live: Vec<&str> = WRITE_PATH_CHECKS.iter().filter(|(_, _, state, _, _)| !state.starts_with("dissolved")).map(|(n, ..)| *n).collect();
+        let mut rows_without_refusal = Vec::new();
+        for name in &live {
+            let (verb, check) = name.split_once(':').expect("a write-path row is verb:check");
+            if crate::write::write_path_refusal(verb, check).is_none() {
+                rows_without_refusal.push(*name);
+            }
+        }
+        assert!(rows_without_refusal.is_empty(), "census rows declared live with no registered refusal behind them: {rows_without_refusal:?}");
+        let refusals_without_row: Vec<String> = crate::write::WRITE_PATH_REFUSALS
+            .iter()
+            .map(|r| format!("{}:{}", r.verb, r.check))
+            .filter(|n| !live.contains(&n.as_str()))
+            .collect();
+        assert!(refusals_without_row.is_empty(), "registered refusals with no live census row: {refusals_without_row:?}");
+    }
 
     fn uca(name: &str, issues: &[(&str, bool)], controls: &[&str]) -> UcaFacts {
         UcaFacts {
