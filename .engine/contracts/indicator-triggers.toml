@@ -13,3 +13,18 @@
 # more decision-chartered work. Sprint 483 sat at 86% with nothing raised.
 above = 50.0
 surfaces = "latent-need derivation (D0249): run business-elicitation / derive Needs the decision-chartered Stories imply, so the Need set describes the work"
+
+[hookLatencyIndicator]
+# issue442's known positive was a 5711 ms stop-hook MEDIAN (pre-sprint-644) and issue441's an 8337 ms
+# single fire; SLOW_FIRE_MS (D0414) calls one fire slow at 3000. A p90 past 10 000 ms says one turn
+# boundary in ten holds the turn longer than either figure those Issues were raised on. 14125 at
+# declaration - the trigger fires on the tree that declared it, and the work it names is the guard the
+# ledger's phases put on the critical path of every fire past the receipt.
+above = 10000
+surfaces = "the stop hook's critical path (keel show enforcement-report slowFires.rows[].phases): issue520 - decision-scaffolding re-scans every line of every file per candidate Decision; index the inbound edge targets once (dcDecisionScaffoldingIndexesItsEdgesOnce)"
+
+[gitFactsSizeIndicator]
+# issue440: 26.9 MB with 24 MB dead before anyone read the size; 4 055 880 bytes after the cut. Twice
+# that says the cache is holding something the one-head rule (dcChangedCacheKeepsOneHead) does not drop.
+above = 8000000
+surfaces = "git-facts cache growth (issue440's class): read which keys hold more than one head and what the cache keeps that the one-head rule does not cover (keel-cli/src/gitfacts.rs)"

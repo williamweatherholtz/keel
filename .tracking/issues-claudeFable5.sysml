@@ -1115,4 +1115,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRigSandboxKeepsThePrefixInstrument to issue519;
+
+    part issue520 : Issue {
+        :>> id = "f09408cf-0420-48f1-a959-54a46c1a9164";
+        :>> title = "The stop hook's critical path is decision-scaffolding on every fire past the receipt: the guard re-reads the whole corpus once per candidate Decision";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The stop hook's critical path is guard:decision-scaffolding on every fire that gets past the green receipt: the last 25 stop fires in .keel/metrics/hooks.jsonl (read 2026-09-13, ts 1789266922..1789313307) put it at 4645-12463 ms of a 6879-17840 ms fire in 13 of the 14 fires that ran the guards (parser-coverage led the one other, 20804 ms). The cause is in keel-cli/src/guards.rs decision_scaffolding: the reachable closure re-reads every line of every .tracking and .engine file for EACH candidate Decision, allocating a format!(' to {d}') per line - candidates x corpus lines, string-allocating - where one pass collecting the inbound-edge targets (#CharteredBy/#DerivedFrom/#Resolves ... to X; satisfy X by) into a set would answer every candidate in one read. issue441 cut the serial parse that every guard waited on; this guard's own loop is what the wall clock waits on now. Known positive: the ledger lines above. Known negative: a fire that answers from the receipt (183-389 ms) does not run the guard and shows no critical path.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcDecisionScaffoldingIndexesItsEdgesOnce to issue520;
 }

@@ -274,6 +274,17 @@ pub(super) const fn headline_label(name: &str) -> &str {
 /// model fails to build.
 #[must_use]
 pub fn metric_value(root: &Path, key: &str) -> Option<f64> {
+    // issue442 / dcHookLatencyIsAnIndicator: the two host-cost metrics read the fire-ledger and the
+    // cache, not the model - so orient's trigger check pays no model build for them.
+    match key {
+        // D0389: the cost is a distribution; this is its p90 over the last 25 stop fires by nearest rank.
+        "hook_stop_p90_ms" => {
+            let (_, p90, _, _) = crate::pm::latency(&crate::pm::recent_event_ms(root, "stop", 25));
+            return Some(f64::from(u32::try_from(p90).unwrap_or(u32::MAX)));
+        }
+        "git_facts_bytes" => return Some(f64::from(u32::try_from(crate::gitfacts::cache_bytes(root)).unwrap_or(u32::MAX))),
+        _ => {}
+    }
     let model = Model::build(root).ok()?;
     let cnt = |n: usize| -> f64 { f64::from(u32::try_from(n).unwrap_or(u32::MAX)) };
     match key {

@@ -117,6 +117,24 @@ pub fn latency(ms: &[u64]) -> (i64, i64, i64, i64) {
     (rank(50), rank(90), rank(99), s.last().copied().and_then(|v| i64::try_from(v).ok()).unwrap_or(i64::MAX))
 }
 
+/// The `ms` of the last `last_n` ledger fires of one `event`, oldest first.
+///
+/// The sample an indicator's percentile is taken over (issue442 / dcHookLatencyIsAnIndicator: the
+/// stop-hook p90 over the last 25 fires, D0389's distribution as one bindable number). A malformed line
+/// is skipped here as it is counted in [`enforcement_report`]; a missing ledger is an empty sample,
+/// never an error.
+#[must_use]
+pub fn recent_event_ms(root: &Path, event: &str, last_n: usize) -> Vec<u64> {
+    let text = std::fs::read_to_string(root.join(".keel").join("metrics").join("hooks.jsonl")).unwrap_or_default();
+    let all: Vec<u64> = text
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|v| v.get("event").and_then(serde_json::Value::as_str) == Some(event))
+        .map(|v| v.get("ms").and_then(serde_json::Value::as_u64).unwrap_or(0))
+        .collect();
+    all.get(all.len().saturating_sub(last_n)..).map(<[u64]>::to_vec).unwrap_or_default()
+}
+
 /// The tracked-side counters (`#ProcessDefect` marks, synced override obligations, run records) —
 /// extracted from [`enforcement_report`] for the line budget; behavior identical.
 fn tracked_counts(root: &Path) -> (usize, usize, usize) {
@@ -344,7 +362,7 @@ pub fn enforcement_report(root: &Path) -> Result<String, crate::view::ViewError>
 
 #[cfg(test)]
 mod tests {
-    use super::{enforcement_report, latency, slow_fire_phases, LEDGER_ADDITIVE_FIELDS, LEDGER_FIELDS, SLOW_FIRE_MS};
+    use super::{enforcement_report, latency, recent_event_ms, slow_fire_phases, LEDGER_ADDITIVE_FIELDS, LEDGER_FIELDS, SLOW_FIRE_MS};
 
     /// THE SCHEMA FREEZE, bound: a line emitted with exactly the frozen fields parses and counts;
     /// a malformed line is COUNTED as malformed, never silently skipped (K2 applied to evidence).
@@ -537,6 +555,30 @@ mod tests {
         assert_eq!(rows[1]["ms"], 28000);
         assert_eq!(rows[1]["phases"][0]["name"], "hook:guards", "the phase the hook named first is read back first");
         assert_eq!(rows[1]["phases"][1]["name"], "guard:priority-inversion (critical path)");
+    }
+
+    /// issue442: the sample is the LAST n fires of the named event only - other events and older fires
+    /// are not in it (known negative), and the p90 over it is the number the indicator binds.
+    #[test]
+    #[allow(clippy::expect_used)] // test setup
+    fn the_recent_sample_is_the_last_n_fires_of_one_event() {
+        let root = std::env::temp_dir().join("keel-pm-recent-event-ms");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
+        let mut lines: Vec<String> = (1..=30u64)
+            .map(|i| format!(r#"{{"ts":{i},"session":"s1","event":"stop","decision":"allow","exit":0,"ms":{}}}"#, i * 1000))
+            .collect();
+        lines.push(r#"{"ts":99,"session":"s1","event":"post-edit","decision":"allow","exit":0,"ms":99999}"#.to_string());
+        lines.push("not json".to_string());
+        std::fs::write(root.join(".keel").join("metrics").join("hooks.jsonl"), lines.join("\n")).expect("write ledger");
+        let sample = recent_event_ms(&root, "stop", 25);
+        assert_eq!(sample.len(), 25);
+        assert_eq!(sample.first().copied(), Some(6000), "the five oldest fires fall out of the window");
+        assert_eq!(sample.last().copied(), Some(30000));
+        assert!(!sample.contains(&99999), "another event's fire is not in the stop sample");
+        assert_eq!(latency(&sample).1, 28000, "p90 by nearest rank over the window: the 23rd of 25");
+        assert!(recent_event_ms(&root, "stop", 0).is_empty());
+        assert!(recent_event_ms(&std::env::temp_dir().join("keel-pm-no-ledger-here"), "stop", 25).is_empty(), "no ledger = empty sample");
     }
 
     /// The ledger emitter's decision: below the threshold no field is written at all (the

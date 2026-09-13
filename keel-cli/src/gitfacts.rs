@@ -116,6 +116,13 @@ fn path_for(root: &Path) -> PathBuf {
     root.join(".keel").join("cache").join("git-facts.toml")
 }
 
+/// The cache file's byte length on disk - the number issue440 sat visible in for fourteen commits
+/// (26.9 MB, 24 MB of it dead heads) and issue442 asked to be an indicator. No file = 0 bytes.
+#[must_use]
+pub fn cache_bytes(root: &Path) -> u64 {
+    std::fs::metadata(path_for(root)).map_or(0, |m| m.len())
+}
+
 fn load(root: &Path) -> Facts {
     let mut shape = std::fs::read_to_string(path_for(root))
         .ok()

@@ -209,4 +209,34 @@ package ProjectIndicators {
         :>> unit = "%";
         :>> method = MeasurementMethod::computed; :>> collectionRef = "sitting_override_rate_pct";
     }
+
+    // issue442 / D0389: the per-turn hook cost was measured every fire and owned by no indicator - issue439
+    // and issue441 sat visible in the ledger's critical path. The p90 over the last 25 stop fires is the
+    // distribution as one bindable number (nearest rank, pm::latency); a receipt-equal fire (D0371) is in
+    // the sample at its real cost, so the number is what the turn boundary actually held.
+    part hookLatencyIndicator : Indicator {
+        :>> id = "48e9e19d-d1cf-47d7-b745-d18b1c083ae5";
+        :>> title = "stop-hook p90 over the last 25 fires";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> measures = "The 90th-percentile wall-clock ms of the stop hook (validate + rules + guards) over its last 25 fire-ledger lines, nearest rank. 14125 ms at declaration, with guard:decision-scaffolding the critical path of every fire past the receipt.";
+        :>> goal = IndicatorGoal::minimize;
+        :>> unit = "ms";
+        :>> method = MeasurementMethod::computed; :>> collectionRef = "hook_stop_p90_ms";
+    }
+    #Informs dependency from hookLatencyIndicator to d0389;
+
+    // issue442 / issue440: the git-facts cache reached 26.9 MB (24 MB dead heads) over fourteen commits
+    // with the size on disk the whole time and nothing reading it.
+    part gitFactsSizeIndicator : Indicator {
+        :>> id = "767746b7-39c6-4b00-a89f-376bf512712e";
+        :>> title = "git-facts cache byte length";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> measures = "The byte length of .keel/cache/git-facts.toml on disk. 4 055 880 bytes at declaration, after dcChangedCacheKeepsOneHead cut the dead heads.";
+        :>> goal = IndicatorGoal::minimize;
+        :>> unit = "bytes";
+        :>> method = MeasurementMethod::computed; :>> collectionRef = "git_facts_bytes";
+    }
+    #Informs dependency from gitFactsSizeIndicator to d0389;
 }
