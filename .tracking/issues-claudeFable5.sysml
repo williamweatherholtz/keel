@@ -1467,4 +1467,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcRecordRefusesAnUnknownFlag to issue551;
+
+    part issue552 : Issue {
+        :>> id = "a335c768-fada-4754-aeee-15d8f37e792e";
+        :>> title = "an item chartered by a HELD Decision is ready: the frontier reads #DependsOn to a proposed Decision and not #CharteredBy, so dcWorkspaceLayeringIsGuarded ranks 14th while its DoD says it is blocked";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "An item chartered by a HELD Decision is ready today. dcWorkspaceLayeringIsGuarded carries `#CharteredBy dependency from dcWorkspaceLayeringIsGuarded to d0483;` (backlog.sysml 3306) and D0483 is proposed, held for the human under D0209; its DoD (backlog.sysml 937) says 'this item stays blocked on that acceptance'. keel show whats-next . at 130675d ranks it 14th READY. The check that established it: view/mod.rs blocked_by (2432-2440) reads only edges of kind dependson or dependency to a Decision standing proposed; a charteredby edge is not read, so the D0465 charter path - the one edge that says WHOSE word this work waits on - does not narrow the frontier. The recorded sentence in the DoD was false of the computed view when written. An AI auto-following the frontier (D0052) would start a sprint whose locked-file edit the process-change guard then refuses (it did not, only because the item ranks behind twelve others). Same class as issue549 (an item #DependsOn another item is not read either): the frontier reads one edge kind where the model authors three that mean WAITING. Resolver dcReadyHonoursItemDependencies gains the clause: a #CharteredBy edge to a proposed Decision blocks the item as a #DependsOn edge does. Until then the honest state is authored: a #DependsOn edge beside the charter edge, so the item reads blocked today.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcReadyHonoursItemDependencies to issue552;
+
+    part issue553 : Issue {
+        :>> id = "40d9b906-6d83-4cb7-829e-215644fcb257";
+        :>> title = "A brief fact named exit0 read a produced-stdout flag, not the exit code";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Four facts the decision brief publishes under the name exit0 (cliReferenceProcedure.gateLinesRun, recorderCheckerLive.perFixture and probeExit0, cliSurfaceLive) were derived from facts.py run()'s ok flag, which returns True whenever the command printed anything regardless of its return code (facts.py lines 69-76: `if p.returncode != 0 and not p.stdout.strip(): return False ...; return True, p.stdout`). check_report.py on a positive fixture prints REFUSED and exits 1; the fact said exit0 = true. Found 2026-09-14 when the twenty-sixth builder refused at its D0473 block ('the page says each positive exits 1 ... it reads exit0: True'); had the builder's check not compared the exit, the page would have carried a sensor reading named for a thing it did not measure. The same class as issue533 (a claim recorded as read when nothing had read it): a fact's NAME asserted more than its `how` computed. Corrected at the root: run_rc returns the real return code and every exit0 fact reads it; the control is a probe pair on the sensor at facts.py start plus a source scan, both refusing to emit.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcBriefExitFactsReadTheReturnCode to issue553;
 }

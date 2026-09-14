@@ -82,6 +82,37 @@ def run(cmd, timeout=60):
         return False, "%s: %s" % (type(exc).__name__, exc)
 
 
+def run_rc(cmd, timeout=60):
+    """Run a command, return (returncode, stdout). A fact named exit0 reads THIS, never run()'s ok flag: run() answers
+    ok=True whenever the command printed anything, so a checker that prints REFUSED and exits 1 read as exit0=True
+    (issue553 - four facts on the twenty-sixth page were caught by the builder's own refusal)."""
+    try:
+        p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True,
+                           timeout=timeout, encoding="utf-8", errors="replace")
+        return p.returncode, (p.stdout or "") + (("\n" + p.stderr) if p.stderr and not (p.stdout or "").strip() else "")
+    except FileNotFoundError:
+        return 127, "executable not found: %s" % cmd[0]
+    except subprocess.TimeoutExpired:
+        return 124, "timed out after %ss" % timeout
+    except Exception as exc:                                        # pragma: no cover
+        return 1, "%s: %s" % (type(exc).__name__, exc)
+
+
+# issue553 - the D0388 pair on the exit-code sensor, run before any fact: a command that prints and exits 1 reads rc 1,
+# one that prints and exits 0 reads rc 0. run() answers ok=True for both, so no fact named for an exit may derive from it;
+# the source scan holds that. Either failing refuses the whole emission - a page with no numbers beats one with a wrong name.
+_rc_pos, _ = run_rc([sys.executable, "-c", "import sys; print('printed'); sys.exit(1)"])
+_rc_neg, _ = run_rc([sys.executable, "-c", "print('printed')"])
+if not (_rc_pos == 1 and _rc_neg == 0):
+    sys.exit("facts.py: the exit-code sensor failed its probe pair (positive rc %s, negative rc %s); refusing to emit"
+             % (_rc_pos, _rc_neg))
+_own = open(__file__, encoding="utf-8").read()
+_bad_exit_keys = re.findall(r'"(exit0|probeExit0)":\s*(?:bool\()?_?f?ok\b', _own)
+if _bad_exit_keys:
+    sys.exit("facts.py: %d fact key(s) named for an exit derive from run()'s ok flag (%s); use run_rc"
+             % (len(_bad_exit_keys), ", ".join(_bad_exit_keys)))
+
+
 def as_json(text):
     try:
         return json.loads(text)
@@ -2360,8 +2391,8 @@ _gate_lines = [l for l in _tv_lines if re.match(r"^KEEL gate (validate|check-eng
 _retired_lines = [l for l in _tv_lines if re.match(r"^KEEL (validate|check-engine|guard) ", l)]
 _ran = {}
 for _verb in (["gate", "validate", "."], ["gate", "check-engine", "."]):
-    _ok, _out = run([KEEL] + _verb, timeout=300)
-    _ran[" ".join(_verb)] = {"exit0": _ok, "lastLine": (_out or "").strip().splitlines()[-1][:160] if (_out or "").strip() else ""}
+    _rc, _out = run_rc([KEEL] + _verb, timeout=300)
+    _ran[" ".join(_verb)] = {"exit0": _rc == 0, "lastLine": (_out or "").strip().splitlines()[-1][:160] if (_out or "").strip() else ""}
 _mirror_ok, _mirror_out = run([KEEL, "sync-claude", "--check", "."], timeout=120)
 fact("cliReferenceProcedure", {
     "testVerifyGateLines": len(_gate_lines), "testVerifyRetiredLines": len(_retired_lines),
@@ -2570,16 +2601,16 @@ fact("recorderCheckerSource", {
      "pattern the two new refusals read; claudeCopyIdentical = byte equality with .claude/skills/.../check_report.py (sync-claude).")
 
 # --- D0473: the checker run live - the pair table, then each sprint-703 fixture on its own
-ok, out = run([sys.executable, _ckp, "--probe", "--root", "."], timeout=120)
+_probe_rc, out = run_rc([sys.executable, _ckp, "--probe", "--root", "."], timeout=120)
 _probe_lines = (out or "").strip().splitlines()
 _per_fixture = {}
 for _name, _expect in _pairs:
-    _fok, _fout = run([sys.executable, _ckp, os.path.join(_fx_dir, _name), "--root", "."], timeout=120)
+    _frc, _fout = run_rc([sys.executable, _ckp, os.path.join(_fx_dir, _name), "--root", "."], timeout=120)
     _flines = [l for l in (_fout or "").strip().splitlines() if l.strip()]
-    _per_fixture[_name] = {"exit0": bool(_fok), "refusals": len([l for l in _flines if l.startswith("  line ") or l.startswith("line ")]),
+    _per_fixture[_name] = {"exit0": _frc == 0, "refusals": len([l for l in _flines if l.startswith("  line ") or l.startswith("line ")]),
                            "firstLine": _flines[0] if _flines else "", "lastLine": _flines[-1] if _flines else ""}
 fact("recorderCheckerLive", {
-    "probeExit0": bool(ok),
+    "probeExit0": _probe_rc == 0,
     "probeLastLine": _probe_lines[-1] if _probe_lines else "",
     "pairsHolding": len([l for l in _probe_lines if l.startswith("probe: known-") and ("-> PASS" in l or "-> REFUSED naming" in l)]),
     "perFixture": _per_fixture,
@@ -2588,7 +2619,11 @@ fact("recorderCheckerLive", {
      "reading `-> PASS` (a negative) or `-> REFUSED naming` (a positive); then the checker run once per PAIRS fixture, its exit and "
      "first/last output lines - a positive exits 1 with `REFUSED:` first, a negative exits 0 with the `check_report: pass` line.")
 
-# --- issue532: the finding, and where its resolver sits
+# --- issue532: the finding, and where its resolver sits (the def that holds it, read - not assumed to be NextWork)
+_rri_eb = re.search(r"action def EngineBuild \{(.*?)^    \}", _bl, re.S | re.M)
+_rri_eb_actions = re.findall(r"^\s{8}action (\w+);", _rri_eb.group(1), re.M) if _rri_eb else []
+_rri_def, _rri_actions = next(((d, a) for d, a in (("NextWork", _nw_actions), ("EngineBuild", _rri_eb_actions))
+                               if "dcRecorderReportRefusesNonRecordWrites" in a), (None, []))
 _i532 = re.search(r"part issue532 : Issue\s*\{(.*?)\n\s*\}", _iss or "", re.S)
 _i532b = _i532.group(1) if _i532 else ""
 fact("recorderRefusalIssue", {
@@ -2600,13 +2635,15 @@ fact("recorderRefusalIssue", {
     "namesTextpatch": "textpatch" in _i532b,
     "namesThreeMore": "three more times" in _i532b,
     "namesCheckerLines": "check_report.py lines 50-71" in _i532b,
-    "resolverPosition": (_nw_actions.index("dcRecorderReportRefusesNonRecordWrites") + 1) if "dcRecorderReportRefusesNonRecordWrites" in _nw_actions else None,
-    "nextWorkItems": len(_nw_actions),
+    "resolverPosition": (_rri_actions.index("dcRecorderReportRefusesNonRecordWrites") + 1) if "dcRecorderReportRefusesNonRecordWrites" in _rri_actions else None,
+    "resolverDef": _rri_def,
+    "defItems": len(_rri_actions),
     "resolverDodNamesIssue": bool(re.search(r"dcRecorderReportRefusesNonRecordWritesDoD[^\n]*Resolves issue532\.", _bl)),
 } if _iss else None, "the finding Issue and its resolver",
      ".tracking/issues-claudeFable5.sysml: the `part issue532 : Issue {` body's severity / createdAt / title, textpatch, `three more "
      "times` and the checker's line span by literal search, and the `#Resolves dependency from <task> to issue532;` edge; "
-     ".tracking/backlog.sysml: the resolver's 1-based position among `action x;` lines inside `action def NextWork` (declaration "
+     ".tracking/backlog.sysml: the resolver's 1-based position among `action x;` lines inside the def that holds it - NextWork "
+     "or EngineBuild, named in resolverDef (declaration "
      "order IS priority, D0052) and whether its DoD line carries `Resolves issue532.` (guard issues, D0304).")
 
 # --- sprint 704: the delivery record the recorder wrote through the API, and the doc surfaces D0473 amended
@@ -2639,6 +2676,358 @@ if _s704:
          ".engine/skills/delegated-ceremony/SKILL.md carries rule `(5) one write per owed record`; CLAUDE.md names D0473 (doc-sync).")
 else:
     fact("recorderRefusalSprint", {"exists": False}, "the delivery record", "the file " + _s704p + " does not exist")
+
+# ================================================================ 28. the twenty-sixth publish's three asks
+# D0477 (the CLI facts in force), D0483 (the layering guard, a plan held before its sprint) and D0484 (the build skill's
+# layout paragraph). Each Decision's fields are read from its file the way the guard reads them; the source, the live
+# guard, the manifests, the skill paragraph, the Issues and the sprint records are read from the tree - nothing typed.
+
+
+def _dec_file(prefix):
+    for _fn in os.listdir(DEC_DIR):
+        if _fn.startswith(prefix):
+            return read(os.path.join(DEC_DIR, _fn)) or ""
+    return ""
+
+
+def _decision_facts(text, dname):
+    """The fields every tab states: status, marker, acceptance, the four fields, the D0469 path words and token."""
+    _d = _guard_field(text, dname, "decision")
+    return {
+        "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", text) or [None, None])[1],
+        "createdAt": _guard_field(text, dname, "createdAt") or None,
+        "createdBy": _guard_field(text, dname, "createdBy") or None,
+        "marker": ("#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+" + dname + r"\s*:", text, re.M)
+                   else "#SafetyChange" if re.search(r"^\s*#SafetyChange\s+part\s+" + dname + r"\s*:", text, re.M) else None),
+        "acceptance": _acceptance_kind(text, dname),
+        "notAFork": "NOT A FORK" in _d,
+        "measuredToken": "MEASURED:" in (_guard_field(text, dname, "rationale") or ""),
+        "pathWordsInDecision": _path_words(_d),
+        "title": _guard_field(text, dname, "title"),
+        "decision": _d, "rationale": _guard_field(text, dname, "rationale"),
+        "consequences": _guard_field(text, dname, "consequences"), "context": _guard_field(text, dname, "context"),
+    }
+
+
+_DEC_HOW = ("regex over the Decision's file: status from `DecisionStatus::x`; marker = a line `#ProspectiveChange part dNNNN :` "
+            "(or #SafetyChange); acceptance mirrors guards.rs acceptance_kind (None = no passing AcceptR segment); the fields read "
+            "as guards.rs unmeasured_path_decisions reads a field; notAFork = the phrase in the decision field; measuredToken = "
+            "`MEASURED:` in the rationale; pathWordsInDecision = the D0469 PATH_WORDS present as whole lower-case words.")
+
+# --- D0477: the Decision, and the names it carries
+_d0477 = _dec_file("0477-")
+_f477 = _decision_facts(_d0477, "d0477")
+_f477.update({
+    "namesIssue547": "issue547" in (_f477["context"] or ""),
+    "namesIssue548": "issue548" in (_f477["context"] or ""),
+    "namesSprint712": "sprint 712" in (_f477["context"] or ""),
+    "namesD0108": "D0108" in (_f477["decision"] or ""),
+    "namesD0271": "D0271" in (_f477["decision"] or ""),
+    "namesTwoPrecedents": "74c1923" in (_f477["context"] or "") and "sprint 711" in (_f477["context"] or ""),
+    "namesOneDrift": "86 facts diffed, one drift" in (_f477["context"] or ""),
+    "probedBeforeEnabled": "one invocation drift, zero duplicate names" in (_f477["rationale"] or ""),
+    "namesRemovalPath": "Removal path:" in (_f477["consequences"] or ""),
+})
+fact("cliInForceDecision", _f477 if _d0477 else None, "the Decision's fields as the guard reads them",
+     _DEC_HOW + " Names by literal search: issue547 / issue548 / `sprint 712` / 74c1923 + `sprint 711` / `86 facts diffed, one drift` "
+     "in context; D0108 / D0271 in decision; `one invocation drift, zero duplicate names` in rationale; `Removal path:` in consequences.")
+
+# --- D0477: the reader and the comparison in source, and the shared retired set
+_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_lib = read(os.path.join(REPO, "keel-cli", "src", "lib.rs")) or ""
+_pcf = _fn_body(_gr, "parse_cli_facts") if _gr else ""
+_csv = _fn_body(_gr, "cli_surface_violations") if _gr else ""
+_se = _fn_body(_lib, "supersede_edges") if _lib else ""
+_tests_mod = re.search(r"^mod cli_surface_declared_tests \{(.*)", _gr, re.S | re.M)
+_tests_body = _tests_mod.group(1) if _tests_mod else ""
+_test_names = re.findall(r"^\s*fn (\w+)\(\)", _tests_body, re.M)
+_gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gr, re.S)
+_gnames = re.findall(r'"([^"]+)"', _gn.group(2)) if _gn else []
+fact("cliInForceSource", {
+    "authoredFactHasPart": bool(re.search(r"pub struct AuthoredCliFact \{[^}]*pub part: String", _gr, re.S)),
+    "parserCollectsRetired": 'strip_prefix("#Supersede dependency from ")' in _pcf and "retired.contains(&part)" in _pcf,
+    "comparisonReadsInvocation": '("invocation", f.invocation.as_str(), m.invocation)' in _csv,
+    "duplicateInForceIsAViolation": "is declared by two CliCommand facts in force" in _csv,
+    "supersedeEdgesScansEngineCli": '.join(".engine").join("cli")' in _se,
+    "testModuleTests": len(_test_names),
+    "liveTestPresent": "the_live_facts_mirror_and_dispatch_agree" in _test_names,
+    "supersessionTest": next((t for t in _test_names if "superseded" in t), None),
+    "invocationDriftTest": next((t for t in _test_names if "invocation" in t and "drift" in t), None),
+    "guardInNames": "cli-surface-declared" in _gnames,
+    "guardCount": int(_gn.group(1)) if _gn else None,
+    "guardCountMatchesList": bool(_gn) and int(_gn.group(1)) == len(_gnames),
+} if _gr and _lib else None, "the reader, the comparison and the shared retired set in source",
+     "keel-cli/src/guards.rs: `pub struct AuthoredCliFact {` carrying `pub part: String`; the body of `parse_cli_facts` carrying "
+     "`strip_prefix(\"#Supersede dependency from \")` and `retired.contains(&part)`; the body of `cli_surface_violations` carrying "
+     "the `(\"invocation\", f.invocation.as_str(), m.invocation)` tuple and the sentence `is declared by two CliCommand facts in "
+     "force`; `fn x()` names inside `mod cli_surface_declared_tests`; GUARD_NAMES count and members. keel-cli/src/lib.rs: the body "
+     "of `supersede_edges` joining `.engine/cli`.")
+
+# --- D0477: the facts on disk - every CliCommand line, the #Supersede edges beside them, the set in force
+_cmds = read(os.path.join(REPO, ".engine", "cli", "commands.sysml")) or ""
+_cmd_lines = [l for l in _cmds.splitlines() if ": CliCommand {" in l]
+_cmd_parts = [(l.strip().split()[1], (re.search(r':>>\s*name\s*=\s*"([^"]*)"', l) or [None, None])[1]) for l in _cmd_lines]
+_sup = re.findall(r"^\s*#Supersede dependency from (\w+) to (\w+);", _cmds, re.M)
+_retired = {t for _, t in _sup}
+_in_force = [(p, nm) for p, nm in _cmd_parts if p not in _retired]
+_names_in_force = [nm for _, nm in _in_force]
+_dups = sorted({nm for nm in _names_in_force if _names_in_force.count(nm) > 1})
+_acc_line = next((l for l in _cmd_lines if l.strip().startswith("part cliAccept2 ")), "")
+_acc_inv = (re.search(r':>>\s*invocation\s*=\s*"([^"]*)"', _acc_line) or [None, None])[1]
+_cf = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or read(os.path.join(REPO, "keel-cli", "src", "cli_facts.rs")) or ""
+_cf_acc = re.search(r'name: "accept",[^}]*?invocation: "([^"]*)"', _cf, re.S)
+fact("cliFactsInForce", {
+    "cliCommandLines": len(_cmd_lines),
+    "supersedeEdges": len(_sup),
+    "retiredParts": sorted(_retired),
+    "supersederParts": sorted(f for f, _ in _sup),
+    "inForce": len(_in_force),
+    "duplicateNamesInForce": _dups,
+    "retiredNamesReDeclared": sorted({nm for p, nm in _cmd_parts if p in _retired}),
+    "acceptInvocationAuthored": _acc_inv,
+    "acceptInvocationMirror": _cf_acc.group(1) if _cf_acc else None,
+    "acceptAgrees": bool(_acc_inv) and bool(_cf_acc) and _acc_inv == _cf_acc.group(1),
+} if _cmds else None, "the CLI facts as authored, and the set in force",
+     ".engine/cli/commands.sysml: lines carrying `: CliCommand {` (part name = the second token, name = its `name` attribute); "
+     "`#Supersede dependency from X to Y;` lines; inForce = parts not a Y; duplicateNamesInForce = names two in-force parts share; "
+     "the `invocation` attribute of `part cliAccept2`; cli_facts.rs: the `invocation:` of the `name: \"accept\"` entry.")
+
+# --- D0477: the guard live on this tree
+_rc, out = run_rc([KEEL, "gate", "guard", "cli-surface-declared", "--no-receipt", "."], timeout=300)
+_last = (out or "").strip().splitlines()[-1] if (out or "").strip() else ""
+_m = re.search(r"\[guard:cli-surface-declared\] (PASS|FAIL) \W+ (\d+) scanned, (\d+) warning\(s\), (\d+) violation\(s\)", _last)
+fact("cliSurfaceLive", {
+    "verdict": _m.group(1) if _m else None, "scanned": int(_m.group(2)) if _m else None,
+    "warnings": int(_m.group(3)) if _m else None, "violations": int(_m.group(4)) if _m else None,
+    "line": _last, "exit0": _rc == 0,
+} if _m else None, "guard cli-surface-declared on this tree",
+     "`" + KEEL + " gate guard cli-surface-declared --no-receipt .`: the last line `[guard:cli-surface-declared] PASS|FAIL - N scanned, "
+     "N warning(s), N violation(s)`" + ("" if _m else " - did not match: " + _last[:200]))
+
+# --- D0477: the two Issues, the resolver's DoD result, and sprint 712's record
+_iss = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_bl = read(os.path.join(REPO, ".tracking", "backlog.sysml")) or ""
+
+
+def _issue_facts(num, resolver_expected):
+    _i = re.search(r"part issue" + num + r" : Issue\s*\{(.*?)\n\s*\}", _iss, re.S)
+    _b = _i.group(1) if _i else ""
+    _res = (re.search(r"#Resolves dependency from (\w+) to issue" + num + ";", _iss) or [None, None])[1]
+    return {
+        "exists": bool(_i),
+        "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _b) or [None, None])[1],
+        "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+        "title": (re.search(r'title\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+        "resolver": _res,
+        "resolverAsExpected": _res == resolver_expected,
+        "resolverDodNamesIssue": bool(re.search(resolver_expected + r"DoD[^\n]*Resolves issue" + num + r"[ .:]", _bl)),
+    }
+
+
+def _dod_results(action):
+    _rs = re.findall(r"part " + action + r"DoDR\d+ : TestResult \{[^}]*?outcome = VerdictKind::(\w+);[^}]*?judgedAgainst = \"([^\"]+)\"", _bl)
+    return [{"outcome": o, "judgedAgainst": s} for o, s in _rs]
+
+
+fact("cliInForceIssues", {
+    "issue547": _issue_facts("547", "dcCliFactSupersessionIsHonoured"),
+    "issue548": _issue_facts("548", "dcCliFactSupersessionIsHonoured"),
+    "resolverDodResults": _dod_results("dcCliFactSupersessionIsHonoured"),
+} if _iss and _bl else None, "the two findings and the resolver's DoD result",
+     ".tracking/issues-claudeFable5.sysml: each `part issueN : Issue {` body's severity / createdAt / title and its `#Resolves` edge; "
+     ".tracking/backlog.sysml: the resolver's DoD line carrying `Resolves issueN`, and its `DoDRn : TestResult` outcomes and shas.")
+
+
+def _sprint_facts(fname, story_charter):
+    _p = os.path.join(REPO, ".tracking", "delivery", fname)
+    _s = read(_p) or ""
+    if not _s:
+        return {"exists": False, "path": _p}
+    _res = re.findall(r"part \w+\s*:\s*TestResult\s*\{[^}]*?outcome\s*=\s*VerdictKind::(\w+)", _s)
+    return {
+        "exists": True, "results": len(_res),
+        "byOutcome": {o: _res.count(o) for o in sorted(set(_res))},
+        "judgedAgainst": sorted(set(re.findall(r'judgedAgainst\s*=\s*"([^"]+)"', _s))),
+        "gateResults": len(re.findall(r"part \w+GateR\d*\s*:\s*TestResult", _s)),
+        "charter": (re.search(r"#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+(\w+)\s*;", _s) or [None, None])[1],
+        "chartersAsExpected": bool(re.search(r"#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+" + story_charter + r"\s*;", _s)),
+        "estimatedPoints": (re.search(r"estimatedPoints\s*=\s*(\d+)", _s) or [None, None])[1],
+        "text": _s,
+    }
+
+
+_SPRINT_HOW = ("the delivery record: results = `part x : TestResult {` segments and their `VerdictKind::x`; judgedAgainst = the "
+               "distinct shas; gateResults = `part xGateRn : TestResult`; charter = the `#CharteredBy dependency from <story> to "
+               "<d>;` target; estimatedPoints from the Story.")
+_s712 = _sprint_facts("sprint712_cliFactSupersessionIsHonoured.sysml", "d0477")
+fact("cliInForceSprint", {k: v for k, v in _s712.items() if k != "text"} | ({
+    "implementNamesTwelvePassed": "cli_surface -> 12 passed 0 failed" in _s712["text"],
+    "namesOneAuthoredFact": "parses to ONE fact" in _s712["text"],
+} if _s712.get("exists") else {}), "sprint 712's record", _SPRINT_HOW + " Literal spans `cli_surface -> 12 passed 0 failed` and `parses to ONE fact`.")
+
+# --- D0483: the Decision, the human's words it derives from, the workspace graph today, the item that would deliver it
+_d0483 = _dec_file("0483-")
+_f483 = _decision_facts(_d0483, "d0483")
+_f483.update({
+    "derivedFromSt126": bool(re.search(r"#DerivedFrom dependency from d0483 to st126;", _d0483)),
+    "namesD0479": "D0479" in (_f483["context"] or ""),
+    "namesD0047": "D0047" in (_f483["rationale"] or ""),
+    "namesD0209": "D0209" in (_f483["decision"] or ""),
+    "namesContract": ".engine/contracts/workspace-layers.toml" in (_f483["decision"] or ""),
+    "namesGuard": "workspace-layering" in (_f483["decision"] or ""),
+    "knownPositive": "keel-git depending on keel-view fails naming both" in (_f483["decision"] or ""),
+    "knownNegative": "the real workspace at the commit that adds the guard passes" in (_f483["decision"] or ""),
+    "namesSprintItem": "dcWorkspaceLayeringIsGuarded" in (_f483["consequences"] or ""),
+})
+fact("layeringDecision", _f483 if _d0483 else None, "the Decision's fields as the guard reads them",
+     _DEC_HOW + " derivedFromSt126 = a `#DerivedFrom dependency from d0483 to st126;` line; the names by literal search in the field named.")
+
+_st_files = [os.path.join(REPO, ".tracking", "intake", f) for f in os.listdir(os.path.join(REPO, ".tracking", "intake"))] if os.path.isdir(os.path.join(REPO, ".tracking", "intake")) else []
+_st126 = None
+for _p in _st_files:
+    _t = read(_p) or ""
+    _m = re.search(r"part st126 : Statement\s*\{(.*?)\n\s*\}", _t, re.S)
+    if _m:
+        _b = _m.group(1)
+        _st126 = {
+            "file": os.path.relpath(_p, REPO).replace("\\", "/"),
+            "text": (re.search(r':>>\s*text\s*=\s*"(.*?)";', _b, re.S) or [None, None])[1],
+            "saidBy": (re.search(r'saidBy\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "saidAt": (re.search(r'saidAt\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "channel": (re.search(r"channel\s*=\s*StatementChannel::(\w+)", _b) or [None, None])[1],
+            "title": (re.search(r':>>\s*title\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+        }
+fact("modularityStatement", _st126, "the human's words the layering Decision derives from",
+     ".tracking/intake/*.sysml: the `part st126 : Statement {` body's text (verbatim, D0236), saidBy, saidAt, channel, title.")
+
+_root_toml = read(os.path.join(REPO, "Cargo.toml")) or ""
+_members_m = re.search(r"members\s*=\s*\[(.*?)\]", _root_toml, re.S)
+_members = re.findall(r'"([^"]+)"', _members_m.group(1)) if _members_m else []
+_edges = []
+for _mp in _members:
+    _mt = read(os.path.join(REPO, _mp, "Cargo.toml")) or ""
+    _crate = (re.search(r'^name\s*=\s*"([^"]+)"', _mt, re.M) or [None, os.path.basename(_mp)])[1]
+    _deps_m = re.search(r"^\[dependencies\](.*?)(?=^\[|\Z)", _mt, re.S | re.M)
+    for _dn in re.findall(r"^(keel-[\w-]+)\s*=", _deps_m.group(1) if _deps_m else "", re.M):
+        _edges.append({"from": _crate, "to": _dn})
+_leaf_members = [m for m in _members if m.startswith("members/")]
+_contract_p = os.path.join(REPO, ".engine", "contracts", "workspace-layers.toml")
+_layer_item = re.search(r"^\s*action dcWorkspaceLayeringIsGuarded;", _bl, re.M)
+_layer_dod = (re.search(r"dcWorkspaceLayeringIsGuardedDoD[^\n]*procedureText = \"(.*?)\";", _bl) or [None, ""])[1]
+_eb = re.search(r"action def EngineBuild \{(.*?)^    \}", _bl, re.S | re.M)
+_eb_actions = re.findall(r"^\s{8}action (\w+);", _eb.group(1), re.M) if _eb else []
+ok, out = run([KEEL, "show", "whats-next", "."], timeout=120)
+_ready_names = [l.strip() for l in (out or "").splitlines() if l.strip()] if ok else []
+fact("workspaceGraph", {
+    "members": _members,
+    "leafMembers": _leaf_members,
+    "memberEdges": _edges,
+    "edgesAmongLeaves": [e for e in _edges if e["from"] != "keel-cli" and e["to"] != "keel-parser"],
+    "keelCliDependsOn": sorted(e["to"] for e in _edges if e["from"] == "keel-cli"),
+    "layersContractExists": os.path.exists(_contract_p),
+    "guardInNames": "workspace-layering" in _gnames,
+    "guardCount": int(_gn.group(1)) if _gn else None,
+    "item": {
+        "exists": bool(_layer_item),
+        "positionInEngineBuild": (_eb_actions.index("dcWorkspaceLayeringIsGuarded") + 1) if "dcWorkspaceLayeringIsGuarded" in _eb_actions else None,
+        "engineBuildItems": len(_eb_actions),
+        "charteredByD0483": bool(re.search(r"#CharteredBy dependency from dcWorkspaceLayeringIsGuarded to d0483;", _bl)),
+        "dependsOnD0483": bool(re.search(r"#DependsOn dependency from dcWorkspaceLayeringIsGuarded to d0483;", _bl)),
+        "dependsOnLeafSprint": bool(re.search(r"#DependsOn dependency from dcWorkspaceLayeringIsGuarded to dcWorkspaceHoldsTheLeafMembers;", _bl)),
+        "dodSaysBlocked": "this item stays blocked on that acceptance" in _layer_dod,
+        "dodNamesFourHomes": "all four homes" in _layer_dod,
+        "readyToday": "dcWorkspaceLayeringIsGuarded" in _ready_names,
+        "readyCount": len(_ready_names),
+    },
+} if _members else None, "the workspace as the manifests declare it, and the item that would add the guard",
+     "Cargo.toml `members = [...]`; each member's Cargo.toml `[dependencies]` entries named keel-*, as (from crate name, to); "
+     "leafMembers = paths under members/; layersContractExists = the file the Decision names is on disk; guardInNames = "
+     "`workspace-layering` in guards.rs GUARD_NAMES; .tracking/backlog.sysml: the item's line, its 1-based position among `action x;` "
+     "lines inside `action def EngineBuild`, its #CharteredBy / #DependsOn edges and two DoD phrases; readyToday = its name among the "
+     "lines of `" + KEEL + " show whats-next .`.")
+
+_i552 = _issue_facts("552", "dcReadyHonoursItemDependencies")
+_i552["namesBlockedBy"] = "blocked_by" in ((re.search(r"part issue552 : Issue\s*\{(.*?)\n\s*\}", _iss, re.S) or [None, ""])[1])
+_i552["resolverPosition"] = (_eb_actions.index("dcReadyHonoursItemDependencies") + 1) if "dcReadyHonoursItemDependencies" in _eb_actions else None
+_i552["resolverReadyRank"] = (_ready_names.index("dcReadyHonoursItemDependencies") + 1) if "dcReadyHonoursItemDependencies" in _ready_names else None
+_i549 = _issue_facts("549", "dcReadyHonoursItemDependencies")
+_vm = read(os.path.join(REPO, "keel-cli", "src", "view", "mod.rs")) or ""
+_bb = _fn_body(_vm, "blocked_by") if _vm else ""
+fact("charterBlockIssue", {
+    "issue552": _i552, "issue549": _i549,
+    "blockedByReadsKinds": sorted(set(re.findall(r'e\.kind == "(\w+)"', _bb))),
+    "blockedByReadsCharter": "charteredby" in _bb,
+} if _iss else None, "the finding the D0483 tab surfaced, and the filter it names",
+     ".tracking/issues-claudeFable5.sysml: `part issue552 : Issue {` and `part issue549`, each with severity, resolver edge and whether the "
+     "resolver's DoD names it; resolverPosition = the resolver's place in EngineBuild, resolverReadyRank = its line in whats-next; "
+     "keel-cli/src/view/mod.rs: the edge kinds `e.kind == \"x\"` inside `fn blocked_by`.")
+
+# --- D0484: the Decision, the paragraph it governs against the manifest, the charter it layers on, sprint 714's record
+_d0484 = _dec_file("0484-")
+_f484 = _decision_facts(_d0484, "d0484")
+_d0479 = _dec_file("0479-")
+_f484.update({
+    "dependsOnD0479": bool(re.search(r"#DependsOn dependency from d0484 to d0479;", _d0484)),
+    "namesSprint714": "Sprint 714" in (_f484["context"] or ""),
+    "namesLocked": "locked process definition" in (_f484["context"] or ""),
+    "namesD0209": "D0209" in (_f484["context"] or ""),
+    "saysNothingElseChanges": "Nothing else in the skill changes" in (_f484["decision"] or ""),
+    "saysDescriptive": "The change is descriptive" in (_f484["rationale"] or ""),
+    "namesPatternAlternative": "naming the pattern" in (_f484["consequences"] or ""),
+    "d0479": {
+        "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0479) or [None, None])[1],
+        "acceptance": _acceptance_kind(_d0479, "d0479"),
+        "judgedBy": sorted(set(re.findall(r'judgedBy\s*=\s*"([^"]+)"', _d0479))),
+        "marker": ("#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+d0479\s*:", _d0479, re.M)
+                   else "#SafetyChange" if re.search(r"^\s*#SafetyChange\s+part\s+d0479\s*:", _d0479, re.M) else None),
+    },
+})
+fact("buildSkillDecision", _f484 if _d0484 else None, "the Decision's fields as the guard reads them, and the charter it layers on",
+     _DEC_HOW + " dependsOnD0479 = a `#DependsOn dependency from d0484 to d0479;` line; names by literal search in the field named; "
+     "d0479 = the charter Decision's status, acceptance kind, judgedBy set and marker (None = unmarked) from .engine/decisions/0479-*.sysml.")
+
+_skill_p = os.path.join(REPO, ".engine", "skills", "build", "SKILL.md")
+_skill = read(_skill_p) or ""
+_skill_claude = read(os.path.join(REPO, ".claude", "skills", "build", "SKILL.md")) or ""
+_para_m = re.search(r"\*\*Workspace layout:\*\*(.*?)\n\n", _skill, re.S)
+_para = _para_m.group(1) if _para_m else ""
+_para_crates = re.findall(r"`(keel-[\w-]+)`", _para)
+_manifest_crates = [m.rsplit("/", 1)[-1] for m in _members]
+fact("buildSkillParagraph", {
+    "exists": bool(_para_m),
+    "text": _para.strip(),
+    "cratesNamed": _para_crates,
+    "manifestCrates": _manifest_crates,
+    "everyManifestCrateNamed": all(c in _para_crates for c in _manifest_crates),
+    "namedNotInManifest": [c for c in _para_crates if c not in _manifest_crates],
+    "namesD0479": "D0479" in _para,
+    "saysReExported": "re-exports" in _para,
+    "namesDenySet": "deny(warnings" in _para,
+    "claudeCopyIdentical": bool(_skill) and _skill == _skill_claude,
+    "skillLockedWords": "process-change" in (_f484["rationale"] or ""),
+} if _skill else None, "the layout paragraph against the manifest",
+     ".engine/skills/build/SKILL.md: the paragraph from `**Workspace layout:**` to the next blank line; cratesNamed = its `keel-x` code "
+     "spans; manifestCrates = the last path segment of each root Cargo.toml member; everyManifestCrateNamed = set inclusion; "
+     "D0479 / `re-exports` / `deny(warnings` by literal search; claudeCopyIdentical = byte equality with .claude/skills/build/SKILL.md.")
+
+_s714 = _sprint_facts("sprint714_workspaceHoldsTheLeafMembers.sysml", "d0479")
+_i551 = _issue_facts("551", "dcRecordRefusesAnUnknownFlag")
+_i551["resolverPosition"] = (_eb_actions.index("dcRecordRefusesAnUnknownFlag") + 1) if "dcRecordRefusesAnUnknownFlag" in _eb_actions else None
+_i551["resolverReadyRank"] = (_ready_names.index("dcRecordRefusesAnUnknownFlag") + 1) if "dcRecordRefusesAnUnknownFlag" in _ready_names else None
+_i550 = _issue_facts("550", "dcTouchedSetDescendsTheWorkspace")
+fact("buildSkillSprint", {k: v for k, v in _s714.items() if k != "text"} | ({
+    "retroNamesD0484": "D0484" in _s714["text"],
+    "retroNamesIssue551": "issue551" in _s714["text"],
+    "retroNamesIssue550": "issue550" in _s714["text"],
+    "retroSaysEdgeByHand": "the edge was authored by hand" in _s714["text"],
+    "helpByteIdentical": "byte-identical" in _s714["text"],
+    "memberLibTests": (re.search(r"(\d+) tests over the non-cli members", _s714["text"]) or [None, None])[1],
+    "touchedPassed": (re.search(r"keel suite --touched: (\d+) passed", _s714["text"]) or [None, None])[1],
+    "issue551": _i551, "issue550": _i550,
+} if _s714.get("exists") else {}), "sprint 714's record and the two findings it carried",
+     _SPRINT_HOW + " Literal spans D0484 / issue551 / issue550 / `the edge was authored by hand` / `byte-identical`; `N tests over the "
+     "non-cli members` and `keel suite --touched: N passed` from the evidence; the two Issues as for the others, with the resolver's "
+     "EngineBuild position and whats-next rank.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
