@@ -23,7 +23,9 @@
 //! temp-then-rename. It is a cache, not truth (§1): delete it and every answer is recomputed identically -
 //! the `DoD`'s check is `keel show orient` byte-identical with the file absent, cold and warm.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::io::Write;
+use std::process::Stdio;
 use std::path::{Path, PathBuf};
 
 /// The on-disk shape. Absent criteria are a separate list because TOML has no null.
@@ -342,6 +344,134 @@ pub fn head_sha(root: &Path) -> Option<String> {
         .filter(|s| is_full_sha(s));
     *g = Some((root.to_path_buf(), h.clone()));
     h
+}
+
+// ── batched git reads (moved from orient, D0479: a view may not reach into orient for git) ──────
+
+/// A commit that git resolves - conservative: if git is unavailable, don't invalidate.
+pub(crate) fn git_sha_valid(sha: &str, repo: &Path) -> bool {
+    if sha.is_empty() {
+        return false;
+    }
+    crate::gitx::git()
+        .arg("-C")
+        .arg(repo)
+        .args(["cat-file", "-t", sha])
+        .output()
+        // conservative: if git is unavailable, don't invalidate
+        .map_or(true, |o| o.status.success() && o.stdout.starts_with(b"commit"))
+}
+
+
+/// Feed `lines` to a batch child's stdin from its OWN thread, closing the pipe when done. Writing
+/// the request and then waiting for the reply on one thread deadlocks as soon as the request outgrows
+/// the pipe: git blocks on a full stdout that nobody reads while we block on a full stdin that git
+/// is not reading (dcResultBindsToItsLandingCommit: full 40-hex keys crossed the threshold that
+/// short ones stayed under, and `orient` hung on `cat-file --batch` for good).
+fn feed_stdin(child: &mut std::process::Child, lines: &[String]) -> Option<std::thread::JoinHandle<()>> {
+    let mut si = child.stdin.take()?;
+    let mut buf = String::with_capacity(lines.iter().map(|l| l.len() + 1).sum());
+    for l in lines {
+        buf.push_str(l);
+        buf.push('\n');
+    }
+    Some(std::thread::spawn(move || {
+        let _ = si.write_all(buf.as_bytes());
+    }))
+}
+
+/// Validate many commit SHAs in ONE `git cat-file --batch-check` spawn (orientPerf): returns
+/// `sha -> is-commit`. Conservative on git failure (true) — matches `git_sha_valid`.
+pub(crate) fn valid_commits(repo: &Path, shas: &[String]) -> HashMap<String, bool> {
+    let mut out: HashMap<String, bool> = HashMap::new();
+    // A full id already confirmed as a commit stays one (dcGitFactsAreContentAddressed); only the rest
+    // go to git. A negative is never remembered - a fetch can make it true.
+    let shas: Vec<String> = shas
+        .iter()
+        .filter(|s| {
+            if commit_known(repo, s) {
+                out.insert((*s).clone(), true);
+                false
+            } else {
+                true
+            }
+        })
+        .cloned()
+        .collect();
+    if shas.is_empty() {
+        return out;
+    }
+    let shas = &shas[..];
+    let spawn = crate::gitx::git()
+        .arg("-C").arg(repo)
+        .args(["cat-file", "--batch-check"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
+        .spawn();
+    let Ok(mut child) = spawn else {
+        for s in shas { out.insert(s.clone(), true); }
+        return out;
+    };
+    let feeder = feed_stdin(&mut child, shas);
+    let waited = crate::perf::timed(&crate::perf::GIT_NANOS, || child.wait_with_output());
+    if let Some(f) = feeder { let _ = f.join(); }
+    let Ok(o) = waited else {
+        for s in shas { out.insert(s.clone(), true); }
+        return out;
+    };
+    let text = String::from_utf8_lossy(&o.stdout);
+    // --batch-check emits one line per input, in order: `<oid> <type> <size>` or `<input> missing`.
+    for (s, line) in shas.iter().zip(text.lines()) {
+        let mut fields = line.split_whitespace();
+        let oid = fields.next().unwrap_or("");
+        let is_commit = fields.next() == Some("commit");
+        if is_commit {
+            // The batch line names the FULL oid: this is where a short anchor resolves for the process,
+            // so every later question about it keys the cache by the full id (gitfacts module doc).
+            remember_resolution(repo, s, oid);
+            remember_commit(repo, oid, true);
+        }
+        out.insert(s.clone(), is_commit);
+    }
+    flush(repo);
+    out
+}
+
+/// Read many `<rev>:<path>` blobs in ONE `git cat-file --batch` spawn (orientPerf): returns
+/// `key -> content` (None if missing). Parses the size-delimited batch protocol. `pub(crate)` so
+/// the coverage/critique element-content staleness check (D0084) can reuse the batched read.
+pub(crate) fn batch_cat_blobs(repo: &Path, keys: &[String]) -> HashMap<String, Option<String>> {
+    let mut out: HashMap<String, Option<String>> = HashMap::new();
+    if keys.is_empty() {
+        return out;
+    }
+    let spawn = crate::gitx::git()
+        .arg("-C").arg(repo)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
+        .spawn();
+    let Ok(mut child) = spawn else { return out; };
+    let feeder = feed_stdin(&mut child, keys);
+    let waited = crate::perf::timed(&crate::perf::GIT_NANOS, || child.wait_with_output());
+    if let Some(f) = feeder { let _ = f.join(); }
+    let Ok(o) = waited else { return out; };
+    let data = o.stdout;
+    let mut pos = 0usize;
+    for k in keys {
+        let Some(rest) = data.get(pos..) else { break };
+        let Some(nl) = rest.iter().position(|&b| b == b'\n') else { break };
+        let header = String::from_utf8_lossy(rest.get(..nl).unwrap_or(&[])).into_owned();
+        let after_header = pos + nl + 1;
+        if header.split_whitespace().nth(1) == Some("missing") || header.ends_with("missing") {
+            out.insert(k.clone(), None);
+            pos = after_header;
+            continue;
+        }
+        let size: usize = header.split_whitespace().nth(2).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let content = data.get(after_header..after_header + size).map(|b| String::from_utf8_lossy(b).into_owned());
+        out.insert(k.clone(), content);
+        pos = after_header + size + 1; // skip the trailing LF after content
+    }
+    out
 }
 
 #[cfg(test)]

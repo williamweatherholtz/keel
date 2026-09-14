@@ -23,7 +23,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::orient::{gate_order, gate_passed};
+use crate::orient::gate_order;
+use crate::textscan::gate_passed;
 
 /// A gate is DEFINED in a sprint when it has a `verification <...>Gate : Test` declaration (the
 /// space-before-colon distinguishes the Test from its `<...>GateR<n> : TestResult`).

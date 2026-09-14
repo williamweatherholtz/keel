@@ -10,6 +10,8 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
+use crate::ident::gen_uuid;
+
 use keel_parser::ast::{Item, Package};
 
 // ── error type ────────────────────────────────────────────────────────────────
@@ -76,37 +78,6 @@ impl From<std::io::Error> for WriteError {
 
 // ── UUID generation ───────────────────────────────────────────────────────────
 
-/// Generate a cryptographically-random UUID v4 (RFC 4122), 122 bits of OS entropy.
-///
-/// # Distributed safety (issue075 / D0129)
-///
-/// The previous construction mixed only clock seconds, sub-second nanos, PID and an in-process
-/// counter that was 0 for the first record of every invocation. It had **no host component**, so
-/// two machines were not independent sources — and `id` is the engine's identity invariant (items
-/// never collide on name precisely because they are distinguished by id, CLAUDE.md §2.3), so a
-/// collision corrupts identity itself. With no duplicate-id detector (issue074) it would also be
-/// undetectable. Entropy now comes from the OS CSPRNG.
-///
-/// # Panics
-///
-/// If the OS CSPRNG is unavailable. That is deliberate: minting a weak identity silently is worse
-/// than failing loudly (the honest-gate principle, D0098).
-#[must_use]
-#[allow(clippy::expect_used)] // deliberate: a weak identity minted silently is worse than a loud abort
-pub fn gen_uuid() -> String {
-    let mut b = [0u8; 16];
-    getrandom::fill(&mut b).expect("OS CSPRNG unavailable — refusing to mint a weak identity");
-    b[6] = (b[6] & 0x0f) | 0x40; // version 4
-    b[8] = (b[8] & 0x3f) | 0x80; // variant RFC 4122
-    let mut s = String::with_capacity(36);
-    for (i, byte) in b.iter().enumerate() {
-        if matches!(i, 4 | 6 | 8 | 10) {
-            s.push('-');
-        }
-        let _ = write!(s, "{byte:02x}");
-    }
-    s
-}
 
 /// The ONE lock file guarding model writes, found by walking up to the `.tracking`/`.engine` parent.
 ///
@@ -2601,7 +2572,7 @@ mod tests {
         let mut seen = HashSet::new();
         for _ in 0..10_000 {
             let u = gen_uuid();
-            assert!(crate::guards::uuid_shaped(&u), "guard 38 rejects a minted id: {u}");
+            assert!(crate::ident::uuid_shaped(&u), "guard 38 rejects a minted id: {u}");
             assert!(seen.insert(u), "duplicate within 10000 mints");
         }
     }

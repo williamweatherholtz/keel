@@ -113,16 +113,15 @@ pub fn note_with_tty_gesture(note: &str, gesture: &str, judge: &str, date: &str)
     debug_assert!(gesture.to_lowercase().contains(checks::TTY_GESTURE_MARK), "the gesture phrase must carry the mark the rule reads");
     format!("{note} - {gesture} by {judge}, {date}")
 }
-mod critique;
+pub mod critique;
 mod knowledge;
-mod reports;
-mod staleness;
+pub mod reports;
+pub mod staleness;
 pub use checks::*;
 pub use knowledge::*;
 pub use critique::*;
 pub use reports::*;
 pub use staleness::*;
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum ViewError {
@@ -245,20 +244,20 @@ pub struct Project {
 // ── the tracking model the view runs over ────────────────────────────────────
 
 #[derive(Clone)]
-struct ItemInfo {
-    type_name: String,
-    attrs: HashMap<String, String>,
-    marker: Option<String>,
+pub(crate) struct ItemInfo {
+    pub(crate) type_name: String,
+    pub(crate) attrs: HashMap<String, String>,
+    pub(crate) marker: Option<String>,
     /// Repo-relative source file (forward-slashed) — powers the `newlyAdded` git-temporal rule scope
     /// (D0105). Empty for items constructed in tests / without a known source.
-    file: String,
+    pub(crate) file: String,
 }
 
 #[derive(Clone)]
-struct Edge {
-    kind: String,
-    from: String,
-    to: String,
+pub(crate) struct Edge {
+    pub(crate) kind: String,
+    pub(crate) from: String,
+    pub(crate) to: String,
 }
 
 /// The computed `displayLabel` view (schema §2.3 — declared but historically unbuilt; D0126). The human
@@ -274,8 +273,8 @@ fn display_label(name: &str, info: &ItemInfo) -> String {
 
 #[derive(Clone)]
 pub(crate) struct Model {
-    items: HashMap<String, ItemInfo>,
-    edges: Vec<Edge>,
+    pub(crate) items: HashMap<String, ItemInfo>,
+    pub(crate) edges: Vec<Edge>,
 }
 
 /// issue333 / D0304: every `resolves` edge whose RESOLVER never names the issue it resolves.
@@ -370,7 +369,7 @@ fn id_shape_census_of<'a>(items: impl Iterator<Item = (&'a str, &'a ItemInfo)>, 
     for (name, info) in items {
         let Some(id) = info.attrs.get("id") else { continue };
         out.scanned += 1;
-        if crate::guards::is_v4_uuid(id) {
+        if crate::ident::is_v4_uuid(id) {
             continue;
         }
         let date = ["judgedAt", "createdAt", "saidAt", "acceptedAt"]
@@ -379,7 +378,7 @@ fn id_shape_census_of<'a>(items: impl Iterator<Item = (&'a str, &'a ItemInfo)>, 
             .map(|d| d.chars().take(10).collect::<String>());
         match date {
             Some(d) if d.as_str() >= cutoff => out.forward.push((name.to_string(), info.file.clone(), id.clone(), d)),
-            _ if crate::guards::uuid_hex_shaped(id) => out.history_hex_not_v4 += 1,
+            _ if crate::ident::uuid_hex_shaped(id) => out.history_hex_not_v4 += 1,
             _ => out.history_not_hex += 1,
         }
     }
@@ -468,7 +467,7 @@ impl Model {
 
     /// Build the model, MEMOIZED by content fingerprint (see [`MODEL_CACHE`]). A burst of concurrent
     /// callers on an unchanged model shares one parse; the cache invalidates on any file change.
-    fn build(root: &Path) -> Result<std::sync::Arc<Self>, ViewError> {
+    pub(crate) fn build(root: &Path) -> Result<std::sync::Arc<Self>, ViewError> {
         crate::perf::add(&crate::perf::BUILD_CALLS, 1);
         let fp = crate::fingerprint::of(root);
         if let Some(m) = Self::cached_model(fp) {
@@ -535,7 +534,7 @@ impl Model {
     /// put-if-absents (first wins) whose effect depends only on the order the sequences are applied in -
     /// so each worker records its file's sequence and the calling thread applies them in `paths` order.
     /// Items, edges and every view are what the serial build produced.
-    fn build_with_workers(root: &Path, workers: usize) -> Result<Self, ViewError> {
+    pub(crate) fn build_with_workers(root: &Path, workers: usize) -> Result<Self, ViewError> {
         let paths: Vec<_> = model_dirs(root).iter().flat_map(|d| crate::collect_sysml(d)).collect();
         let ingested = crate::perf::phase("model:parse-files", || Self::parse_all(root, &paths, workers));
         let mut items: HashMap<String, ItemInfo> = HashMap::new();
@@ -746,7 +745,7 @@ fn attr_matches(info: &ItemInfo, key: &str, pred: &AttrPred) -> bool {
     })
 }
 
-fn has_outgoing(edges: &[Edge], name: &str, kind: &str) -> bool {
+pub(crate) fn has_outgoing(edges: &[Edge], name: &str, kind: &str) -> bool {
     edges.iter().any(|e| e.from == name && e.kind == kind)
 }
 
@@ -1724,7 +1723,7 @@ fn traverse(model: &Model, seed: &HashSet<String>, tr: &Traverse, edge_kinds: &[
 
 // ── JSON emit (presentation-agnostic; rendering is a separate layer) ──────────
 
-fn json_esc(s: &str) -> String {
+pub(crate) fn json_esc(s: &str) -> String {
     s.chars()
         .flat_map(|c| match c {
             '"' => vec!['\\', '"'],
@@ -1826,7 +1825,7 @@ fn run_resolved(root: &Path, view_name: &str) -> Result<(ViewSpec, std::sync::Ar
 // passing acceptance event (`{dNNNN}AcceptR1 : TestResult, outcome=pass`). Algorithmic (a
 // naming + outcome correlation), so a Rust function — not a TOML filter.
 
-fn compute_attestation(model: &Model) -> (usize, Vec<String>) {
+pub(crate) fn compute_attestation(model: &Model) -> (usize, Vec<String>) {
     let mut accepted: Vec<&String> = model.standing("accepted").into_iter().collect();
     accepted.sort();
     let missing: Vec<String> = accepted
@@ -2004,10 +2003,10 @@ struct ResolverStatus {
     complete: bool,
 }
 
-struct IssueStatus {
-    issue: String,
+pub(crate) struct IssueStatus {
+    pub(crate) issue: String,
     resolvers: Vec<ResolverStatus>,
-    open: bool,
+    pub(crate) open: bool,
 }
 
 /// The latest recorded disposition verdict on a finding Issue (D0092): the `disposition` attr of a
@@ -2022,7 +2021,7 @@ fn issue_disposition(model: &Model, issue: &str) -> Option<String> {
         .next_back()
 }
 
-fn compute_issue_resolution<S: std::hash::BuildHasher>(model: &Model, done: &HashSet<String, S>) -> Vec<IssueStatus> {
+pub(crate) fn compute_issue_resolution<S: std::hash::BuildHasher>(model: &Model, done: &HashSet<String, S>) -> Vec<IssueStatus> {
     let mut issues: Vec<&String> = model.items.iter().filter(|(_, i)| i.type_name == "Issue").map(|(n, _)| n).collect();
     issues.sort();
     // A resolving Decision completes the Issue only while it is accepted AND in force (D0398).
@@ -2233,7 +2232,7 @@ pub fn marker_census(root: &Path) -> Result<String, ViewError> {
                 }
             }
             if let Ok(text) = std::fs::read_to_string(&path) {
-                for m in crate::guards::engine_markers() {
+                for m in crate::textscan::engine_markers() {
                     let n = text.matches(&format!("#{m}")).count();
                     if n > 0 {
                         *raw.entry(m.clone()).or_default() += n;
@@ -2536,7 +2535,7 @@ pub fn untriaged_issues(root: &Path) -> Result<(usize, Vec<String>), ViewError> 
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn open_issues(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
-    let done = crate::orient::done_names(root);
+    let done = crate::done::done_names(root);
     let all = compute_issue_resolution(&model, &done);
     let total = all.len();
     let open_count = all.iter().filter(|i| i.open).count();
@@ -3125,9 +3124,9 @@ struct Verifier {
 }
 
 pub(crate) struct Coverage {
-    element: String,
-    type_name: String,
-    tier: &'static str,          // D0082: verified | attested | addressed | suspect | uncovered
+    pub(crate) element: String,
+    pub(crate) type_name: String,
+    pub(crate) tier: &'static str,          // D0082: verified | attested | addressed | suspect | uncovered
     basis: Option<&'static str>, // the strongest covering verifier kind
     verifiers: Vec<Verifier>,
 }
@@ -3160,14 +3159,14 @@ fn tier_for_kind(kind: &str) -> &'static str {
 /// only complete evidence is a stale verify-Test → `suspect`; nothing → `uncovered`.
 /// A tier the GATE accepts as covered (D0082): objective evidence or a defensible attestation.
 /// `addressed` (claim only), `suspect` (stale), and `uncovered` are gaps.
-fn is_covered_tier(tier: &str) -> bool {
+pub(crate) fn is_covered_tier(tier: &str) -> bool {
     matches!(tier, "verified" | "attested")
 }
 
 /// Gate-covered % over `cov`, optionally restricted to type `ty` (empty = all): the fraction whose
 /// tier is gate-covered (verified|attested). The single coverage-ratio formula (D0090) — `metric_value`
 /// AND the report scalar cards both source from here, so the number is computed in exactly one place.
-fn coverage_pct_of(cov: &[Coverage], ty: &str) -> u32 {
+pub(crate) fn coverage_pct_of(cov: &[Coverage], ty: &str) -> u32 {
     let rows: Vec<&Coverage> = cov.iter().filter(|c| ty.is_empty() || c.type_name == ty).collect();
     pct(rows.iter().filter(|c| is_covered_tier(c.tier)).count(), rows.len())
 }
@@ -3175,7 +3174,7 @@ fn coverage_pct_of(cov: &[Coverage], ty: &str) -> u32 {
 /// Verified % over `cov` restricted to type `ty` (empty = all): the fraction at the strongest
 /// (`verified`) tier — V&V traceability. Shared by `metric_value` (`req_verified_pct`/
 /// `needs_verified_pct`) and the traceability scorecard (D0090; single-source).
-fn verified_pct_of(cov: &[Coverage], ty: &str) -> u32 {
+pub(crate) fn verified_pct_of(cov: &[Coverage], ty: &str) -> u32 {
     let rows: Vec<&Coverage> = cov.iter().filter(|c| ty.is_empty() || c.type_name == ty).collect();
     pct(rows.iter().filter(|c| c.tier == "verified").count(), rows.len())
 }
@@ -3306,7 +3305,6 @@ struct TierStat {
     /// on screen next to the number it improves.
     superseded: Vec<String>,
 }
-
 
 /// `keel controls` (D0195, panel R1 aerospace flip 2) — the two-way hazard/control diff.
 ///
@@ -3790,7 +3788,7 @@ fn at_least_high(sev: &str) -> bool {
 /// so "outranks" is simply "appears earlier". Returns `(outranking item, high item, its severity)`.
 /// An outranking item in `recorded` - one carrying a `#PrioritizedBy` edge to the Statement or
 /// Decision that ranks it (D0429) - is a deliberate inversion and is not reported.
-fn inversion_pairs(ready: &[(String, Option<String>)], recorded: &HashSet<String>) -> Vec<(String, String, String)> {
+pub(crate) fn inversion_pairs(ready: &[(String, Option<String>)], recorded: &HashSet<String>) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for (i, (high, sev)) in ready.iter().enumerate() {
         let Some(s) = sev.as_deref().filter(|s| at_least_high(s)) else { continue };
@@ -3803,232 +3801,25 @@ fn inversion_pairs(ready: &[(String, Option<String>)], recorded: &HashSet<String
     out
 }
 
-/// The deliberate-rank records (D0429): every `#PrioritizedBy` edge, as `item -> citation` when its
-/// target is a Statement or Decision, and as a violation line otherwise - a citation to an Issue, a
-/// Task or an unresolved name would let an item rank itself, so it records nothing.
-fn priority_records(model: &Model) -> (HashMap<String, String>, Vec<String>) {
-    let mut recorded = HashMap::new();
-    let mut violations = Vec::new();
-    for e in model.edges.iter().filter(|e| e.kind == "prioritizedby") {
-        match model.items.get(&e.to).map(|i| i.type_name.as_str()) {
-            Some("Statement" | "Decision") => {
-                recorded.insert(e.from.clone(), e.to.clone());
-            }
-            Some(t) => violations.push(format!(
-                "#PrioritizedBy dependency from {} to {}: the target is of type {t}, not a Statement or Decision - a deliberate rank is recorded against the human's words or a recorded judgment, never against another work item (D0429)",
-                e.from, e.to
-            )),
-            None => violations.push(format!("#PrioritizedBy dependency from {} to {}: the target resolves to no item (D0429)", e.from, e.to)),
-        }
-    }
-    (recorded, violations)
-}
-
-/// One ready item's computed priority signals (D0311): where it stands, what it resolves, how many
-/// retros have named it as the already-tracked home of a finding, and the class those combine to.
-pub struct PrioritySignal {
-    pub task: String,
-    pub position: usize,
-    pub resolver_severity: Option<String>,
-    pub recurrences: usize,
-    /// The rank class the signals justify: `Critical`, `High`, `Medium`, `Low` or `none`.
-    pub effective: String,
-    /// Which signal set the class - `severity`, `recurrence`, or `none`.
-    pub driven_by: &'static str,
-    /// The Statement or Decision a `#PrioritizedBy` edge cites as ranking this item (D0429), if any.
-    pub ranked_by: Option<String>,
-}
-
-/// What [`priority_inversions`] reports: the inversions still standing, the deliberate ones with their
-/// citations, and the records whose target cannot rank anything.
-pub struct PriorityInversions {
-    /// `(outranking item, high item, its class)` for every inversion no record covers.
-    pub pairs: Vec<(String, String, String)>,
-    /// `(item, citation)` for every ready item whose rank a `#PrioritizedBy` edge records.
-    pub recorded: Vec<(String, String)>,
-    /// One line per `#PrioritizedBy` edge whose target is not a Statement or Decision.
-    pub violations: Vec<String>,
-}
-
-fn class_rank(s: &str) -> u8 {
-    match s {
-        "Critical" => 4,
-        "High" => 3,
-        "Medium" => 2,
-        "Low" => 1,
-        _ => 0,
-    }
-}
-
-/// How many sprint retros name each open backlog item as the tracked home of a finding they chose not
-/// to open an item for. One citation is tracking; every further one is the finding coming back while
-/// the item sat (D0311, the heredoc case: eight recurrences under "already tracked").
-fn retro_citations(root: &Path) -> HashMap<String, usize> {
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for f in crate::collect_sysml(&root.join(".tracking").join("delivery")) {
-        let Ok(t) = std::fs::read_to_string(&f) else { continue };
-        for retro in crate::guards::retro_texts(&t) {
-            let lower = retro.to_lowercase();
-            if !crate::guards::RETRO_NO_ITEM_JUSTIFICATIONS.iter().any(|j| lower.contains(*j)) {
-                continue;
-            }
-            let mut seen: HashSet<String> = HashSet::new();
-            for n in crate::guards::named_items(&retro) {
-                if seen.insert(n.clone()) {
-                    *counts.entry(n).or_insert(0) += 1;
-                }
-            }
-        }
-    }
-    counts
-}
-
-/// The rank class recurrence alone justifies: twice puts a finding with the High resolvers, three or
-/// more with the Critical ones - each citation past the first is one more time the defect came back.
-const fn recurrence_class(citations: usize) -> Option<&'static str> {
-    match citations {
-        0 | 1 => None,
-        2 => Some("High"),
-        _ => Some("Critical"),
-    }
-}
-
-/// Every ready item's priority signals, in declaration (= priority) order (D0311).
-///
-/// # Errors
-/// Propagates model-build failures.
-pub fn priority_signals(root: &Path) -> Result<Vec<PrioritySignal>, ViewError> {
-    let model = Model::build(root)?;
-    // The frontier alone (issue439): the guard built on this paid orient::compute whole - suspect
-    // walk, drift, burndown - to read `ready`, and was the critical path of every slow hook fire.
-    let (ready, _compute_failures, _outstanding) = crate::perf::phase("priority:frontier", || crate::orient::ready(root));
-    let citations = crate::perf::phase("priority:retro-citations", || retro_citations(root));
-    let (records, _) = priority_records(&model);
-    let severity_of = |task: &str| -> Option<String> {
-        model
-            .edges
-            .iter()
-            .filter(|e| e.kind == "resolves" && e.from == task)
-            .filter_map(|e| model.items.get(&e.to))
-            .filter_map(|i| i.attrs.get("severity").cloned())
-            .max_by_key(|s| class_rank(s))
-    };
-    Ok(ready
-        .iter()
-        .enumerate()
-        .map(|(i, t)| {
-            let sev = severity_of(t);
-            let rec = citations.get(t).copied().unwrap_or(0);
-            let rec_class = recurrence_class(rec);
-            let sev_rank = sev.as_deref().map_or(0, class_rank);
-            let rec_rank = rec_class.map_or(0, class_rank);
-            let (effective, driven_by) = if rec_rank > sev_rank {
-                (rec_class.unwrap_or("none").to_string(), "recurrence")
-            } else if sev_rank > 0 {
-                (sev.clone().unwrap_or_default(), "severity")
-            } else {
-                ("none".to_string(), "none")
-            };
-            PrioritySignal { task: t.clone(), position: i + 1, resolver_severity: sev, recurrences: rec, effective, driven_by, ranked_by: records.get(t).cloned() }
-        })
-        .collect())
-}
-
-/// The inversions the signals justify, less the recorded ones, with the records and their defects.
-fn inversions_of(signals: &[PrioritySignal], record_violations: Vec<String>) -> PriorityInversions {
-    let ready: Vec<(String, Option<String>)> = signals.iter().map(|s| (s.task.clone(), (s.effective != "none").then(|| s.effective.clone()))).collect();
-    let recorded: Vec<(String, String)> = signals.iter().filter_map(|s| s.ranked_by.clone().map(|by| (s.task.clone(), by))).collect();
-    let exempt: HashSet<String> = recorded.iter().map(|(t, _)| t.clone()).collect();
-    PriorityInversions { pairs: inversion_pairs(&ready, &exempt), recorded, violations: record_violations }
-}
-
-/// `keel show priority` (D0311): the priority metric, made visible - every ready item in its declared
-/// order with the computed signals and the class they justify, and the inversions the guard reports.
-///
-/// # Errors
-/// Propagates model-build failures.
-pub fn priority(root: &Path) -> Result<String, ViewError> {
-    let signals = priority_signals(root)?;
-    let rows: Vec<Json> = signals
-        .iter()
-        .map(|s| {
-            Json::Obj(vec![
-                ("position".to_string(), Json::Int(i64::try_from(s.position).unwrap_or(i64::MAX))),
-                ("task".to_string(), Json::s(s.task.clone())),
-                ("effective".to_string(), Json::s(s.effective.clone())),
-                ("drivenBy".to_string(), Json::s(s.driven_by)),
-                ("resolverSeverity".to_string(), s.resolver_severity.clone().map_or(Json::Null, Json::s)),
-                ("retroRecurrences".to_string(), Json::Int(i64::try_from(s.recurrences).unwrap_or(i64::MAX))),
-                ("rankedBy".to_string(), s.ranked_by.clone().map_or(Json::Null, Json::s)),
-            ])
-        })
-        .collect();
-    let model = Model::build(root)?;
-    let (_, record_violations) = priority_records(&model);
-    let inv = inversions_of(&signals, record_violations);
-    let inversions: Vec<Json> = inv
-        .pairs
-        .into_iter()
-        .map(|(lower, higher, class)| Json::Obj(vec![("outranks".to_string(), Json::s(lower)), ("item".to_string(), Json::s(higher)), ("class".to_string(), Json::s(class))]))
-        .collect();
-    let recorded: Vec<Json> = inv.recorded.into_iter().map(|(item, by)| Json::Obj(vec![("item".to_string(), Json::s(item)), ("rankedBy".to_string(), Json::s(by))])).collect();
-    Ok(Json::Obj(vec![
-        ("priority".to_string(), Json::s("D0052: declaration order IS priority. D0258/D0311: rank is reassessed against COMPUTED signals - the resolver Issue's severity, and how many sprint retros named the item as the already-tracked home of a finding (twice = High, three or more = Critical). An inversion is a lower-class item declared ABOVE a higher one; the priority-inversion guard warns on each, and refineAssessPriority discharges it by reordering or by recording why - a #PrioritizedBy edge from the item to the Statement or Decision that ranks it (D0429), listed under recorded.")),
-        ("ready".to_string(), Json::Arr(rows)),
-        ("inversions".to_string(), Json::Arr(inversions)),
-        ("recorded".to_string(), Json::Arr(recorded)),
-        ("recordViolations".to_string(), Json::Arr(inv.violations.into_iter().map(Json::s).collect())),
-    ])
-    .dump())
-}
-
-/// Backlog priority inversions: a ready item ranked ABOVE work that resolves a >= High Issue.
-///
-/// Closes issue084 (D0130). D0052 makes backlog DECLARATION ORDER the priority and requires the AI to
-/// auto-follow the ranked frontier — but nothing computed whether recorded ORDER agreed with recorded
-/// SEVERITY, so a mis-ordered backlog was indistinguishable from a curated one. It was mis-ordered:
-/// `keelArchViews` (issue069, Low) ranked FIRST purely because an earlier session appended it to the
-/// end of a COMPLETED block, while `dcStaleKernelInstanceGate` (issue081, High — an enforced commit
-/// gate being routinely bypassed) ranked 14th, and the AI then narrated priority in prose instead of
-/// reordering the file. Both inputs are recorded facts, so the inversion is COMPUTABLE.
-///
-/// Reported, never enforced: priority is a human judgment and ordering may be deliberate (a High item
-/// can be legitimately deferred behind an enabler). The value is that the trade-off becomes VISIBLE
-/// instead of resting on whoever last appended to the file.
-///
-/// D0429: an inversion the backlog RECORDS - a `#PrioritizedBy` edge from the outranking item to the
-/// Statement or Decision that ranks it - is deliberate by the record and is not in `pairs`; it is in
-/// `recorded` with its citation. The guard's "if that is deliberate say so" now names where.
-///
-/// # Errors
-/// Returns [`ViewError`] if a tracking/instance file fails to parse.
-pub fn priority_inversions(root: &Path) -> Result<PriorityInversions, ViewError> {
-    // D0311: the class compared is the EFFECTIVE one - resolver severity or retro recurrence, whichever
-    // is higher - so a finding that keeps coming back climbs the same ladder a High Issue does, and the
-    // same guard, the same warning and the same refinement step carry it.
-    let signals = priority_signals(root)?;
-    let model = Model::build(root)?;
-    let (_, record_violations) = priority_records(&model);
-    Ok(inversions_of(&signals, record_violations))
-}
-
-struct ReadinessBlockers {
-    coverage_gaps: Vec<String>,
-    critique_gaps: Vec<String>,
-    stale_verifications: Vec<String>,
-    undispositioned_findings: Vec<String>, // open finding Issues with severity >= Medium
-    unfixed_critical: Vec<String>,         // open finding Issues with severity == Critical
-    invariant_violations: Vec<String>,     // enforced-guard violations (guard all)
+/// The five readiness categories the `assured` verdict is composed from (D0079 c), plus the population.
+pub struct ReadinessBlockers {
+    pub coverage_gaps: Vec<String>,
+    pub critique_gaps: Vec<String>,
+    pub stale_verifications: Vec<String>,
+    pub undispositioned_findings: Vec<String>, // open finding Issues with severity >= Medium
+    pub unfixed_critical: Vec<String>,         // open finding Issues with severity == Critical
+    pub invariant_violations: Vec<String>,     // enforced-guard violations (guard all)
     /// How many governed coverage rows exist at all. Zero means there is NOTHING to assure, and
     /// readiness over nothing is not readiness (D0286) - a fresh scaffold read READY for that reason.
-    governed: usize,
+    pub governed: usize,
 }
 
 impl ReadinessBlockers {
     /// READY = all BLOCKING categories empty. `stale_verifications` is ADVISORY (the D0050
     /// informational signal — cleared by re-verification, never a commit gate), so it does not
     /// affect readiness; it is surfaced separately.
-    const fn ready(&self) -> bool {
+    #[must_use]
+    pub const fn ready(&self) -> bool {
         self.governed > 0
             && self.coverage_gaps.is_empty()
             && self.critique_gaps.is_empty()
@@ -4039,7 +3830,8 @@ impl ReadinessBlockers {
 
     /// The verdict word. Three, not two: an empty population is neither READY nor NOT READY, it is
     /// NOTHING TO ASSURE - and saying READY there was the clean-sweep defect (D0286).
-    const fn verdict(&self) -> &'static str {
+    #[must_use]
+    pub const fn verdict(&self) -> &'static str {
         if self.governed == 0 {
             "NOTHING TO ASSURE"
         } else if self.ready() {
@@ -4049,7 +3841,9 @@ impl ReadinessBlockers {
         }
     }
 
-    const fn tone(&self) -> &'static str {
+    /// The HTML tone class for the verdict.
+    #[must_use]
+    pub const fn tone(&self) -> &'static str {
         if self.governed == 0 {
             "empty"
         } else if self.ready() {
@@ -4085,13 +3879,20 @@ fn finding_blockers(resolution: &[IssueStatus], model: &Model) -> (Vec<String>, 
     (undisp, critical)
 }
 
-fn compute_readiness(root: &Path) -> Result<ReadinessBlockers, ViewError> {
+/// The readiness categories a view can compute alone: coverage, critique, findings and the population.
+///
+/// `task_suspect` is the suspect walk and `invariant_violations` the guard suite's, both computed by
+/// the caller (`guards::compute_readiness`) - a view runs no guard (D0479, dcGuardsViewOrientCycleIsBroken).
+///
+/// # Errors
+/// Returns [`ViewError`] if a tracking/instance file fails to parse.
+pub fn readiness(root: &Path, task_suspect: Vec<String>, invariant_violations: Vec<String>) -> Result<ReadinessBlockers, ViewError> {
     let model = Model::build(root)?;
     // PHASE-TIMED (dcSharedParsedModel): `assured` is 7-9s of which fingerprint, parse and git are
     // ~1.4s, so the remaining 6s is in-view computation and a total cannot say which step. Each step
     // is now named, so the next optimisation is aimed rather than guessed.
-    let done = crate::perf::phase("doneNames", || crate::orient::done_names(root));
-    let suspect_vec = crate::perf::phase("orientCompute", || crate::orient::compute(root).suspect);
+    let done = crate::perf::phase("doneNames", || crate::done::done_names(root));
+    let suspect_vec = task_suspect;
     let task_suspect: HashSet<String> = suspect_vec.iter().cloned().collect();
     let stale = compute_stale_verifications(root, &model);
 
@@ -4115,21 +3916,6 @@ fn compute_readiness(root: &Path) -> Result<ReadinessBlockers, ViewError> {
 
     let (undispositioned_findings, unfixed_critical) = finding_blockers(&compute_issue_resolution(&model, &done), &model);
 
-    // Base invariant guards only — EXCLUDE `assured` (would recurse) and `critique` (composed
-    // separately as critique_gaps). This is what "invariants green" means for readiness.
-    // THE WHOLE GUARD SUITE, INSIDE A VIEW. Legitimate - readiness means invariants hold - but it makes
-    // `keel gate assured` cost `keel gate guard` PLUS every composed view, which is the single largest term and was
-    // invisible until it was named.
-    let invariant_violations: Vec<String> = crate::perf::phase("allGuards", || {
-        crate::guards::GUARD_NAMES
-            .iter()
-            .copied()
-            .filter(|n| !matches!(*n, "assured" | "critique"))
-            .filter_map(|n| crate::guards::run_one(n, root))
-            .flat_map(|r| r.violations.into_iter().map(move |v| format!("{}: {v}", r.name)))
-            .collect()
-    });
-
     Ok(ReadinessBlockers {
         governed: governed_n,
         coverage_gaps,
@@ -4141,63 +3927,6 @@ fn compute_readiness(root: &Path) -> Result<ReadinessBlockers, ViewError> {
     })
 }
 
-/// Readiness blocker summaries (the `guard assured` violation set) — empty iff READY.
-///
-/// # Errors
-/// Returns [`ViewError`] if a tracking/instance file fails to parse.
-pub fn assured_blockers(root: &Path) -> Result<Vec<String>, ViewError> {
-    let b = compute_readiness(root)?;
-    let mut out = Vec::new();
-    let note = |out: &mut Vec<String>, label: &str, v: &[String]| {
-        if !v.is_empty() {
-            out.push(format!("{label}: {} ({})", v.len(), v.iter().take(5).cloned().collect::<Vec<_>>().join(", ")));
-        }
-    };
-    // BLOCKING categories only (stale_verifications is advisory — see ReadinessBlockers::ready).
-    note(&mut out, "coverage gaps", &b.coverage_gaps);
-    note(&mut out, "critique gaps", &b.critique_gaps);
-    note(&mut out, "undispositioned >=Medium findings", &b.undispositioned_findings);
-    note(&mut out, "unfixed Critical findings", &b.unfixed_critical);
-    note(&mut out, "invariant violations", &b.invariant_violations);
-    Ok(out)
-}
-
-/// Assurance-readiness view (D0079 c) as JSON: the composite READY/NOT-READY verdict + per-category
-/// blocker counts and samples. The single "is the deliverable assured?" answer; never stored.
-///
-/// # Errors
-/// Returns [`ViewError`] if a tracking/instance file fails to parse.
-pub fn assured(root: &Path) -> Result<String, ViewError> {
-    let b = compute_readiness(root)?;
-    let cat = |label: &str, v: &[String]| {
-        Json::Obj(vec![
-            ("category".to_string(), Json::s(label)),
-            ("count".to_string(), Json::Int(i64::try_from(v.len()).unwrap_or(i64::MAX))),
-            ("sample".to_string(), Json::Arr(v.iter().take(10).map(|s| Json::s(s.clone())).collect())),
-        ])
-    };
-    let blockers = Json::Arr(vec![
-        cat("coverage_gaps", &b.coverage_gaps),
-        cat("critique_gaps", &b.critique_gaps),
-        cat("undispositioned_findings", &b.undispositioned_findings),
-        cat("unfixed_critical", &b.unfixed_critical),
-        cat("invariant_violations", &b.invariant_violations),
-    ]);
-    // Advisory: surfaced for the full picture but NOT gating (cleared by re-verification, D0050).
-    let advisories = Json::Arr(vec![cat("stale_verifications", &b.stale_verifications)]);
-    let out = Json::Obj(vec![
-        (
-            "assured".to_string(),
-            Json::s("assurance readiness (D0079 c; charter-time scoped, D0081): READY iff GOVERNED coverage complete AND GOVERNED critique complete AND every >=Medium finding dispositioned AND no Critical open AND invariants green. stale_verifications is advisory (re-verify; not gating)"),
-        ),
-        ("ready".to_string(), Json::Bool(b.ready())),
-        ("verdict".to_string(), Json::s(b.verdict())),
-        ("governed".to_string(), Json::Int(i64::try_from(b.governed).unwrap_or(0))),
-        ("blockers".to_string(), blockers),
-        ("advisories".to_string(), advisories),
-    ]);
-    Ok(out.dump())
-}
 
 // ── contention (D0129 srDcContentionAdjudication) ────────────────────────────
 
@@ -5426,20 +5155,6 @@ mod tests {
     }
 
     #[test]
-    fn report_produces_cards_and_rejects_unknown() {
-        // D0087: each report yields a non-empty cards array; unknown report errors. (cwd = crate dir.)
-        let root = std::path::Path::new("..");
-        for name in ["assurance", "traceability", "quality-debt", "flow", "governance", "friction"] {
-            let json = report(root, name, false).unwrap_or_else(|e| panic!("report {name}: {e}"));
-            assert!(json.contains("\"cards\""), "{name} has cards");
-            assert!(json.contains("\"tone\""), "{name} cards carry a tone");
-        }
-        assert!(report(root, "bogus", false).is_err(), "unknown report errors");
-        let html = report_html(root, "assurance", false).expect("assurance html");
-        assert!(html.contains("class=\"cards\"") && !html.contains("/*CARDS*/"), "scorecard cards injected");
-    }
-
-    #[test]
     fn render_dispatches_modes_and_rejects_unknown() {
         // D0086: graph/table/review render; unknown mode errors. (cwd = crate dir in tests; the
         // declared view files live one level up at the repo root.)
@@ -5834,7 +5549,7 @@ mod tests {
 
     #[test]
     fn marker_scan_ignores_prose_and_catches_a_misspelling() {
-        use crate::guards::{markers_declared_for_test as declared, markers_used_for_test as used};
+        use crate::textscan::{markers_declared as declared, markers_used as used};
 
         // Real syntactic positions are picked up; a marker QUOTED IN PROSE is not. That distinction is
         // load-bearing: procedureText fields legitimately discuss markers (`#Marker dependency from a
@@ -5873,46 +5588,6 @@ mod tests {
         // failure mode: `#DerivdFrom` validated clean and silently removed its item from the HARD
         // requirement-rootedness guard's view.
         assert!(!dec.contains("DerivdFrom"), "a misspelling must not resolve as declared");
-    }
-
-    #[test]
-    fn retro_backlog_fails_when_a_finding_is_neither_tracked_in_this_commit_nor_justified() {
-        use crate::guards::retro_backlog_violations_for_test as check;
-        // A sprint file whose RETRO gate carries the given text. The DoD line names the delivered
-        // task, as every real one does — which is what made the second shape of this guard vacuous.
-        let sprint = |t: &str| {
-            vec![(
-                ".tracking/delivery/sprint999_x.sysml".to_string(),
-                format!(
-                    "package S {{
-verification storyDoD : Test {{ :>> method = VerificationMethod::test; :>> procedureText = \"DELIVERED: dcTheWork.\"; }}
-                     verification xRetroGate : Test {{ :>> title = \"retro gate\"; :>> method = VerificationMethod::analyze; :>> procedureText = \"{t}\"; }}
-}}
-"
-                ),
-            )]
-        };
-        let nothing_added: Vec<String> = Vec::new();
-        let added_issue073 = vec!["issue073".to_string()];
-
-        // THREE SHAPES OF THIS GUARD, and the two earlier ones are kept here as regressions.
-        // Shape 1 (pre-issue189): co-staging a tracked file satisfied it — every commit stages one.
-        // Shape 2 (D0172): the retro's text had to NAME an item — every sprint file names the task it
-        //   delivered, and the check only ran on the tokens AVOIDABLE-ISSUE / LESSON: (issue335).
-        // Shape 3 (D0279): this commit must ADD an item the retro's own text names, or say why not.
-        assert_eq!(check(&nothing_added, &[], &sprint("AVOIDABLE-ISSUE 1: piping hung the kernel.")).len(), 1);
-        // The sprint-513 case: FINDING, not LESSON — shape 2 never looked. Shape 3 does.
-        assert_eq!(check(&nothing_added, &[], &sprint("FINDING: piping hung the kernel.")).len(), 1);
-        // Naming the delivered task is what every retro does; it tracks nothing.
-        assert_eq!(check(&nothing_added, &[], &sprint("FINDING: piping hung the kernel. Delivered dcTheWork.")).len(), 1);
-        // Naming an item THIS COMMIT ADDS -> clean.
-        assert!(check(&added_issue073, &[], &sprint("FINDING: piping hung the kernel - tracked as issue073.")).is_empty());
-        // Explicitly justified as needing none -> clean. The obligation is a STATED choice.
-        assert!(check(&nothing_added, &["dcPreBashAdvisory".to_string()], &sprint("AVOIDABLE-ISSUE 1: x — no new item, already guarded by dcPreBashAdvisory.")).is_empty());
-        // A retro with no findings language still gets examined; it names nothing and justifies
-        // nothing, so it is a violation — a retro that records no finding and no reason is exactly
-        // the empty ceremony D0131 exists to prevent.
-        assert_eq!(check(&nothing_added, &[], &sprint("WELL: everything went fine.")).len(), 1);
     }
 
     #[test]
@@ -5980,56 +5655,6 @@ verification storyDoD : Test {{ :>> method = VerificationMethod::test; :>> proce
             ]
         );
         assert_eq!((c.history_not_hex, c.history_hex_not_v4), (1, 1));
-    }
-
-    #[test]
-    fn priority_records_read_the_edge_and_refuse_a_target_that_is_not_a_word_or_a_judgment() {
-        // D0429: `#PrioritizedBy dependency from <item> to <stNNN|dNNNN>;` is the record; an edge to
-        // any other type is a violation, never a silent exemption - an item citing an Issue or a Task
-        // would be ranking itself.
-        let dir = std::env::temp_dir().join(format!("keel_prank_{}", std::process::id()));
-        std::fs::remove_dir_all(&dir).ok();
-        let tracking = dir.join(".tracking");
-        std::fs::create_dir_all(&tracking).unwrap();
-        std::fs::write(
-            tracking.join("m.sysml"),
-            concat!(
-                "package P {\n",
-                "    part st1 : Statement { :>> text = \"do this first\"; }\n",
-                "    part d1 : Decision { :>> title = \"first\"; }\n",
-                "    part issue1 : Issue { :>> severity = \"High\"; }\n",
-                "    action def W { action byWord; action byJudgment; action byIssue; action byNothing; }\n",
-                "    #PrioritizedBy dependency from byWord to st1;\n",
-                "    #PrioritizedBy dependency from byJudgment to d1;\n",
-                "    #PrioritizedBy dependency from byIssue to issue1;\n",
-                "    #PrioritizedBy dependency from byNothing to nowhere;\n",
-                "}\n"
-            ),
-        )
-        .unwrap();
-        let model = Model::build_with_workers(&dir, 1).unwrap();
-        let (recorded, violations) = priority_records(&model);
-        assert_eq!(recorded.get("byWord").map(String::as_str), Some("st1"));
-        assert_eq!(recorded.get("byJudgment").map(String::as_str), Some("d1"));
-        assert_eq!(recorded.len(), 2, "{recorded:?}");
-        assert_eq!(violations.len(), 2, "{violations:?}");
-        assert!(violations.iter().any(|v| v.contains("byIssue") && v.contains("of type Issue")), "{violations:?}");
-        assert!(violations.iter().any(|v| v.contains("byNothing") && v.contains("resolves to no item")), "{violations:?}");
-        // Through the signals: the record is the citation, and a recorded item is out of `pairs`.
-        let sig = |task: &str, class: Option<&str>, by: Option<&str>| PrioritySignal {
-            task: task.to_string(),
-            position: 0,
-            resolver_severity: None,
-            recurrences: 0,
-            effective: class.unwrap_or("none").to_string(),
-            driven_by: "none",
-            ranked_by: by.map(str::to_string),
-        };
-        let inv = inversions_of(&[sig("byWord", None, Some("st1")), sig("enabler", None, None), sig("urgent", Some("High"), None)], violations);
-        assert_eq!(inv.pairs, vec![("enabler".to_string(), "urgent".to_string(), "High".to_string())]);
-        assert_eq!(inv.recorded, vec![("byWord".to_string(), "st1".to_string())]);
-        assert_eq!(inv.violations.len(), 2);
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

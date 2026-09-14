@@ -112,7 +112,7 @@ pub fn prepare(root: &Path, process: &str, approved_by: &str) -> Result<RunSetup
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .ok_or("launch refused: cannot read HEAD (K12 needs the spawn-time tree identity)")?;
     Ok(RunSetup {
-        id: crate::write::gen_uuid(),
+        id: crate::ident::gen_uuid(),
         process: process.to_string(),
         actor,
         approved_by: approved_by.to_string(),
@@ -266,7 +266,7 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
              \x20   verification run{short}Gate : Test {{ :>> id = \"{}\"; :>> title = \"launched run {short}: {} - post-run gate\"; :>> createdAt = \"{}\"; :>> createdBy = \"{}\"; :>> method = VerificationMethod::test; :>> procedureText = \"Launch approved by {} against the reviewed plan (srServeApproveGateHuman). REACHABILITY RESIDUAL (srServeBoundedReachableContext): the run received only its declared inputs as context but could READ the whole repository; the enforced bound is the post-run whole-tree gate plus unconditional human diff review, not input scoping. Post-run gate over the run-start-to-working-tree diff ({} file(s): {}). validate + activation-filtered guards + blocking rules. Turns {}; duration {}ms; timedOut {}; K3 ledgerSignal {} (report-only, issue206: machine-local, never a gate input). THE DIFF AWAITS HUMAN REVIEW regardless of this verdict. Problems at gate: {}\"; }}\n\
              \x20   part run{short}GateR1 : TestResult {{ :>> id = \"{}\"; :>> outcome = VerdictKind::{verdict}; :>> judgedAgainst = \"{}\"; :>> judgedAt = \"{}\"; :>> judgedBy = \"{}\"; }}\n\
              }}\n",
-            crate::write::gen_uuid(),
+            crate::ident::gen_uuid(),
             esc(&setup.process),
             crate::scaffold::today(),
             setup.actor,
@@ -278,7 +278,7 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
             timed_out,
             ledger_signal,
             if problems.is_empty() { "none".to_string() } else { esc(&problems.join(" | ")).chars().take(1500).collect::<String>() },
-            crate::write::gen_uuid(),
+            crate::ident::gen_uuid(),
             setup.head_at_spawn,
             crate::scaffold::today(),
             setup.actor,

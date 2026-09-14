@@ -1454,7 +1454,7 @@ mod tests {
     /// to a tracked module and an untracked new module both read as changed.
     #[test]
     fn the_changed_set_is_the_working_trees_not_heads() {
-        let dir = std::env::temp_dir().join(format!("keel-touched-{}", crate::write::gen_uuid()));
+        let dir = std::env::temp_dir().join(format!("keel-touched-{}", crate::ident::gen_uuid()));
         std::fs::create_dir_all(dir.join("keel-cli").join("src")).unwrap();
         std::fs::create_dir_all(dir.join("keel-cli").join("tests")).unwrap();
         let git = |args: &[&str]| {

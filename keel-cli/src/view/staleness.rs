@@ -1,6 +1,7 @@
-//! element-content staleness (D0084) - targeted suspicion on element change - extracted from view.rs (sprint 418, dcViewRsRestructure: the panel's
-//! god-module finding). Pure move, no behavior change; `view::` paths survive via the
-//! `pub use` re-exports in mod.rs.
+//! Element-content staleness (D0084): targeted suspicion on element change.
+//!
+//! Extracted from view.rs (sprint 418, dcViewRsRestructure: the panel's god-module finding). Pure move,
+//! no behavior change; `view::` paths survive via the `pub use` re-exports in mod.rs.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
@@ -351,7 +352,7 @@ fn decode_string_body(rest: &str) -> String {
 
 /// Names of verify/critique Tests that are STALE: their target assurance element's semantic field
 /// changed since the Test's latest result commit, and the element existed at that commit (D0084).
-pub(super) fn compute_stale_verifications(root: &Path, model: &Model) -> HashSet<String> {
+pub(crate) fn compute_stale_verifications(root: &Path, model: &Model) -> HashSet<String> {
     let elem_files = build_element_files(root);
     let mut work: Vec<(String, String, &'static str, String)> = Vec::new(); // (test, element, field, sha)
     let mut keys: HashSet<String> = HashSet::new();
@@ -370,7 +371,7 @@ pub(super) fn compute_stale_verifications(root: &Path, model: &Model) -> HashSet
         keys.insert(format!("{sha}:{rel}"));
         work.push((e.from.clone(), e.to.clone(), field, sha));
     }
-    let blobs = crate::orient::batch_cat_blobs(root, &keys.into_iter().collect::<Vec<_>>());
+    let blobs = crate::gitfacts::batch_cat_blobs(root, &keys.into_iter().collect::<Vec<_>>());
     let mut stale: HashSet<String> = HashSet::new();
     for (test, element, field, sha) in work {
         let Some(rel) = elem_files.get(&element) else { continue };
@@ -435,7 +436,7 @@ fn direct_verifiers<S: std::hash::BuildHasher>(
     vs
 }
 
-pub(super) fn compute_coverage<S: std::hash::BuildHasher>(
+pub(crate) fn compute_coverage<S: std::hash::BuildHasher>(
     model: &Model,
     done: &HashSet<String, S>,
     task_suspect: &HashSet<String, S>,
@@ -500,8 +501,8 @@ pub(super) fn compute_coverage<S: std::hash::BuildHasher>(
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn coverage(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
-    let done = crate::orient::done_names(root);
-    let task_suspect: HashSet<String> = crate::orient::compute(root).suspect.into_iter().collect();
+    let done = crate::done::done_names(root);
+    let task_suspect: HashSet<String> = crate::suspect::suspect(root).into_iter().collect();
     let stale = crate::perf::phase("staleVerifications", || compute_stale_verifications(root, &model));
     let cov = compute_coverage(&model, &done, &task_suspect, &stale);
     let gf = crate::govern::grandfathered_under(root, COVERAGE_DECISION);

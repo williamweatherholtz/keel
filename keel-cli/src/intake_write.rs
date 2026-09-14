@@ -16,7 +16,8 @@
 //! by test.
 use std::path::{Path, PathBuf};
 
-use crate::write::{gen_uuid, with_file_lock, write_atomic, WriteError};
+use crate::ident::gen_uuid;
+use crate::write::{with_file_lock, write_atomic, WriteError};
 
 /// A human's words, verbatim.
 pub struct NewStatement<'a> {

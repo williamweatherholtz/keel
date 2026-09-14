@@ -6,6 +6,13 @@
 //! `sprint-coverage`. M3b/M3c add ceremony/charter/keystone + a unified runner.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+
+use crate::binding::step_check_bindings;
+use crate::json::Json;
+use crate::view::{ReadinessBlockers, ViewError};
+use crate::cli_facts::{parse_cli_facts, AuthoredCliFact};
+use crate::ident::{is_v4_uuid, uuid_shaped};
+use crate::textscan::{engine_markers, markers_declared, markers_used, named_items, retro_texts, strip_string_literals, RETRO_NO_ITEM_JUSTIFICATIONS};
 use std::path::{Path, PathBuf};
 
 use crate::algo::is_space;
@@ -708,7 +715,7 @@ pub fn untrusted_taint(root: &Path) -> GuardReport {
     let (scanned, sources) = untrusted_sources(&blob, &deciders);
     let edges = taint_edges(&blob);
     let accepted = decision_acceptances(root);
-    let done = crate::orient::done_names(root);
+    let done = crate::done::done_names(root);
     let violations = taint_violations(&sources, &edges, &accepted, &done);
     GuardReport { name: "untrusted-taint", scanned, warnings: Vec::new(), violations }
 }
@@ -906,7 +913,7 @@ pub fn control_defect_registry(root: &Path) -> GuardReport {
     if entries.is_empty() {
         return GuardReport { name: "control-defect-registry", scanned: 0, warnings: Vec::new(), violations: Vec::new() };
     }
-    let done = crate::orient::done_names(root);
+    let done = crate::done::done_names(root);
     let open: std::collections::HashSet<String> = match crate::view::open_issue_names(root, &done) {
         Ok(v) => v.into_iter().collect(),
         Err(e) => {
@@ -983,7 +990,7 @@ fn gates_defined(text: &str, order: &[String]) -> HashSet<String> {
 /// and `proposed` made sprint708's honestly FAILED closeOut read as unrecorded and its Retro as out of
 /// turn (issue544) - the red landed on the one record that told the truth (D0098).
 fn gates_recorded(text: &str, order: &[String]) -> HashSet<String> {
-    order.iter().filter(|g| crate::orient::gate_has_result(text, g)).cloned().collect()
+    order.iter().filter(|g| crate::textscan::gate_has_result(text, g)).cloned().collect()
 }
 
 /// Ordering violations: a recorded gate while an earlier DEFINED gate is unrecorded.
@@ -1619,7 +1626,7 @@ pub fn acceptance_binds_to_text(root: &Path) -> GuardReport {
     }
     // One batch for the texts at the binding SHAs; one `git log` for every file's introducing commit.
     let keys: Vec<String> = accepted.iter().map(|(rel, _, sha, _)| format!("{sha}:{rel}")).collect();
-    let blobs = crate::orient::batch_cat_blobs(root, &keys);
+    let blobs = crate::gitfacts::batch_cat_blobs(root, &keys);
     let intro_log = git_stdout(root, &["log", "--diff-filter=A", "--format=%h", "--name-only", "--", ".engine/decisions"]);
     let mut introducing: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut current = String::new();
@@ -1639,7 +1646,7 @@ pub fn acceptance_binds_to_text(root: &Path) -> GuardReport {
         .filter(|(rel, _, sha, _)| blobs.get(&format!("{sha}:{rel}")).cloned().flatten().is_none())
         .filter_map(|(rel, _, _, _)| introducing.get(rel).map(|c| format!("{c}:{rel}")))
         .collect();
-    let intro_blobs = crate::orient::batch_cat_blobs(root, &intro_keys);
+    let intro_blobs = crate::gitfacts::batch_cat_blobs(root, &intro_keys);
     let head = git_stdout(root, &["rev-parse", "--short", "HEAD"]).trim().to_string();
     let mut violations = Vec::new();
     let mut warnings = Vec::new();
@@ -1668,7 +1675,7 @@ pub fn acceptance_binds_to_text(root: &Path) -> GuardReport {
             if let Some((result, _)) = latest_acceptance(text, dec) {
                 if let Some(landing) = result_landing_commit(root, rel, &result) {
                     let key = format!("{landing}:{rel}");
-                    if let Some(Some(at_landing)) = crate::orient::batch_cat_blobs(root, std::slice::from_ref(&key)).get(&key) {
+                    if let Some(Some(at_landing)) = crate::gitfacts::batch_cat_blobs(root, std::slice::from_ref(&key)).get(&key) {
                         if drifted_fields(at_landing, text).is_empty() {
                             drift.clear();
                         }
@@ -1815,7 +1822,8 @@ pub fn unit_extras_present(root: &Path) -> GuardReport {
 
 #[cfg(test)]
 mod parallel_tests {
-    use super::{added_non_v4_ids, is_v4_uuid, non_v4_ids_in, uuid_hex_shaped, uuid_shaped};
+    use super::{added_non_v4_ids, is_v4_uuid, non_v4_ids_in, uuid_shaped};
+    use crate::ident::uuid_hex_shaped;
 
     /// D0430/issue454: the known positive is an id the write API emitted this session; the known
     /// negatives are the verifier's typed id (shape only), a v5 and a sequence-shaped hex id.
@@ -2566,7 +2574,7 @@ pub fn resolver_kind(root: &Path) -> GuardReport {
 /// AS incomplete is honest state; suppressing it or blocking on it both destroy the honest picture.
 #[must_use]
 pub fn assured(root: &Path) -> GuardReport {
-    match crate::view::assured_blockers(root) {
+    match assured_blockers(root) {
         Ok(blockers) => GuardReport { name: "assured", scanned: 0, warnings: Vec::new(), violations: blockers },
         Err(e) => GuardReport { name: "assured", scanned: 0, warnings: Vec::new(), violations: vec![format!("error computing readiness: {e}")] },
     }
@@ -2811,103 +2819,6 @@ pub fn decision_requirement_link(root: &Path) -> GuardReport {
 
 // ── marker-vocabulary guard (an undeclared/misspelled marker silently blinds a control) ───────────
 
-/// Remove `SysML` string literals from a line, so markers QUOTED IN PROSE are not mistaken for edges.
-///
-/// Essential, not cosmetic: `procedureText` fields legitimately discuss markers (`#Marker dependency
-/// from a to b`, `#Kind dependency`, `#Changes dependency`), and a naive scan reports each as an
-/// undeclared marker. Those three alone would have produced 9 false violations on a hard guard.
-fn strip_string_literals(line: &str) -> String {
-    let mut out = String::with_capacity(line.len());
-    let mut in_str = false;
-    for c in line.chars() {
-        if c == '"' {
-            in_str = !in_str;
-            continue;
-        }
-        if !in_str {
-            out.push(c);
-        }
-    }
-    out
-}
-
-/// Syntactic positions in which a `#Marker` names a real edge or a marked item.
-const MARKER_FOLLOWERS: [&str; 5] = ["dependency", "part", "item", "verification", "requirement"];
-
-/// The ENGINE's own marker algebra — always valid, known to the binary (D0136 / issue089).
-///
-/// These are the markers the engine's OWN guards and views consume: `#Verify` drives
-/// tier-satisfaction and verification-trace, `#DerivedFrom` drives the hard requirement-rootedness
-/// guard, `#Resolves` drives issue triage, and so on. They are part of the engine's CONTRACT, so the
-/// binary must know them intrinsically rather than requiring each project to re-declare them.
-///
-/// Why this exists: D0133 shipped `marker-vocabulary` as a HARD guard in the BINARY whose passing
-/// condition was `metadata def` lines in the PROJECT's schema files. `include_dir!` embeds `.engine`
-/// at build time, so a v0.2.0 binary carried the declarations — but an existing downstream project
-/// keeps its own on-disk `.engine/schema/`, which upgrading the binary never touches. Reproduced: a
-/// pre-v0.2.0 schema plus a v0.2.0 binary yields **566 violations and every commit blocked**, on the
-/// engine's own shipped files. Worse, the obvious remedy meant editing FROZEN `schema/core`, so the
-/// guard forced every downstream project into a frozen-schema sign-off just to keep committing.
-/// The engine's own marker vocabulary, DERIVED from the `metadata def`s in the schema baked into
-/// this binary — never restated as a literal list.
-///
-/// It was a hardcoded 17-entry list and had already fallen behind: `Controls`, `Feedback` and
-/// `Restructure` shipped with the codeaudit module and were never added (issue120). Deriving keeps
-/// the property this list exists for — the vocabulary travels WITH the binary, so upgrading the
-/// binary against an older on-disk `.engine/` cannot produce the issue090 lockout — while removing
-/// the second place that had to be remembered.
-#[must_use]
-pub fn engine_markers() -> &'static HashSet<String> {
-    static M: std::sync::LazyLock<HashSet<String>> =
-        std::sync::LazyLock::new(|| crate::schema::VOCAB.markers.clone());
-    &M
-}
-
-/// Marker names USED in real syntactic positions in `text`, as `(marker, 1-based line)`.
-fn markers_used(text: &str) -> Vec<(String, usize)> {
-    let mut out = Vec::new();
-    for (i, raw) in text.lines().enumerate() {
-        let line = strip_string_literals(raw);
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("//") {
-            continue; // a comment may legitimately name a marker
-        }
-        for (pos, _) in line.match_indices('#') {
-            let rest = &line[pos + 1..];
-            let name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
-            if name.is_empty() {
-                continue;
-            }
-            let after = rest[name.len()..].trim_start();
-            if MARKER_FOLLOWERS.iter().any(|f| after.starts_with(f)) {
-                out.push((name, i + 1));
-            }
-        }
-    }
-    out
-}
-
-/// Marker names DECLARED as `metadata def <Name>;` in `texts`.
-fn markers_declared(texts: &[String]) -> HashSet<String> {
-    // The engine's own algebra is always valid — a project must never have to re-declare it (D0136).
-    let mut out: HashSet<String> = engine_markers().clone();
-    for text in texts {
-        for raw in text.lines() {
-            let line = raw.trim();
-            if line.starts_with("//") {
-                continue;
-            }
-            if let Some(rest) = line.strip_prefix("metadata def ") {
-                let name: String = rest.trim().chars().take_while(|c| c.is_alphanumeric()).collect();
-                if !name.is_empty() {
-                    out.insert(name);
-                }
-            }
-        }
-    }
-    out
-}
-
 /// Guard: every metadata marker used must be DECLARED (D0133 / issue077).
 ///
 /// Markers were never type-checked, so a MISSPELLED marker validated clean and silently removed that
@@ -2946,99 +2857,88 @@ pub fn marker_vocabulary(root: &Path) -> GuardReport {
     GuardReport { name: "marker-vocabulary", scanned, warnings: Vec::new(), violations }
 }
 
-/// Test-only re-exports of the pure marker scanners.
-#[doc(hidden)]
-#[must_use]
-pub fn markers_used_for_test(text: &str) -> Vec<(String, usize)> {
-    markers_used(text)
+/// Readiness, composed (D0079 c): the suspect walk, the guard suite and the view's own categories.
+///
+/// # Errors
+/// Returns [`ViewError`] if a tracking/instance file fails to parse.
+pub fn compute_readiness(root: &Path) -> Result<ReadinessBlockers, ViewError> {
+    let task_suspect = crate::perf::phase("suspectWalk", || crate::suspect::suspect(root));
+    // Base invariant guards only — EXCLUDE `assured` (would recurse) and `critique` (composed
+    // separately as critique_gaps). This is what "invariants green" means for readiness.
+    // THE WHOLE GUARD SUITE, INSIDE A VIEW. Legitimate - readiness means invariants hold - but it makes
+    // `keel gate assured` cost `keel gate guard` PLUS every composed view, which is the single largest term and was
+    // invisible until it was named.
+    let invariant_violations: Vec<String> = crate::perf::phase("allGuards", || {
+        GUARD_NAMES
+            .iter()
+            .copied()
+            .filter(|n| !matches!(*n, "assured" | "critique"))
+            .filter_map(|n| run_one(n, root))
+            .flat_map(|r| r.violations.into_iter().map(move |v| format!("{}: {v}", r.name)))
+            .collect()
+    });
+    crate::view::readiness(root, task_suspect, invariant_violations)
 }
-#[doc(hidden)]
-#[must_use]
-pub fn markers_declared_for_test(texts: &[String]) -> HashSet<String> {
-    markers_declared(texts)
+
+/// Readiness blocker summaries (the `guard assured` violation set) — empty iff READY.
+///
+/// # Errors
+/// Returns [`ViewError`] if a tracking/instance file fails to parse.
+pub fn assured_blockers(root: &Path) -> Result<Vec<String>, ViewError> {
+    let b = compute_readiness(root)?;
+    let mut out = Vec::new();
+    let note = |out: &mut Vec<String>, label: &str, v: &[String]| {
+        if !v.is_empty() {
+            out.push(format!("{label}: {} ({})", v.len(), v.iter().take(5).cloned().collect::<Vec<_>>().join(", ")));
+        }
+    };
+    // BLOCKING categories only (stale_verifications is advisory — see ReadinessBlockers::ready).
+    note(&mut out, "coverage gaps", &b.coverage_gaps);
+    note(&mut out, "critique gaps", &b.critique_gaps);
+    note(&mut out, "undispositioned >=Medium findings", &b.undispositioned_findings);
+    note(&mut out, "unfixed Critical findings", &b.unfixed_critical);
+    note(&mut out, "invariant violations", &b.invariant_violations);
+    Ok(out)
+}
+
+/// Assurance-readiness view (D0079 c) as JSON: the composite READY/NOT-READY verdict + per-category
+/// blocker counts and samples. The single "is the deliverable assured?" answer; never stored.
+///
+/// # Errors
+/// Returns [`ViewError`] if a tracking/instance file fails to parse.
+pub fn assured_report(root: &Path) -> Result<String, ViewError> {
+    let b = compute_readiness(root)?;
+    let cat = |label: &str, v: &[String]| {
+        Json::Obj(vec![
+            ("category".to_string(), Json::s(label)),
+            ("count".to_string(), Json::Int(i64::try_from(v.len()).unwrap_or(i64::MAX))),
+            ("sample".to_string(), Json::Arr(v.iter().take(10).map(|s| Json::s(s.clone())).collect())),
+        ])
+    };
+    let blockers = Json::Arr(vec![
+        cat("coverage_gaps", &b.coverage_gaps),
+        cat("critique_gaps", &b.critique_gaps),
+        cat("undispositioned_findings", &b.undispositioned_findings),
+        cat("unfixed_critical", &b.unfixed_critical),
+        cat("invariant_violations", &b.invariant_violations),
+    ]);
+    // Advisory: surfaced for the full picture but NOT gating (cleared by re-verification, D0050).
+    let advisories = Json::Arr(vec![cat("stale_verifications", &b.stale_verifications)]);
+    let out = Json::Obj(vec![
+        (
+            "assured".to_string(),
+            Json::s("assurance readiness (D0079 c; charter-time scoped, D0081): READY iff GOVERNED coverage complete AND GOVERNED critique complete AND every >=Medium finding dispositioned AND no Critical open AND invariants green. stale_verifications is advisory (re-verify; not gating)"),
+        ),
+        ("ready".to_string(), Json::Bool(b.ready())),
+        ("verdict".to_string(), Json::s(b.verdict())),
+        ("governed".to_string(), Json::Int(i64::try_from(b.governed).unwrap_or(0))),
+        ("blockers".to_string(), blockers),
+        ("advisories".to_string(), advisories),
+    ]);
+    Ok(out.dump())
 }
 
 // ── retro-backlog guard (a retro finding that terminates in prose) ────────────────────────────────
-
-/// Phrases by which a retro EXPLICITLY justifies raising no tracked item.
-///
-/// The obligation is not "always create an item" — sometimes a control already exists, and adding a
-/// duplicate is noise. The obligation is that the choice is STATED rather than left silent, so a
-/// reader can tell a considered decision from an omission.
-pub(crate) const RETRO_NO_ITEM_JUSTIFICATIONS: &[&str] = &["no new item", "no item needed", "already tracked", "no further item"];
-
-/// Every tracked-item NAME this retro's own text mentions — `dcCamelCase` and `issueNNN` tokens.
-///
-/// The RETRO's text, not the whole sprint file: a sprint file legitimately names the task it
-/// delivered in its `DoD` line, and that name satisfied the old check for every retro ever written.
-pub(crate) fn named_items(text: &str) -> Vec<String> {
-    /// `dc` is followed by an uppercase letter; `issue` by a digit.
-    type NextOk = fn(char) -> bool;
-    let bytes = text.as_bytes();
-    let boundary =
-        |i: usize| i.checked_sub(1).and_then(|j| bytes.get(j)).is_none_or(|b| !b.is_ascii_alphanumeric());
-    let mut out = Vec::new();
-    // A Decision (`d0289`) tracks a finding as legitimately as a task or an Issue does - a "won't do"
-    // IS a Decision (Invariant 4) - so a retro may name one to justify raising nothing else. The
-    // Decision is matched in BOTH cases - `d0388` as the file names it, `D0388` as CLAUDE.md, every
-    // commit message, every DoD and this guard's own refusal text write it - and returned as the
-    // item's real name (`d0388`) so the exists check still hits the tree (issue424: sprint 627's
-    // 'already tracked by D0388' was refused as naming no item at all). Only the Decision form is
-    // case-folded: `Issue` and `DC` in prose are words, not items, and stay unmatched.
-    let pairs: [(&str, NextOk); 4] =
-        [("dc", |c| c.is_ascii_uppercase()), ("issue", |c| c.is_ascii_digit()), ("d0", |c| c.is_ascii_digit()), ("D0", |c| c.is_ascii_digit())];
-    for (needle, ok_next) in pairs {
-        let mut from = 0;
-        while let Some(rel) = text[from..].find(needle) {
-            let st = from + rel;
-            let rest = &text[st + needle.len()..];
-            if boundary(st) && rest.starts_with(ok_next) {
-                let mut name: String = text[st..].chars().take_while(char::is_ascii_alphanumeric).collect();
-                if needle == "D0" {
-                    name.replace_range(..1, "d");
-                }
-                out.push(name);
-            }
-            from = st + needle.len();
-        }
-    }
-    out
-}
-
-/// The `procedureText` of every RETRO gate in a sprint file — the `method = analyze` verifications
-/// whose title says retro. Returns the texts; a file with no retro gate yields none.
-///
-/// Blocks start at a LINE that begins with `verification ` — never at the word inside a string. The
-/// first version split the whole file on the word, so a retro whose text mentioned "verification"
-/// (the commonest word in this repository) was cut in half and silently not examined: the guard passed
-/// a retro it had not read. Found by this guard's own arming test on 2026-09-03 (issue364, second shape).
-pub(crate) fn retro_texts(sprint_file: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut blocks: Vec<String> = Vec::new();
-    for line in sprint_file.lines() {
-        if line.trim_start().starts_with("verification ") {
-            blocks.push(String::new());
-        }
-        if let Some(b) = blocks.last_mut() {
-            b.push_str(line);
-            b.push('\n');
-        }
-    }
-    for block in blocks {
-        let head = block.split('{').next().unwrap_or("");
-        let is_retro = block.contains("VerificationMethod::analyze") && head.to_ascii_lowercase().contains("retro");
-        if !is_retro {
-            continue;
-        }
-        if let Some(i) = block.find("procedureText = \"") {
-            let rest = &block[i + 17..];
-            if let Some(j) = rest.find("\";") {
-                out.push(rest[..j].to_string());
-            }
-        }
-    }
-    out
-}
 
 /// Violations for staged sprint records whose RETRO names findings that this commit does not track.
 ///
@@ -3130,11 +3030,47 @@ fn added_items(root: &Path, read: ChangeRead) -> Vec<String> {
     items
 }
 
-/// Test-only re-export of the pure warning builder (the view self-tests exercise it).
-#[doc(hidden)]
-#[must_use]
-pub fn retro_backlog_violations_for_test(added_items: &[String], known_items: &[String], sprint_texts: &[(String, String)]) -> Vec<String> {
-    retro_backlog_violations(added_items, known_items, sprint_texts)
+#[cfg(test)]
+mod retro_backlog_tests {
+    #[test]
+    fn retro_backlog_fails_when_a_finding_is_neither_tracked_in_this_commit_nor_justified() {
+        use super::retro_backlog_violations as check;
+        // A sprint file whose RETRO gate carries the given text. The DoD line names the delivered
+        // task, as every real one does — which is what made the second shape of this guard vacuous.
+        let sprint = |t: &str| {
+            vec![(
+                ".tracking/delivery/sprint999_x.sysml".to_string(),
+                format!(
+                    "package S {{
+verification storyDoD : Test {{ :>> method = VerificationMethod::test; :>> procedureText = \"DELIVERED: dcTheWork.\"; }}
+                     verification xRetroGate : Test {{ :>> title = \"retro gate\"; :>> method = VerificationMethod::analyze; :>> procedureText = \"{t}\"; }}
+}}
+"
+                ),
+            )]
+        };
+        let nothing_added: Vec<String> = Vec::new();
+        let added_issue073 = vec!["issue073".to_string()];
+
+        // THREE SHAPES OF THIS GUARD, and the two earlier ones are kept here as regressions.
+        // Shape 1 (pre-issue189): co-staging a tracked file satisfied it — every commit stages one.
+        // Shape 2 (D0172): the retro's text had to NAME an item — every sprint file names the task it
+        //   delivered, and the check only ran on the tokens AVOIDABLE-ISSUE / LESSON: (issue335).
+        // Shape 3 (D0279): this commit must ADD an item the retro's own text names, or say why not.
+        assert_eq!(check(&nothing_added, &[], &sprint("AVOIDABLE-ISSUE 1: piping hung the kernel.")).len(), 1);
+        // The sprint-513 case: FINDING, not LESSON — shape 2 never looked. Shape 3 does.
+        assert_eq!(check(&nothing_added, &[], &sprint("FINDING: piping hung the kernel.")).len(), 1);
+        // Naming the delivered task is what every retro does; it tracks nothing.
+        assert_eq!(check(&nothing_added, &[], &sprint("FINDING: piping hung the kernel. Delivered dcTheWork.")).len(), 1);
+        // Naming an item THIS COMMIT ADDS -> clean.
+        assert!(check(&added_issue073, &[], &sprint("FINDING: piping hung the kernel - tracked as issue073.")).is_empty());
+        // Explicitly justified as needing none -> clean. The obligation is a STATED choice.
+        assert!(check(&nothing_added, &["dcPreBashAdvisory".to_string()], &sprint("AVOIDABLE-ISSUE 1: x — no new item, already guarded by dcPreBashAdvisory.")).is_empty());
+        // A retro with no findings language still gets examined; it names nothing and justifies
+        // nothing, so it is a violation — a retro that records no finding and no reason is exactly
+        // the empty ceremony D0131 exists to prevent.
+        assert_eq!(check(&nothing_added, &[], &sprint("WELL: everything went fine.")).len(), 1);
+    }
 }
 
 /// Guard: a sprint retro's findings must become tracked items, not prose (issue085 / D0130).
@@ -3196,7 +3132,7 @@ pub fn retro_backlog(root: &Path) -> GuardReport {
 /// violation, because a rank cited to a work item records nothing.
 #[must_use]
 pub fn priority_inversion(root: &Path) -> GuardReport {
-    match crate::view::priority_inversions(root) {
+    match crate::priority::priority_inversions(root) {
         Ok(inv) => {
             let warnings = inv
                 .pairs
@@ -5224,6 +5160,24 @@ pub fn scaffold_placeholder(root: &Path) -> GuardReport {
     GuardReport { name: "scaffold-placeholder", scanned, warnings: Vec::new(), violations }
 }
 
+#[cfg(test)]
+mod scaffold_placeholder_tests {
+    use super::scaffold_placeholder;
+    use crate::scaffold::{sprint, tests::temp_root, PLACEHOLDER};
+
+    /// Guard 40 rejects the scaffold until it is filled — the whole point of the marker.
+    #[test]
+    fn the_placeholder_guard_rejects_an_unfilled_scaffold_and_passes_a_filled_one() {
+        let root = temp_root("guard");
+        let path = sprint(&root, 999, "guardRun", "d9997", 2, "claudeOpus5").expect("scaffold");
+        let report = scaffold_placeholder(&root);
+        assert!(!report.violations.is_empty(), "an unfilled scaffold must be rejected");
+        let filled = std::fs::read_to_string(&path).expect("read").replace(PLACEHOLDER, "filled in");
+        std::fs::write(&path, filled).expect("fill");
+        assert!(scaffold_placeholder(&root).violations.is_empty(), "a filled scaffold passes");
+    }
+}
+
 /// Guard 41: the keel-owned `.claude/` enforcement surface matches this binary's generator
 /// (D0174/P0.2). The check IS `keel sync-claude --check` — one implementation, one surface.
 ///
@@ -6204,31 +6158,6 @@ fn id_values(line: &str) -> Vec<String> {
     out
 }
 
-/// 8-4-4-4-12 groups of `[0-9a-z]`, exactly. Written out rather than regexed because the guard path
-/// stays dependency-light, and because the group lengths ARE the specification.
-pub(crate) fn uuid_shaped(v: &str) -> bool {
-    let groups: Vec<&str> = v.split('-').collect();
-    groups.len() == 5
-        && [8usize, 4, 4, 4, 12].iter().zip(&groups).all(|(want, g)| {
-            g.len() == *want && g.chars().all(|c| c.is_ascii_digit() || c.is_ascii_lowercase())
-        })
-}
-
-/// 8-4-4-4-12 groups of lowercase hex - shaped AND hexadecimal, any version.
-pub(crate) fn uuid_hex_shaped(v: &str) -> bool {
-    let groups: Vec<&str> = v.split('-').collect();
-    groups.len() == 5
-        && [8usize, 4, 4, 4, 12].iter().zip(&groups).all(|(want, g)| {
-            g.len() == *want && g.chars().all(|c| c.is_ascii_digit() || matches!(c, 'a'..='f'))
-        })
-}
-
-/// An RFC 4122 version-4 UUID exactly as `write::gen_uuid` emits one: lowercase hex, version
-/// nibble `4`, variant nibble in `89ab` (D0430 / issue454). The fingerprint of an API-written id.
-pub(crate) fn is_v4_uuid(v: &str) -> bool {
-    uuid_hex_shaped(v) && v.as_bytes().get(14) == Some(&b'4') && matches!(v.as_bytes().get(19), Some(b'8' | b'9' | b'a' | b'b'))
-}
-
 /// `(name, type, 1-based line, body-up-to-the-next-declaration)` for each id-bearing declaration.
 ///
 /// The body stops at the NEXT declaration so a member can never borrow its sibling's id — the bug that
@@ -6916,72 +6845,6 @@ pub fn engine_lint(root: &Path) -> GuardReport {
     GuardReport { name: "engine-lint", scanned: decision_files.len() + inst_files.len(), warnings, violations }
 }
 
-/// One CLI fact as authored in `.engine/cli/commands.sysml`, reduced to the fields the guard compares.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthoredCliFact {
-    /// The `part <name>` the fact is declared as - what a `#Supersede` edge names (issue547).
-    pub part: String,
-    pub name: String,
-    pub family: String,
-    pub effect: String,
-    pub stability: String,
-    pub synopsis: String,
-    pub invocation: String,
-}
-
-/// Read one `:>> key = "value"` or `:>> key = Enum::member` attribute out of a single-line part.
-fn cli_attr(line: &str, key: &str) -> Option<String> {
-    let needle = format!(":>> {key} = ");
-    let i = line.find(&needle)? + needle.len();
-    let rest = &line[i..];
-    if let Some(r) = rest.strip_prefix('"') {
-        return r.find('"').map(|e| r[..e].to_string());
-    }
-    let end = rest.find(';')?;
-    Some(rest[..end].rsplit("::").next().unwrap_or("").to_string())
-}
-
-/// Parse the `CliCommand` facts out of the file text.
-///
-/// Pure, so the comparison is unit-testable on a fixture; the model loader is not used because this guard must also run in a tree whose `.tracking`
-/// is unrelated to the engine (a downstream project).
-#[must_use]
-///
-/// FACTS IN FORCE (issue547). D0108 says a non-owner ADDS or SUPERSEDES another actor's item and never
-/// overwrites it, and guard `ownership` enforces that. For a `CliCommand` the supersede remedy has to
-/// be honoured HERE: the edge `#Supersede dependency from cliX2 to cliX;` is authored beside the facts
-/// in the same file, and a fact whose part name is such a target is retired - not parsed as a second
-/// fact of the same command name that `cli-surface-declared` then compares against the mirror. Before
-/// this read, the only path past `ownership` for a fact authored by a retired actor was to delete the
-/// part and re-author it under a NEW id (74c1923 `cliGithub`, sprint 711 `cliRecord`) - discarding
-/// Invariant 3's immutable identity to satisfy a rule whose own remedy this reader could not see.
-pub fn parse_cli_facts(text: &str) -> Vec<AuthoredCliFact> {
-    let retired: HashSet<String> = text
-        .lines()
-        .filter_map(|l| l.trim_start().strip_prefix("#Supersede dependency from "))
-        .filter_map(|rest| rest.split_once(" to "))
-        .map(|(_, to)| to.trim().trim_end_matches(';').trim().to_string())
-        .collect();
-    text.lines()
-        .filter(|l| l.contains(": CliCommand {"))
-        .filter_map(|l| {
-            let part = l.trim_start().strip_prefix("part ")?.split_whitespace().next()?.to_string();
-            if retired.contains(&part) {
-                return None;
-            }
-            Some(AuthoredCliFact {
-                part,
-                name: cli_attr(l, "name")?,
-                family: cli_attr(l, "family")?,
-                effect: cli_attr(l, "effect")?,
-                stability: cli_attr(l, "stability")?,
-                synopsis: cli_attr(l, "synopsis")?,
-                invocation: cli_attr(l, "invocation").unwrap_or_default(),
-            })
-        })
-        .collect()
-}
-
 /// The comparison, pure: authored facts vs the Rust mirror vs the dispatch inventory.
 ///
 /// BOTH WAYS on every edge. Returns violations only - there is no advisory shape here, because any disagreement
@@ -7444,7 +7307,7 @@ mod cli_surface_declared_tests {
 
 #[cfg(test)]
 mod retro_tie_tests {
-    use super::{named_items, retro_backlog_violations_for_test, retro_texts};
+    use super::{named_items, retro_backlog_violations, retro_texts};
 
     /// A sprint file whose RETRO gate carries `finding`. The `DoD` line names the delivered task — as
     /// every real sprint file does — which is exactly what defeated the previous shape of this guard.
@@ -7464,7 +7327,7 @@ mod retro_tie_tests {
     #[test]
     fn a_finding_in_any_words_with_no_new_item_is_a_violation() {
         let text = sprint_with_retro("TWO FINDINGS. (1) the guard checks that an edge EXISTS, not that the resolver fits. (2) the same per-instance repair recurred.");
-        let v = retro_backlog_violations_for_test(&[], &[], &[("s.sysml".to_string(), text)]);
+        let v = retro_backlog_violations(&[], &[], &[("s.sysml".to_string(), text)]);
         assert_eq!(v.len(), 1, "a retro with findings and no NEW tracked item must be a violation: {v:?}");
         assert!(v[0].contains("names no item at all"), "{v:?}");
     }
@@ -7474,7 +7337,7 @@ mod retro_tie_tests {
     #[test]
     fn naming_the_delivered_task_does_not_track_a_finding() {
         let text = sprint_with_retro("FINDING: the counter was wrong. This sprint delivered dcDeliveredThing, which is unrelated.");
-        let v = retro_backlog_violations_for_test(&[], &[], &[("s.sysml".to_string(), text)]);
+        let v = retro_backlog_violations(&[], &[], &[("s.sysml".to_string(), text)]);
         assert_eq!(v.len(), 1, "an EXISTING task's name must not satisfy the check: {v:?}");
         assert!(v[0].contains("dcDeliveredThing") && v[0].contains("none of which this commit adds"), "{v:?}");
     }
@@ -7484,10 +7347,10 @@ mod retro_tie_tests {
     fn a_finding_whose_named_item_this_commit_adds_is_clean() {
         let text = sprint_with_retro("FINDING: the counter was wrong; recorded as issue188 with a resolver.");
         let added = vec!["issue188".to_string()];
-        assert!(retro_backlog_violations_for_test(&added, &[], &[("s.sysml".to_string(), text)]).is_empty());
+        assert!(retro_backlog_violations(&added, &[], &[("s.sysml".to_string(), text)]).is_empty());
         let text = sprint_with_retro("LESSON: shell mangling again - now tracked as dcAuthorViaWriteTool.");
         let added = vec!["dcAuthorViaWriteTool".to_string()];
-        assert!(retro_backlog_violations_for_test(&added, &[], &[("s.sysml".to_string(), text)]).is_empty());
+        assert!(retro_backlog_violations(&added, &[], &[("s.sysml".to_string(), text)]).is_empty());
     }
 
     /// The obligation is a STATED choice, not always-an-item: an explicit justification is clean.
@@ -7497,11 +7360,11 @@ mod retro_tie_tests {
         // checkable; the phrase alone is no longer enough (issue364, D0293).
         let text = sprint_with_retro("FINDING: a one-off typo; no new item - dcPostEditGate already catches this class.");
         let known = vec!["dcPostEditGate".to_string()];
-        assert!(retro_backlog_violations_for_test(&[], &known, &[("s.sysml".to_string(), text)]).is_empty());
+        assert!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text)]).is_empty());
         // ...and a Decision counts as the tracking item too.
         let text = sprint_with_retro("no new item - already tracked: the stale help is recorded in d0283.");
         let known = vec!["d0283".to_string()];
-        assert!(retro_backlog_violations_for_test(&[], &known, &[("s.sysml".to_string(), text)]).is_empty());
+        assert!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text)]).is_empty());
     }
 
     /// issue364, second shape: a retro whose text contains the word "verification" was cut in half by the
@@ -7510,7 +7373,7 @@ mod retro_tie_tests {
     fn a_retro_that_mentions_verification_is_still_examined() {
         let text = sprint_with_retro("FINDING: the verification of X was skipped; no item named anywhere here.");
         assert_eq!(retro_texts(&text).len(), 1, "the retro must be extracted whole: {:?}", retro_texts(&text));
-        let v = retro_backlog_violations_for_test(&[], &[], &[("s.sysml".to_string(), text)]);
+        let v = retro_backlog_violations(&[], &[], &[("s.sysml".to_string(), text)]);
         assert_eq!(v.len(), 1, "and examined: {v:?}");
     }
 
@@ -7518,7 +7381,7 @@ mod retro_tie_tests {
     #[test]
     fn already_tracked_with_no_named_item_is_a_violation() {
         let text = sprint_with_retro("no new item - already tracked: the finding belongs to the verification revamp.");
-        let v = retro_backlog_violations_for_test(&[], &["dcVerificationByAuthority".to_string()], &[("s.sysml".to_string(), text)]);
+        let v = retro_backlog_violations(&[], &["dcVerificationByAuthority".to_string()], &[("s.sysml".to_string(), text)]);
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].contains("'already tracked'") && v[0].contains("names no item at all"), "{v:?}");
     }
@@ -7527,7 +7390,7 @@ mod retro_tie_tests {
     #[test]
     fn already_tracked_naming_a_nonexistent_item_is_a_violation() {
         let text = sprint_with_retro("no new item - already tracked in issue999, which covers it.");
-        let v = retro_backlog_violations_for_test(&[], &["issue001".to_string()], &[("s.sysml".to_string(), text)]);
+        let v = retro_backlog_violations(&[], &["issue001".to_string()], &[("s.sysml".to_string(), text)]);
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].contains("issue999") && v[0].contains("none of which exists"), "{v:?}");
     }
@@ -7539,7 +7402,7 @@ mod retro_tie_tests {
     #[test]
     fn a_justification_that_names_a_real_item_passes_form_and_leaves_relevance_to_the_reader() {
         let text = sprint_with_retro("no new item - already tracked: that gap belongs to issue336.");
-        assert!(retro_backlog_violations_for_test(&[], &["issue336".to_string()], &[("s.sysml".to_string(), text)]).is_empty());
+        assert!(retro_backlog_violations(&[], &["issue336".to_string()], &[("s.sysml".to_string(), text)]).is_empty());
     }
 
     /// Only the RETRO gate is examined — a `DoD` or review gate mentioning a finding-like word is not a
@@ -7551,7 +7414,7 @@ verification storyXDoD : Test { :>> method = VerificationMethod::test; :>> proce
 }
 ";
         assert!(retro_texts(no_retro).is_empty());
-        assert!(retro_backlog_violations_for_test(&[], &[], &[("s.sysml".to_string(), no_retro.to_string())]).is_empty());
+        assert!(retro_backlog_violations(&[], &[], &[("s.sysml".to_string(), no_retro.to_string())]).is_empty());
     }
 
     /// Word boundaries on the item tokens, as before.
@@ -7582,8 +7445,8 @@ verification storyXDoD : Test { :>> method = VerificationMethod::test; :>> proce
     fn a_retro_justified_by_an_uppercase_decision_passes_when_it_exists_and_fails_when_it_does_not() {
         let text = sprint_with_retro("no new item - already tracked by D0388 and its probe rule.");
         let known = vec!["d0388".to_string()];
-        assert!(retro_backlog_violations_for_test(&[], &known, &[("s.sysml".to_string(), text.clone())]).is_empty(), "d0388 exists: the uppercase form names it");
-        let v = retro_backlog_violations_for_test(&[], &["d0387".to_string()], &[("s.sysml".to_string(), text)]);
+        assert!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text.clone())]).is_empty(), "d0388 exists: the uppercase form names it");
+        let v = retro_backlog_violations(&[], &["d0387".to_string()], &[("s.sysml".to_string(), text)]);
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].contains("d0388") && v[0].contains("none of which exists"), "{v:?}");
         assert!(v[0].contains("`d0NNN` (or `D0NNN`)") && v[0].contains("`issueNNN`") && v[0].contains("`dcTaskName`"), "the refusal quotes the accepted forms: {v:?}");
@@ -8020,8 +7883,8 @@ mod tests {
         let mut defined = gates_defined(proposed_then_pass, &order);
         defined.extend(recorded.iter().cloned());
         assert!(ordering_violations(&order, &defined, &recorded).is_empty(), "a proposed gate is recorded in its turn");
-        assert!(!crate::orient::gate_passed(proposed_then_pass, "Refine"), "but it is still not PASSED");
-        assert!(crate::orient::gate_passed(proposed_then_pass, "Implement"));
+        assert!(!crate::textscan::gate_passed(proposed_then_pass, "Refine"), "but it is still not PASSED");
+        assert!(crate::textscan::gate_passed(proposed_then_pass, "Implement"));
 
         let missing_then_pass = "verification xRefineGate : Test { }\n\
             verification xStandupGate : Test { }\n\
@@ -8062,8 +7925,8 @@ mod tests {
         let mut defined = gates_defined(failed_then_pass, &order);
         defined.extend(recorded.iter().cloned());
         assert!(ordering_violations(&order, &defined, &recorded).is_empty(), "a failed gate was recorded in its turn");
-        assert!(!crate::orient::gate_passed(failed_then_pass, "CloseOut"), "but it is still not PASSED");
-        assert!(!crate::orient::gate_recorded(failed_then_pass, "CloseOut"), "and the flow view's finish reader still refuses it");
+        assert!(!crate::textscan::gate_passed(failed_then_pass, "CloseOut"), "but it is still not PASSED");
+        assert!(!crate::textscan::gate_recorded(failed_then_pass, "CloseOut"), "and the flow view's finish reader still refuses it");
 
         let missing_then_pass = "verification xCloseOutGate : Test { }\n\
             verification xRetroGate : Test { :>> procedureText = \"Avoidable issues scanned\"; }\n\
@@ -8594,44 +8457,6 @@ pub fn declared_check_names(root: &Path) -> HashSet<String> {
         names.insert(format!("gate:{phase}"));
     }
     names
-}
-
-/// Every `:>> checkedBy = "<name>";` in a process file.
-///
-/// As (path, 1-based line, step name, check name). The step is the nearest enclosing
-/// `action <step> : ProcessStep {` - the same one-line-or-block walk `attribute_vocabulary` does,
-/// narrowed to the one attribute.
-#[must_use]
-pub fn step_check_bindings(root: &Path) -> Vec<(PathBuf, usize, String, String)> {
-    let mut out = Vec::new();
-    for path in crate::collect_sysml(&root.join(".engine/processes")) {
-        let Ok(text) = crate::corpus::read_to_string(&path) else { continue };
-        let mut step = String::new();
-        for (i, raw) in text.lines().enumerate() {
-            let t = raw.trim_start();
-            if t.starts_with("//") {
-                continue;
-            }
-            if let Some(rest) = t.strip_prefix("action ") {
-                if let Some((name, ty)) = rest.split_once(':') {
-                    if ty.trim_start().starts_with("ProcessStep") {
-                        step = name.trim().to_string();
-                    }
-                }
-            }
-            let Some(pos) = t.find(":>> checkedBy") else { continue };
-            let after = t[pos + ":>> checkedBy".len()..].trim_start();
-            let Some(after) = after.strip_prefix('=') else { continue };
-            let value = after.trim_start();
-            let name = value
-                .strip_prefix('"')
-                .and_then(|v| v.split_once('"'))
-                .map(|(n, _)| n.to_string())
-                .unwrap_or_default();
-            out.push((path.clone(), i + 1, step.clone(), name));
-        }
-    }
-    out
 }
 
 /// A `ProcessStep` that names its check names one that RUNS.
@@ -9280,7 +9105,7 @@ mod working_tree_eol_tests {
     /// A repository declaring `*.sysml text eol=lf` and `*.bat text eol=crlf`, autocrlf OFF so the
     /// fixture's bytes are what git sees on every host (CI is Linux; this host is Windows).
     fn fixture(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("keel-eol-{tag}-{}", crate::write::gen_uuid()));
+        let dir = std::env::temp_dir().join(format!("keel-eol-{tag}-{}", crate::ident::gen_uuid()));
         std::fs::create_dir_all(dir.join(".tracking")).unwrap();
         git(&dir, &["init", "-q"]);
         git(&dir, &["config", "core.autocrlf", "false"]);
@@ -9314,7 +9139,7 @@ mod working_tree_eol_tests {
         assert!(r.violations.is_empty(), "{:?}", r.violations);
         assert_eq!(r.scanned, 2);
         // and a tree git cannot list has nothing to judge
-        let plain = std::env::temp_dir().join(format!("keel-eol-plain-{}", crate::write::gen_uuid()));
+        let plain = std::env::temp_dir().join(format!("keel-eol-plain-{}", crate::ident::gen_uuid()));
         std::fs::create_dir_all(&plain).unwrap();
         let none = super::working_tree_eol(&plain);
         assert_eq!((none.scanned, none.violations.len()), (0, 0));

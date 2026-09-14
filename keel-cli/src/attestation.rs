@@ -429,11 +429,11 @@ mod tests {
         let proposed = "package S {\n    verification sRefineGate : Test { :>> id = \"e2e00000-0000-4000-8000-00000000f101\"; :>> method = VerificationMethod::inspect; }\n    part sRefineGateR1 : TestResult { :>> id = \"e2e00000-0000-4000-8000-00000000f102\"; :>> outcome = VerdictKind::proposed; :>> judgedAgainst = \"abc1234\"; :>> judgedAt = \"2026-09-10\"; :>> judgedBy = \"bot\"; }\n}\n";
         std::fs::write(&f, proposed).expect("write");
         assert_eq!(super::proposed_count(&root), 1, "one proposed result is counted");
-        assert!(!crate::orient::gate_passed(proposed, "sRefine"), "a proposed gate is NOT passed");
+        assert!(!crate::textscan::gate_passed(proposed, "sRefine"), "a proposed gate is NOT passed");
         let passed = proposed.replace("VerdictKind::proposed", "VerdictKind::pass");
         std::fs::write(&f, &passed).expect("write");
         assert_eq!(super::proposed_count(&root), 0, "a pass is not proposed");
-        assert!(crate::orient::gate_passed(&passed, "sRefine"), "the same gate at pass IS passed");
+        assert!(crate::textscan::gate_passed(&passed, "sRefine"), "the same gate at pass IS passed");
     }
 
     #[test]

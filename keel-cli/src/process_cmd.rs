@@ -456,7 +456,7 @@ fn unit_id_for(root: &Path, process: &str) -> Result<String, String> {
     if let Some(id) = minted {
         return Ok(id);
     }
-    let id = crate::write::gen_uuid();
+    let id = crate::ident::gen_uuid();
     write_minted_id(root, process, &id);
     Ok(id)
 }

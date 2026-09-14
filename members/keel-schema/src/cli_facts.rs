@@ -5,6 +5,8 @@
 //! one home and the help cannot go stale against the surface the way the hand-written block did
 //! after D0273.
 
+use std::collections::HashSet;
+
 /// The sub-verbs a ROUTING command's invocation declares, each with its full segment, in declaration
 /// order (D0451/D0454).
 ///
@@ -205,4 +207,70 @@ mod sub_verb_tests {
         assert_eq!(sub_verbs_of(inv("library")), vec!["init", "sync", "list"]);
         assert!(sub_verbs_of(inv("claim")).is_empty());
     }
+}
+
+/// One CLI fact as authored in `.engine/cli/commands.sysml`, reduced to the fields the guard compares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthoredCliFact {
+    /// The `part <name>` the fact is declared as - what a `#Supersede` edge names (issue547).
+    pub part: String,
+    pub name: String,
+    pub family: String,
+    pub effect: String,
+    pub stability: String,
+    pub synopsis: String,
+    pub invocation: String,
+}
+
+/// Read one `:>> key = "value"` or `:>> key = Enum::member` attribute out of a single-line part.
+fn cli_attr(line: &str, key: &str) -> Option<String> {
+    let needle = format!(":>> {key} = ");
+    let i = line.find(&needle)? + needle.len();
+    let rest = &line[i..];
+    if let Some(r) = rest.strip_prefix('"') {
+        return r.find('"').map(|e| r[..e].to_string());
+    }
+    let end = rest.find(';')?;
+    Some(rest[..end].rsplit("::").next().unwrap_or("").to_string())
+}
+
+/// Parse the `CliCommand` facts out of the file text.
+///
+/// Pure, so the comparison is unit-testable on a fixture; the model loader is not used because this guard must also run in a tree whose `.tracking`
+/// is unrelated to the engine (a downstream project).
+#[must_use]
+///
+/// FACTS IN FORCE (issue547). D0108 says a non-owner ADDS or SUPERSEDES another actor's item and never
+/// overwrites it, and guard `ownership` enforces that. For a `CliCommand` the supersede remedy has to
+/// be honoured HERE: the edge `#Supersede dependency from cliX2 to cliX;` is authored beside the facts
+/// in the same file, and a fact whose part name is such a target is retired - not parsed as a second
+/// fact of the same command name that `cli-surface-declared` then compares against the mirror. Before
+/// this read, the only path past `ownership` for a fact authored by a retired actor was to delete the
+/// part and re-author it under a NEW id (74c1923 `cliGithub`, sprint 711 `cliRecord`) - discarding
+/// Invariant 3's immutable identity to satisfy a rule whose own remedy this reader could not see.
+pub fn parse_cli_facts(text: &str) -> Vec<AuthoredCliFact> {
+    let retired: HashSet<String> = text
+        .lines()
+        .filter_map(|l| l.trim_start().strip_prefix("#Supersede dependency from "))
+        .filter_map(|rest| rest.split_once(" to "))
+        .map(|(_, to)| to.trim().trim_end_matches(';').trim().to_string())
+        .collect();
+    text.lines()
+        .filter(|l| l.contains(": CliCommand {"))
+        .filter_map(|l| {
+            let part = l.trim_start().strip_prefix("part ")?.split_whitespace().next()?.to_string();
+            if retired.contains(&part) {
+                return None;
+            }
+            Some(AuthoredCliFact {
+                part,
+                name: cli_attr(l, "name")?,
+                family: cli_attr(l, "family")?,
+                effect: cli_attr(l, "effect")?,
+                stability: cli_attr(l, "stability")?,
+                synopsis: cli_attr(l, "synopsis")?,
+                invocation: cli_attr(l, "invocation").unwrap_or_default(),
+            })
+        })
+        .collect()
 }

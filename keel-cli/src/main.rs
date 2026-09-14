@@ -1692,7 +1692,7 @@ fn cmd_orient(args: &[String]) -> i32 {
         eprintln!("{w}");
     }
     if html {
-        return match keel_cli::view::orient_html(&root) {
+        return match keel_cli::reports::orient_html(&root) {
             Ok(h) => {
                 println!("{h}");
                 0
@@ -2117,7 +2117,7 @@ fn cmd_priority(args: &[String]) -> i32 {
         Ok(r) => r,
         Err(code) => return code,
     };
-    match keel_cli::view::priority(&root) {
+    match keel_cli::priority::priority(&root) {
         Ok(json) => {
             println!("{json}");
             0
@@ -2238,7 +2238,7 @@ fn cmd_mint(args: &[String]) -> i32 {
     };
     let mut out = String::new();
     for _ in 0..n {
-        out.push_str(&keel_cli::write::gen_uuid());
+        out.push_str(&keel_cli::ident::gen_uuid());
         out.push('\n');
     }
     print!("{out}");
@@ -2707,7 +2707,7 @@ fn cmd_assured(args: &[String]) -> i32 {
         Ok(r) => r,
         Err(code) => return code,
     };
-    match keel_cli::view::assured(&root) {
+    match keel_cli::guards::assured_report(&root) {
         Ok(json) => {
             println!("{json}");
             0
@@ -3636,7 +3636,7 @@ fn cmd_report(args: &[String]) -> i32 {
     };
     let html = args.iter().any(|a| a == "--html");
     let trend = args.iter().any(|a| a == "--trend");
-    let result = if html { keel_cli::view::report_html(&root, name, trend) } else { keel_cli::view::report(&root, name, trend) };
+    let result = if html { keel_cli::reports::report_html(&root, name, trend) } else { keel_cli::reports::report(&root, name, trend) };
     match result {
         Ok(out) => {
             println!("{out}");

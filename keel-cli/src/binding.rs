@@ -16,7 +16,7 @@
 //! walk covers only `walked..HEAD`. Ancestry is answered in-process from one `git rev-list --parents`.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// What a result is asked to bind: its id, and the commit its author judged against.
 pub struct Ask<'a> {
@@ -178,6 +178,44 @@ fn is_ancestor(parents: &HashMap<String, Vec<String>>, anc: &str, from: &str) ->
     false
 }
 
+/// Every `:>> checkedBy = "<name>";` in a process file.
+///
+/// As (path, 1-based line, step name, check name). The step is the nearest enclosing
+/// `action <step> : ProcessStep {` - the same one-line-or-block walk `attribute_vocabulary` does,
+/// narrowed to the one attribute.
+#[must_use]
+pub fn step_check_bindings(root: &Path) -> Vec<(PathBuf, usize, String, String)> {
+    let mut out = Vec::new();
+    for path in crate::collect_sysml(&root.join(".engine/processes")) {
+        let Ok(text) = crate::corpus::read_to_string(&path) else { continue };
+        let mut step = String::new();
+        for (i, raw) in text.lines().enumerate() {
+            let t = raw.trim_start();
+            if t.starts_with("//") {
+                continue;
+            }
+            if let Some(rest) = t.strip_prefix("action ") {
+                if let Some((name, ty)) = rest.split_once(':') {
+                    if ty.trim_start().starts_with("ProcessStep") {
+                        step = name.trim().to_string();
+                    }
+                }
+            }
+            let Some(pos) = t.find(":>> checkedBy") else { continue };
+            let after = t[pos + ":>> checkedBy".len()..].trim_start();
+            let Some(after) = after.strip_prefix('=') else { continue };
+            let value = after.trim_start();
+            let name = value
+                .strip_prefix('"')
+                .and_then(|v| v.split_once('"'))
+                .map(|(n, _)| n.to_string())
+                .unwrap_or_default();
+            out.push((path.clone(), i + 1, step.clone(), name));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,7 +244,7 @@ mod tests {
     /// bound to the landing commit; a pass whose id is not yet in history keeps `judgedAgainst`.
     #[test]
     fn a_pass_recorded_before_its_landing_commit_binds_to_the_landing_commit() {
-        let dir = std::env::temp_dir().join(format!("keel-binding-{}", crate::write::gen_uuid()));
+        let dir = std::env::temp_dir().join(format!("keel-binding-{}", crate::ident::gen_uuid()));
         std::fs::create_dir_all(dir.join(".tracking")).unwrap();
         let git = |args: &[&str]| {
             let o = crate::gitx::git().arg("-C").arg(&dir).args(args).output().unwrap();

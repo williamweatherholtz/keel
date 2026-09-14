@@ -1500,4 +1500,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcEveryEdgeKindHasAReader to issue554;
+
+    part issue555 : Issue {
+        :>> id = "2c904214-8cdd-404d-a5fe-580654834549";
+        :>> title = "A write to a D0070 locked surface draws no word until the process-change guard refuses the commit";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 717 moved compute_readiness, assured_blockers and two test modules into keel-cli/src/guards.rs and one function out of it. The edits were made, built and clippy-clean before anything said the file is a locked surface: hook_pre_write (keel-cli/src/main.rs, the PreToolUse Write|Edit hook) checks the hook kill switch, CONTROL_PLANE_PATHS and the .tracking / .engine/decisions protected tiers and returns without ever asking guards::is_locked_path (keel-cli/src/guards.rs:1215), the one predicate that says whether the D0070 keystone lock covers a path. So the first mention of the missing marked Decision was the process-change guard at rung 2 of keel verify, after the code was finished - correct behaviour, and the fourth time this ordering has cost a turn (issue213 twice, sprint 624's two skill files, now guards.rs). The lock belongs to the commit (D0209 clause 2) and must stay there; what is missing is the word at write time that names the file as locked and the two paths through the lock, so the Decision is drafted while the change is being made instead of discovered when it is done. Found 2026-09-14 in the sprint 717 verify log: [guard:process-change] FAIL naming keel-cli/src/guards.rs with NO co-committed process-change Decision.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcLockedSurfaceEditIsNamedAtWriteTime to issue555;
 }

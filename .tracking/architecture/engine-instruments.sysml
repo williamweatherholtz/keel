@@ -436,4 +436,25 @@ package EngineInstruments {
         :>> producesFeedback = fbSpikeMetamodel;
     }
 
+    // modGraph: scripts/modgraph.py (D0479, sprint 717)
+    // KNOWN FAILURE MODES: it reads `crate::<module>` tokens with `//` comments and string literals stripped, so a reference reached through a `use` alias or a re-export is attributed to the alias's home, not the module named; only `//` comments (doc comments included) and string literals are stripped, so a `/* */` block comment that spells `crate::guards::` reads as a reference (a false positive, never a miss; none in the tree at the adding commit). The forbidden pairs are a list in the script, so a new layer is guarded only once its pair is added there.
+    // PUBLISHED TO: the DoD of dcGuardsViewOrientCycleIsBroken (its D0388 pair) and, under dcWorkspaceLayeringIsGuarded, the guard that will carry it
+    part fbModGraph : Feedback {
+        :>> id = "612aa446-c514-4f63-a818-5735a9f591ee";
+        :>> title = "whether keel-cli's module graph holds the D0479 layering: no reference from view, orient, write or scaffold into guards, none from view into orient";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> sensedFrom = cpDeliverable;
+        :>> reportsTo = ctAgent;
+    }
+    part snModGraph : Sensor {
+        :>> id = "4abaf613-7b3e-4e35-a936-32fc05658821";
+        :>> title = "modGraph";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> mechanism = "scripts/modgraph.py";
+        :>> measures = "the top-level module graph of keel-cli/src (nodes: modules and keel_* re-exports; edges: crate::X references): module and edge counts, Tarjan cycles, and under --check the FORBIDDEN back-edges each named at file:line, exit 1 on any";
+        :>> determinism = Determinism::tree;
+        :>> reading = SensorReading::verdict;
+        :>> producesFeedback = fbModGraph;
+    }
+
 }

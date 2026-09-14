@@ -380,7 +380,7 @@ fn workflow_actions(root: &Path, out: &mut Vec<Action>, fb: &mut Vec<Fb>) {
 fn cli_actions(root: &Path, out: &mut Vec<Action>, fb: &mut Vec<Fb>) {
     let path = root.join(".engine").join("cli").join("commands.sysml");
     let Ok(text) = std::fs::read_to_string(&path) else { return };
-    for f in crate::guards::parse_cli_facts(&text) {
+    for f in crate::cli_facts::parse_cli_facts(&text) {
         let src = ".engine/cli/commands.sysml".to_string();
         match f.effect.as_str() {
             "writes" | "both" => {

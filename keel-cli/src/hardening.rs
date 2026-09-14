@@ -279,7 +279,7 @@ fn process_enforcement(root: &Path) -> Json {
 fn step_enforcement(root: &Path) -> Json {
     let declared = enforcement_contract(root);
     let names = crate::guards::declared_check_names(root);
-    let bound: std::collections::BTreeMap<(String, String), String> = crate::guards::step_check_bindings(root)
+    let bound: std::collections::BTreeMap<(String, String), String> = crate::binding::step_check_bindings(root)
         .into_iter()
         .map(|(path, _, step, name)| {
             let unit = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
@@ -404,7 +404,7 @@ fn step_trigger(root: &Path) -> Json {
     let events = configured_hook_events(root);
     let names = crate::guards::declared_check_names(root);
     let guard_names: std::collections::HashSet<&str> = crate::guards::GUARD_NAMES.iter().copied().collect();
-    let bound: std::collections::BTreeMap<(String, String), String> = crate::guards::step_check_bindings(root)
+    let bound: std::collections::BTreeMap<(String, String), String> = crate::binding::step_check_bindings(root)
         .into_iter()
         .map(|(path, _, step, name)| {
             let unit = path.file_stem().unwrap_or_default().to_string_lossy().to_string();

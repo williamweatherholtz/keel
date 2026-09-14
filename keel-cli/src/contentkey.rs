@@ -153,7 +153,7 @@ mod tests {
     /// an input any more. `.keel/metrics/` writes move neither.
     #[test]
     fn a_code_edit_moves_both_keys_a_tracking_edit_moves_the_tree_key_and_an_mtime_moves_neither() {
-        let d = std::env::temp_dir().join(format!("keel-contentkey-{}", crate::write::gen_uuid()));
+        let d = std::env::temp_dir().join(format!("keel-contentkey-{}", crate::ident::gen_uuid()));
         std::fs::create_dir_all(d.join("keel-cli").join("src")).expect("mk");
         std::fs::create_dir_all(d.join(".tracking")).expect("mk");
         std::fs::write(d.join("keel-cli").join("src").join("lib.rs"), "pub fn a() {}\n").expect("w");

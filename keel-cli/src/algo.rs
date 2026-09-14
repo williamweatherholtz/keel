@@ -234,7 +234,7 @@ fn is_sitting_review_name(name: &str) -> bool {
 
 /// Sitting-review pass records: `part <sitting…R\d+> : TestResult { …[^}]* VerdictKind::pass`.
 /// Statement-scoped (matches query.py's `[^}]*`, which spans newlines) so multi-line
-/// `TestResult` blocks are caught — mirrors [`crate::orient::gate_passed`].
+/// `TestResult` blocks are caught — mirrors [`crate::textscan::gate_passed`].
 fn collect_sitting_reviews(text: &str, out: &mut BTreeSet<String>) {
     for (idx, _) in text.match_indices("part ") {
         let after = &text[idx + "part ".len()..];
@@ -287,7 +287,7 @@ fn scan_delivery_files(tracking: &Path, chartered: &HashSet<String>, order: &[St
                 }
             }
         }
-        let absent: Vec<&String> = order.iter().filter(|g| !crate::orient::gate_passed(&text, g)).collect();
+        let absent: Vec<&String> = order.iter().filter(|g| !crate::textscan::gate_passed(&text, g)).collect();
         if !absent.is_empty() {
             let entry = Json::Obj(vec![
                 ("file".to_string(), Json::s(fname.clone())),

@@ -532,7 +532,7 @@ fn govern_resolve(repo: &Path, pcs: &[ProcChange], item: &str) -> GovernData {
     let mut after: Vec<(String, String)> = Vec::new();
     for d in pcs {
         let Some(ec) = &d.effective_commit else { continue };
-        if !crate::orient::git_sha_valid(ec, repo) {
+        if !crate::gitfacts::git_sha_valid(ec, repo) {
             continue;
         }
         if is_ancestor(repo, ec, &item_commit) {

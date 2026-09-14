@@ -1,6 +1,7 @@
-//! critique coverage (D0080/D0079) - per-element x required-lens - extracted from view.rs (sprint 418, dcViewRsRestructure: the panel's
-//! god-module finding). Pure move, no behavior change; `view::` paths survive via the
-//! `pub use` re-exports in mod.rs.
+//! Critique coverage (D0080/D0079): per element x required lens.
+//!
+//! Extracted from view.rs (sprint 418, dcViewRsRestructure: the panel's god-module finding). Pure move,
+//! no behavior change; `view::` paths survive via the `pub use` re-exports in mod.rs.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
@@ -87,7 +88,7 @@ impl CritiquePolicy {
     /// Lenient load for ADVISORY aggregate reports: falls back to the Core-3 default on any error. A
     /// malformed policy is surfaced loudly by `critique-coverage` / `guard critique` (same gate), so the
     /// report cards needn't re-raise it.
-    pub(super) fn load_or_core3(root: &Path) -> Self {
+    pub(crate) fn load_or_core3(root: &Path) -> Self {
         Self::load(root).unwrap_or_else(|_| Self::core3())
     }
 
@@ -114,14 +115,14 @@ pub(super) struct LensStatus {
     outcome: Option<String>, // pass = survived the lens; fail = a finding was raised
 }
 
-pub(super) struct CritiqueCoverage {
-    pub(super) element: String,
-    pub(super) type_name: String,
+pub(crate) struct CritiqueCoverage {
+    pub(crate) element: String,
+    pub(crate) type_name: String,
     pub(super) lenses: Vec<LensStatus>,
-    pub(super) covered: bool, // every required lens critiqued
+    pub(crate) covered: bool, // every required lens critiqued
 }
 
-pub(super) fn compute_critique_coverage<S: std::hash::BuildHasher>(
+pub(crate) fn compute_critique_coverage<S: std::hash::BuildHasher>(
     model: &Model,
     stale: &HashSet<String, S>,
     policy: &CritiquePolicy,
@@ -193,8 +194,8 @@ pub(super) fn compute_critique_coverage<S: std::hash::BuildHasher>(
 // elements created after the governing decision landed. coverage(C) is governed by D0079; the
 // critique requirement by D0080. Pre-decision elements are grandfathered (out of the GATE's gap set,
 // though still shown in the VIEW with `governed=false` for transparency).
-pub(super) const COVERAGE_DECISION: &str = "d0079";
-pub(super) const CRITIQUE_DECISION: &str = "d0080";
+pub(crate) const COVERAGE_DECISION: &str = "d0079";
+pub(crate) const CRITIQUE_DECISION: &str = "d0080";
 /// The sitting-review grandfather line (D0155): sittings present at this Decision's introduction commit
 /// are accepted-unreviewed; everything after it is a live obligation.
 pub(super) const SITTING_DECISION: &str = "d0155";
@@ -236,7 +237,7 @@ pub fn critique_suspect(root: &Path) -> Result<Vec<String>, ViewError> {
 }
 
 /// Pure core of [`critique_suspect`]: the sorted set of elements with an unresolved failing critique.
-pub(super) fn critique_suspect_set(model: &Model) -> Vec<String> {
+pub(crate) fn critique_suspect_set(model: &Model) -> Vec<String> {
     // D0102: a fail critique whose finding Issue is dispositioned ACCEPT-RISK/DISMISS no longer induces
     // suspicion — the verdict consciously resolved it. The finding->critique link is the typed `#DependsOn`
     // edge from the Issue to the critique Test (so the computation has a typed path, not prose).

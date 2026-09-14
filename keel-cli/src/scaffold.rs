@@ -11,7 +11,7 @@
 //! No `TestResult`s are generated: results are appended when a gate is actually judged
 //! (`record gate-result`), never pre-created.
 
-use crate::write::gen_uuid;
+use crate::ident::gen_uuid;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -228,7 +228,7 @@ pub fn today() -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::{sprint, sprint_filled, PLACEHOLDER};
 
     /// Since D0435 the scaffold reads the ceremony order from the tree: the workflow's `first A then B;`
@@ -298,7 +298,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    fn temp_root(tag: &str) -> std::path::PathBuf {
+    pub fn temp_root(tag: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!("keel-scaffold-{tag}"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".tracking").join("delivery")).expect("mkdir");
@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(ids.len(), 8, "story + DoD + six gates");
         let mut seen = std::collections::HashSet::new();
         for id in &ids {
-            assert!(crate::guards::uuid_shaped(id), "guard 38 rejects a scaffolded id: {id}");
+            assert!(crate::ident::uuid_shaped(id), "guard 38 rejects a scaffolded id: {id}");
             assert!(seen.insert(*id), "duplicate id in one scaffold");
         }
         for g in ["RefineGate", "StandupGate", "ImplementGate", "ReviewGate", "CloseOutGate", "RetroGate"] {
@@ -356,15 +356,4 @@ mod tests {
         assert!(sprint(&root, 998, "ok", "dNothing", 3, "x").is_err(), "unknown charter must refuse");
     }
 
-    /// Guard 40 rejects the scaffold until it is filled — the whole point of the marker.
-    #[test]
-    fn the_placeholder_guard_rejects_an_unfilled_scaffold_and_passes_a_filled_one() {
-        let root = temp_root("guard");
-        let path = sprint(&root, 999, "guardRun", "d9997", 2, "claudeOpus5").expect("scaffold");
-        let report = crate::guards::scaffold_placeholder(&root);
-        assert!(!report.violations.is_empty(), "an unfilled scaffold must be rejected");
-        let filled = std::fs::read_to_string(&path).expect("read").replace(PLACEHOLDER, "filled in");
-        std::fs::write(&path, filled).expect("fill");
-        assert!(crate::guards::scaffold_placeholder(&root).violations.is_empty(), "a filled scaffold passes");
-    }
 }

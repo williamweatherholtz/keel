@@ -1192,7 +1192,7 @@ fn view_html(r: Result<String, crate::view::ViewError>) -> Response {
 
 /// GET /view/report/:name (D0094 m2) — the full computed HTML report (instantiate/render action).
 async fn view_report(State(s): State<AppState>, AxPath(name): AxPath<String>) -> Response {
-    view_html(crate::view::report_html(&s.rootpath(), &name, false))
+    view_html(crate::reports::report_html(&s.rootpath(), &name, false))
 }
 
 /// GET /view/diagram (D0094 m2) — the whole-model interactive diagram HTML (render action).
@@ -1698,7 +1698,7 @@ struct RunAskReq {
 /// POST /api/run/ask (D0182 headless-ask proxy): a launched run's pre-write hook registers an ask
 /// and receives an id to poll. The human answers from the console; hook-side expiry maps to deny.
 async fn api_run_ask(State(s): State<AppState>, axum::Json(b): axum::Json<RunAskReq>) -> Response {
-    let id = crate::write::gen_uuid();
+    let id = crate::ident::gen_uuid();
     if let Ok(mut asks) = s.asks.lock() {
         asks.insert(id.clone(), (b.path, b.session, None));
     }
@@ -2509,7 +2509,7 @@ async fn api_processes(State(s): State<AppState>) -> Response {
 }
 
 async fn api_report(State(s): State<AppState>, AxPath(name): AxPath<String>) -> Response {
-    cached_owned(&s, &format!("report:{name}"), |r| crate::view::report(r, &name, false))
+    cached_owned(&s, &format!("report:{name}"), |r| crate::reports::report(r, &name, false))
 }
 
 /// History reads ~/.claude transcripts (outside the fingerprint), so it is computed fresh (uncached).

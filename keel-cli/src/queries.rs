@@ -21,7 +21,7 @@ fn idx(root: &Path) -> crate::indexer::ExtractedIndex {
 #[must_use]
 pub fn outstanding(root: &Path) -> String {
     let tasks = idx(root).tasks;
-    let done = crate::orient::done_names(root);
+    let done = crate::done::done_names(root);
     let mut out: Vec<String> = tasks.keys().filter(|t| !done.contains(t.as_str())).cloned().collect();
     out.sort();
     Json::Obj(vec![("outstanding".to_string(), Json::Arr(out.into_iter().map(Json::s).collect()))]).dump()
@@ -31,7 +31,7 @@ pub fn outstanding(root: &Path) -> String {
 #[must_use]
 pub fn item(root: &Path, name: &str) -> String {
     let index = idx(root);
-    let done = crate::orient::done_names(root);
+    let done = crate::done::done_names(root);
     let Some(t) = index.tasks.get(name) else {
         return Json::Obj(vec![("error".to_string(), Json::s(format!("no task '{name}'")))]).dump();
     };

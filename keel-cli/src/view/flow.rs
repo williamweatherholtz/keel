@@ -113,7 +113,7 @@ pub fn is_sprint(text: &str) -> bool {
 /// The retro gate has a RECORDED result in `text` - `pass` or `proposed` (D0312 B).
 #[must_use]
 pub fn retro_recorded(text: &str) -> bool {
-    crate::orient::gate_recorded(text, "Retro")
+    crate::textscan::gate_recorded(text, "Retro")
 }
 
 /// The first `estimatedPoints = N;` in `text`, else 0.
@@ -217,7 +217,7 @@ pub fn facts(root: &Path) -> Result<FlowFacts, String> {
         .iter()
         .flat_map(|(_, gp, _)| candidates_by.get(gp.as_str()).into_iter().flatten().map(move |(sha, _)| format!("{sha}:{gp}")))
         .collect();
-    let blobs = crate::orient::batch_cat_blobs(root, &keys);
+    let blobs = crate::gitfacts::batch_cat_blobs(root, &keys);
 
     let mut spans: Vec<SprintSpan> = Vec::new();
     for (stem, gp, points) in files {
