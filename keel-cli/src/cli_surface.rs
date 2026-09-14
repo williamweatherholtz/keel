@@ -20,13 +20,13 @@
 //! point. A unit declaring a name the post-collapse engine no longer has is exactly what must refuse.
 
 /// Every command this binary dispatches, sorted. Kept equal to `main.rs`'s dispatch by test.
-pub const COMMAND_NAMES: [&str; 34] = [
+pub const COMMAND_NAMES: [&str; 35] = [
     "accept", "activate", "activation", "actor", "advance", "audit",
     "claim", "claude", "currency", "deactivate", "deck", "enroll",
     "gate", "github", "hook", "init", "judge-set", "land",
     "library", "migrate", "onboard", "override", "process", "projects",
     "recall", "record", "reject", "render", "serve", "show",
-    "suite", "sync", "sync-claude", "version",
+    "suite", "sync", "sync-claude", "verify", "version",
 ];
 
 /// Does this binary dispatch `name`?

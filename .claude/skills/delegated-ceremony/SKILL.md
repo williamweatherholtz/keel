@@ -28,7 +28,7 @@ and it reported "All issues resolved ... ready for commit" over a tree whose gua
 | Role | Agent type | Reads | Writes |
 |---|---|---|---|
 | PRIMARY | the session | everything | the substance: code, design, analysis; the dispatches below |
-| VERIFIER | `verifier` (haiku) | the tree; the commands' output (validate, check-engine, guard, sync-claude --check, suite --touched, clippy, the probe pair) | ONE receipt file in the scratchpad. Nothing under `.tracking/`, `.engine/`, `keel-cli/`, `.claude/`, `CLAUDE.md`; no `keel record`; no git |
+| VERIFIER | `verifier` (haiku) | the tree; the commands' output (`keel verify . --probe POS,NEG` - the D0476 ladder: validate, guard, clippy, the probe pair, suite --touched, stopping at the first red - plus check-engine and sync-claude --check) | ONE receipt file in the scratchpad. Nothing under `.tracking/`, `.engine/`, `keel-cli/`, `.claude/`, `CLAUDE.md`; no `keel record`; no git |
 | RECORDER | `recorder` (haiku) | the verifier's receipt file ONLY - never the primary's account of the work | `keel record ...` calls ONLY. No Write/Edit on any tree file (the agent has neither tool); no git |
 
 The agent types are `.claude/agents/verifier.md` and `.claude/agents/recorder.md`. They carry the

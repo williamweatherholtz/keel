@@ -1357,4 +1357,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcBuildScriptDoesNotWatchTheGitIndex to issue541;
+
+    part issue542 : Issue {
+        :>> id = "c73e23b0-08e6-42c9-99c3-1885a61b73c2";
+        :>> title = "CI red at 1e2ed25: nextest --workspace lists keel-parser's four harness=false binaries the keel-cli-only exclusion missed";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "CI is red at 1e2ed25 (sprint707's landing commit, the first nextest run on ubuntu): `gh run view 34825100902 --log-failed` -> `creating test list failed ... for keel-parser::lexer_bdd, command ... --list --format terse exited with exit code 2; error: unexpected argument '--list' found`, exit 104, conclusion failure. ci.yml:35 and release.yml:52 run `cargo nextest run --workspace` excluding only the three keel-cli cucumber binaries; keel-parser/Cargo.toml:29-42 declares four more harness = false targets (lexer_bdd, parser_bdd, semantic_bdd, spec_compat_bdd) that nextest cannot list. The local touched run never met them because touched.rs:688 custom_harness_tests reads keel-cli/Cargo.toml alone and runs keel-cli's binaries alone, so the run that was green here (823 passed) was over a different set than CI's. sprint707's retro finding three named this drift and dismissed it (`custom_harness_tests reads the manifest ... so a fourth cucumber binary fails that test before it can drift`) - the test pins keel-cli's trio, not the workspace, and the dismissal was wrong; sprint707's closeOut result was recorded before the CI conclusion existed and its clause `read back as success` is now false at 1e2ed25. Severity High: main's CI is red until the split names every custom harness in the workspace, and the D0047 control the retro should have produced (a test binding the workflows to the manifests) does not exist.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcCiNextestExcludesEveryCustomHarness to issue542;
+
+    part issue543 : Issue {
+        :>> id = "26d8fa81-2cdf-4672-b5a5-a30dc4bb26be";
+        :>> title = "record result / gate-result read --evidence from the shell argument with no file form: D0224's fifth occurrence emptied two quotes in sprint 708's implement gate";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Fifth D0224 occurrence, 2026-09-14, recording sprint 708's implement gate: the evidence text passed as --evidence '...' contained two backtick spans quoting the command under test (keel verify . --probe onlyone) and its --help line; the shell took them as command substitution, failed on the parenthesis in the quoted refusal, and the result landed with both quotes emptied (sprint708 line 28: 'KEEL --help line 86 ;' and '--probe onlyone -> exit=2'). No output was injected this time because the substitution errored, so the write path's captured-output refusal (write.rs:1611) had nothing to see. Repaired by owner edit. Root cause: record result and record gate-result read --evidence straight from the shell argument (main.rs:2917, main.rs:2993) and have no file form, while decision (--from), issue (--description-from) and task (--dod-from) do - the D0224 control was applied verb by verb, each after its own occurrence, and these two verbs, which carry the most quoted command lines of any record, were never given it. Until the file form exists the workaround is --evidence '$(cat FILE)', whose content the shell does not re-parse.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcEvidenceGoesThroughAFile to issue543;
 }

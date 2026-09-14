@@ -961,7 +961,7 @@ pub fn after_gate(repo: &Path, t: &Touched) -> Option<i32> {
         return Some(2);
     }
     let n = t.binaries().len();
-    println!("keel land: {n} touched test binar{} before the push (cargo test --release --test ...; those observed green at this content are skipped, D0474)", if n == 1 { "y" } else { "ies" });
+    println!("keel land: {n} touched test binar{} before the push (cargo nextest run over the selected binaries, D0475; those observed green at this content are skipped, D0474)", if n == 1 { "y" } else { "ies" });
     match run(repo, t, crate::receipt::forced(&[])) {
         Ok(r) if r.green() => {
             println!("keel land: touched tests pass - {} (receipt {RECEIPT})", r.summary());

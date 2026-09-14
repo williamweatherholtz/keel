@@ -4700,6 +4700,13 @@ fn cmd_suite(rest: &[String]) -> i32 {
     keel_cli::suite::cmd(rest, &repo_arg(&own))
 }
 
+fn cmd_verify(rest: &[String]) -> i32 {
+    // The probe value is a command line, never a root: the root is found among what the ladder
+    // does not consume.
+    let own = keel_cli::verify::own_args(rest);
+    keel_cli::verify::cmd(rest, &repo_arg(&own))
+}
+
 fn cmd_currency(rest: &[String]) -> i32 {
     let root = rest.iter().find(|a| !a.starts_with("--") && Path::new(a.as_str()).join(".tracking").is_dir()).map_or_else(|| find_repo_root().unwrap_or_else(|| PathBuf::from(".")), PathBuf::from);
     keel_cli::currency::cmd(rest, &root)
@@ -5653,6 +5660,7 @@ fn main() {
         Some("github") => cmd_github(rest), // D0453: pull, ingest, decider, gesture and decision-id route under it
         Some("currency") => cmd_currency(rest), // D0338: the unattended pass - pull, library, drift
         Some("suite") => cmd_suite(rest), // D0353: the full suite, with the receipt land demands
+        Some("verify") => cmd_verify(rest), // D0476: the pre-commit ladder, stopping at the first red
         Some("advance") => keel_cli::cursor::advance_cmd(rest, &find_repo_root().unwrap_or_else(|| PathBuf::from("."))),
         Some("enroll") => cmd_enroll(rest),
         Some("render") => cmd_render(rest),

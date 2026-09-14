@@ -137,8 +137,8 @@ Change Request cross-cuts and is itself frozen.
 **Subagents (D0425)**
 - Primary does substance. Process `delegated-ceremony` (skill of the same name carries both briefs; dispatch by
   pointing at it, agent types `verifier`/`recorder` in `.claude/agents/`). VERIFIER (haiku, skill `test-verify`,
-  D0438) runs `keel suite --touched` DETACHED, `gate validate`, `gate check-engine`, `gate guard --no-receipt`,
-  clippy, the D0388 pair; writes a receipt only. RECORDER (haiku, no Write/Edit tool) writes ceremony through
+  D0438) runs `keel verify . --probe POS,NEG` DETACHED (the D0476 ladder: validate, guard, clippy, the D0388
+  pair, `suite --touched`, stopping at the first red), plus `gate check-engine`, `sync-claude --check`; writes a receipt only. RECORDER (haiku, no Write/Edit tool) writes ceremony through
   `keel record` from that receipt ONLY; a marker/edge the API lacks is a `REFUSED:` report line, never typed; its
   report ends with the last line of `keel gate --fast .`. `references/check_report.py` refuses a report otherwise,
   and one whose `WROTE:` names a non-`record` command or writes one gate/task twice (D0473): a red after a write is
@@ -168,6 +168,7 @@ Change Request cross-cuts and is itself frozen.
 keel gate validate .            # .tracking authority (kernel-free)
 keel gate check-engine .        # .engine instance gate
 keel gate guard [--no-receipt]  # all forward guards; catalogue .engine/docs/guards.md; count from `keel version`
+keel verify [ROOT] [--probe POS,NEG] [--no-receipt]  # the pre-commit ladder in cost order, stops at the first red (D0476)
 keel gate --fast           # per-edit tier
 keel gate --workspace      # commit tier, multi-project
 keel show enforcement-report    # hook fires, blocks, latency distribution, refusals (D0389/D0424)

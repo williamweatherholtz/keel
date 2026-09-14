@@ -68,6 +68,7 @@ pub mod cursor;
 pub mod currency;
 pub mod suite;
 pub mod touched;
+pub mod verify;
 pub mod eol;
 pub mod github;
 pub mod github_ingest;

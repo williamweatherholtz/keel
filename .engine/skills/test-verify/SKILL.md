@@ -2,16 +2,17 @@
 name: test-verify
 description: |
   The D0425 VERIFIER's procedure: run the deliverable's gate set against the tree
-  as it is - keel suite --touched (detached, receipt read only after exit), validate,
-  check-engine, guard --no-receipt, sync-claude --check, clippy, the sprint's D0388
-  probe pair - and report every discrepancy naming the command. Use when dispatched
+  as it is - keel verify . --probe POSITIVE,NEGATIVE (the D0476 ladder: validate, guard,
+  clippy, the sprint's D0388 probe pair, then suite --touched, in that order, stopping at
+  the first red; detached, receipt read only after exit), plus check-engine and
+  sync-claude --check outside it - and report every discrepancy naming the command. Use when dispatched
   as a verifier subagent, or asked to "verify," "is it green," "run the touched set,"
   or before any deliverable DoD or gate TestResult is recorded. READS and RUNS only:
   writes nothing under .tracking or .engine, records no TestResult (that is the
   recorder's, from this skill's receipt), does NOT build from scratch (use build)
   and does NOT commit (use repo-push).
 metadata:
-  version: 0.2.0
+  version: 0.3.0
   domain: [rust, cargo-test, clippy, keel-suite, touched-set, verification, D0425, SysMLv2]
   writePolicy: readOnly
   engine: keel-ai-toolkit
@@ -46,7 +47,15 @@ Run from the project root. `KEEL` below is the binary named in the dispatch (def
 `./target/release/keel.exe`); never `target/release/keel.exe` when a build may run — a copy
 (`keel-serve.exe`, `keel-land.exe`) survives a relink.
 
-### 1. Launch the touched run DETACHED, record the launch time
+### 1. Launch the ladder DETACHED, record the launch time
+
+`keel verify . --probe POSITIVE,NEGATIVE` is the pre-commit ladder (D0476): `gate validate`,
+`gate guard` (from its receipt, D0371), `cargo clippy --release --all-targets -- -D warnings`,
+the D0388 probe pair named by `--probe`, then `suite --touched` - in that order, STOPPING at the
+first red, so a lint is reported in under a minute instead of after the twenty-minute run
+(sprint705). It writes `.keel/metrics/verify-receipt.toml` naming the rung it stopped at; a rung
+after the red is `not-run`, a pair not named is `not-named`. Its last rung is the run the land
+will honour:
 
 `keel suite --touched .` is the set the land will run (D0421/D0432): the integration tests whose
 text names a changed `keel-cli/src/<stem>.rs`, plus the lib's own unit tests whenever any
@@ -58,7 +67,7 @@ is a receipt too - `--no-receipt` runs every binary when the dispatch asks for i
 
 ```
 python -c "import time; print(int(time.time()))" > .keel/metrics/verify-launch.epoch
-(nohup KEEL suite --touched . > .keel/metrics/verify-touched.out 2>&1 < /dev/null & disown)
+(nohup KEEL verify . --probe "<POSITIVE>,<NEGATIVE>" > .keel/metrics/verify-touched.out 2>&1 < /dev/null & disown)
 ```
 
 or the harness's `run_in_background` on the same command. Do NOT wait on it in a foreground call
@@ -74,51 +83,52 @@ step 5, minus the `stems`/`lib` rows. The two receipts use the same two words th
 and `seconds` is the run's wall clock, so `at` > launch epoch proves the run finished after you
 launched it and `at - seconds` is within two seconds of the launch epoch when it is this run's;
 `seconds` belongs in the `SUITE RECEIPT:` row as `ran=<n>s`.
-`keel suite` REFUSES to run from `target/release/keel.exe` (it cannot relink its own image); run
-it from the copy the dispatch names.
+`keel verify` and `keel suite` REFUSE to run from `target/release/keel.exe` (it cannot relink its
+own image); run them from the copy the dispatch names.
 
-### 2. Run the rest of the gate set while it runs
+### 2. Run the two checks outside the ladder while it runs
 
 Each line of the receipt is `<command> -> <the verdict line the command printed>; exit=<code>`.
+The ladder's own rungs (validate, guard, clippy, the pair, touched) are read from its receipt in
+step 4 - do not run them a second time beside it; the two would contend for cargo's lock.
 
 ```
-KEEL gate validate .                  # the .tracking semantic authority
 KEEL gate check-engine .              # .engine instance reference resolution
-KEEL gate guard --no-receipt .        # every enforced forward guard; --no-receipt forces the run
 KEEL sync-claude --check .            # the claude-surface-drift check
 git rev-parse --short HEAD
 git status --short                    # count and list; the recorder needs to know the tree was dirty
 ```
 
-`guard` exit 1 is a FAIL to report with the failing guard's line — not a thing to explain away.
-The dispatch may name guards it EXPECTS red (a proposed Decision's known red); report them as red
-and cite the dispatch's expectation beside each.
+A guard rung that stopped the ladder is a FAIL to report with the failing guard's line from
+`verify-touched.out` — not a thing to explain away. The dispatch may name guards it EXPECTS red (a
+proposed Decision's known red); report them as red and cite the dispatch's expectation beside each.
 
 Note `keel gate guard` before staging reads NOTHING for the index-reading guards (`process-change` scans
 `git diff --cached`; issue464): say in the receipt that the commit tier was not exercised.
 
-### 3. The D0388 probe pair
+### 3. The D0388 probe pair - on the ladder's command line
 
 The dispatch names the sprint's check and its two cases — one known-positive, one known-negative,
-chosen before the tree was read. Run exactly what the dispatch names (a `cargo test --release
-<name>` filter, a `python scripts/probes/<x>.py --probe`, or a `KEEL <lens>` over a fixture) and
-report both cases' outcomes by name. A dispatch that names no pair is reported as `PROBE PAIR: not
+chosen before the tree was read. Each side is one shell-free command line run from the project
+root (a `cargo test --release <name>` filter, a `python scripts/probes/<x>.py --probe`, or a `KEEL
+<lens>` over a fixture); pass them as `--probe "<POSITIVE>,<NEGATIVE>"` in step 1 - the rung is
+green only when both sides exit 0. A dispatch that names no pair launches the ladder without
+`--probe`; the receipt's probe rung reads `not-named` and the receipt line is `PROBE PAIR: not
 named by the dispatch` — never invented.
 
-### 4. Clippy — and what to do when the build lock is held
+### 4. Read the ladder receipt — ONLY after the process exits
 
-```
-cargo clippy --release --all-targets -- -D warnings
-```
+`.keel/metrics/verify-receipt.toml` carries `head`, `at`, `seconds`, `outcome`, `stopped_at`
+(`none` on green, else the rung) and one `[[rung]]` row per rung (`name`, `verdict` = pass | fail |
+not-run | not-named, `exit`, `seconds`, `command`). A `not-run` rung was never asked - report it as
+not run, never as passed; a red rung's first error line is in `verify-touched.out`. Clippy is a
+rung, so there is no build-lock wait and no `TIMEOUT` to report; a ladder killed before it wrote
+has no receipt newer than the launch epoch, and that is the line.
 
-The touched run holds cargo's build lock, so clippy may block until it finishes. Run it AFTER
-step 5 if it did not complete within the foreground cap, and report `TIMEOUT` with the reason
-rather than `pass`; never report a clippy you did not see finish.
+### 5. Read the touched receipt — when the ladder reached it
 
-### 5. Read the touched receipt — ONLY after the process exits
-
-Wait until the process is gone (`tasklist | grep -i cargo` / `pgrep cargo` is empty and
-`verify-touched.out` ends with a `Summary [` / `test result:` / `touched:` line). Then read
+Wait until the process is gone (`tasklist | grep -i cargo` is empty and `verify-touched.out` ends
+with the ladder's `keel verify:` summary line). When `stopped_at` is `none` or `touched`, read
 `.keel/metrics/touched-receipt.toml` and check, in this order, each as its own receipt line:
 
 | Check | Honest when | Why (issue468 / D0387) |
@@ -142,12 +152,12 @@ Plain text, this shape, in the scratchpad path the dispatch gives (never under t
 
 ```
 VERIFIER RECEIPT  <date>  head=<sha>  tree=<clean|N dirty paths>
-KEEL gate validate . -> <line>; exit=<n>
+LADDER: KEEL verify . --probe ... -> outcome=<pass|fail> stopped_at=<none|rung> seconds=<n> at=<epoch> (<at>launch: ok|STALE)
+  validate=<verdict> guard=<verdict> clippy=<verdict> probe=<verdict> touched=<verdict>   (from its [[rung]] rows)
+  first red line: "<verbatim from verify-touched.out>" | none
 KEEL gate check-engine . -> <line>; exit=<n>
-KEEL gate guard --no-receipt . -> PASS <n>; FAIL <m> [<guard>: <line>]; exit=<n>
 KEEL sync-claude --check . -> <line>; exit=<n>
-cargo clippy ... -> <pass|TIMEOUT|fail: first error>; exit=<n>
-PROBE PAIR: <check> -> positive <case>: <outcome>; negative <case>: <outcome>
+PROBE PAIR: <check> -> positive <case>: <outcome>; negative <case>: <outcome> | not named by the dispatch
 TOUCHED RECEIPT: outcome=<..> passed=<n> failed=<n> seconds=<n> at=<epoch> launch=<epoch> (<at>launch: ok|STALE)
   stems=<[...]> changed=<[...]> (MATCH|MISMATCH) lib=<bool> head=<sha> log=<path>
   test result line: "<verbatim from verify-touched.out>"
@@ -160,6 +170,8 @@ The recorder reads THIS file and nothing else; it never reads the primary's desc
 ## Anti-patterns — each one has happened
 
 1. **Foreground touched run** (issue469): killed at the cap, eleven minutes lost. Detach.
+   **Rungs run by hand in an order of your own** (sprint705, D0476): a lint found after the
+   twenty-minute run cost a second one. The ladder is one command; it owns the order.
 2. **Reading the receipt while `outcome = "running"`** or with `at` before the launch (issue468,
    sprint 661): the previous run's pass over a different change set.
 3. **A filter the primary chose instead of the touched set** (issue459/D0432): six tests passed
@@ -175,6 +187,6 @@ The recorder reads THIS file and nothing else; it never reads the primary's desc
 ## Questions This Skill Answers
 
 - "Verify this sprint" / "run the verifier" / "is the tree green?"
-- "Run the touched set" / "what will the land run?"
+- "Run the touched set" / "what will the land run?" / "run the ladder" / "keel verify"
 - "Is the receipt honest?" (outcome / at / stems / lib)
 - "What evidence backs this gate?" — the receipt file, line by line
