@@ -1390,4 +1390,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcCeremonyOrderCountsAFailedGateAsRecorded to issue544;
+
+    part issue545 : Issue {
+        :>> id = "d0180f0b-3661-4f01-be81-c8779f8a1861";
+        :>> title = "a guard's constraint-def identity is checked by a unit test at land only: custom-harness-routed passed every gate and failed keel land 889 s in";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Met 2026-09-14 landing commit 6281526 (sprint 709): guard custom-harness-routed was registered in GUARD_NAMES, the dispatch, guards.md and control-map.sysml, and keel gate validate / check-engine / guard --no-receipt were ALL PASS, yet keel land failed one test of 821 after 889 seconds - guards::guard_catalogue_tests::every_guard_has_a_constraint_def_identity: guards with no constraint-def identity (D0195 clause 1): [custom-harness-routed]. The fourth registration home, .engine/rules/guard-constraints.sysml, is policed by a unit test alone, so a gate-time check the other three homes have (doc-guard-count for guards.md, control-map-reconciled for control-map.sysml, the compiler for GUARD_NAMES vs the dispatch) does not exist for it, and the miss surfaces only at land, at the cost of the whole touched cycle and an unpushed commit. Same shape as issue370 (twelve guards with no identity, for weeks): the test was the fix for the instance; the class is a registration home a gate does not read. Fix: the identity check becomes a guard clause (doc-guard-count already counts the catalogue against keel version; the constraint file is the same kind of home).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGuardIdentityIsCheckedAtTheGate to issue545;
 }
