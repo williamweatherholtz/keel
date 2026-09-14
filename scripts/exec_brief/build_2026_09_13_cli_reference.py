@@ -12,7 +12,14 @@ always and in prose when the phrase carries a flag or a root; the eight retired 
 guard is applied on this tree; the Decision ratifies it. The builder refuses unless the guard is in GUARD_NAMES and the
 dispatch, shares tool-reference's walk, passes live with zero violators, the skill's gate lines run here with exit 0, and
 the sprint record states the before-failure and the overcount.
-One tab per ask (D0404); the seven carried tabs are the twenty-third builder's, every count a facts.py fact (sections 21-25),
+D0472 joined before the page was published: the builder's own shared-walk check refused the page at aba396e, because
+tool_reference carried its own copy of the walk and only cli_reference called living_doc_files - the sentence D0471's
+consequences and sprint 703's Story DoD both record was false of the source. D0472 (process-change, #DependsOn d0471) makes
+the two guards take their files from one function; issue533 records that a DELIVERED claim was passed unread, with a
+resolver that has the VERIFIER read such claims back before the RECORDER writes. The builder refuses unless tool_reference's
+first statement is the shared call, the walk is defined once with two callers, tool-reference passes live, the Decision
+carries MEASURED: and the edge, and the Issue and resolver are recorded with the resolver's DoD naming it.
+One tab per ask (D0404); the seven carried tabs are the twenty-third builder's, every count a facts.py fact (sections 21-26),
 never typed.
 
 Usage: python scripts/exec_brief/build_2026_09_13_cli_reference.py <facts.json> <previous.html> <out.html>
@@ -55,18 +62,18 @@ def n(x):
     return f"{int(x):,}" if float(x) == int(x) else f"{x:,}"
 
 
-# ---- the queue: seven ratifications and one fork -------------------------------------------------------
-QUEUE = ["d0461", "d0465", "d0466", "d0467", "d0468", "d0469", "d0470", "d0471"]
+# ---- the queue: eight ratifications and one fork -------------------------------------------------------
+QUEUE = ["d0461", "d0465", "d0466", "d0467", "d0468", "d0469", "d0470", "d0471", "d0472"]
 pending = v("pendingAcceptances")
 members = v("pendingMembers")
 AQ = v("authorityQueuePending")
 if len(members) != pending or v("pendingForks") != 1:
     sys.exit(f"refusing: facts disagree - {len(members)} members, {pending} pending, {v('pendingForks')} forks")
 if [p["slug"] for p in members] != QUEUE:
-    sys.exit(f"refusing: this page is written for the retro name, the keystone, the sample fork, the Issue-first retro, the host-cost thresholds, the measured-cost token, the reject verdict and the doc-verb guard; the queue is {[p['slug'] for p in members]}")
+    sys.exit(f"refusing: this page is written for the retro name, the keystone, the sample fork, the Issue-first retro, the host-cost thresholds, the measured-cost token, the reject verdict, the doc-verb guard and the shared walk; the queue is {[p['slug'] for p in members]}")
 if AQ["decisions"] != QUEUE:
     sys.exit(f"refusing: the authority-queue lens reads {AQ['decisions']}; the file-derived set is {QUEUE}")
-if [p["fork"] for p in members] != [False, False, True, False, False, False, False, False]:
+if [p["fork"] for p in members] != [False, False, True, False, False, False, False, False, False]:
     sys.exit("refusing: the fork must be the third member and the only one")
 
 tests, failing = v("suiteTests"), v("suiteFailed")
@@ -322,7 +329,7 @@ if not (CRI["retroIssue531"] and CRI["retroIssue531Resolver"]):
 if not (CRS["exists"] and CRS["chartersD0471"] and CRS["dodStatesBeforeFailure"] and CRS["statesOvercount"] and CRS["namesIssue531"] and CRS["results"] >= 7):
     sys.exit(f"refusing: the page says the sprint is recorded, chartered by this item, stating the before-failure and the overcount; the record reads {CRS}")
 fig17 = logic_lanes(
-    "The verifier followed the skill verbatim; three gate lines named verbs the binary had folded away",
+    "Three gate lines in the skill named verbs the binary had folded away",
     ("before", [
         ("KEEL validate . in the skill", "exit 2, a usage dump", "bad", ""),
         ("the receipt", "no gate lines; DISCREPANCIES: NONE", "bad", ""),
@@ -333,13 +340,56 @@ fig17 = logic_lanes(
     ], ["", ""]),
 )
 fig18 = downstream(
-    "One surface, held to the dispatch",
-    ("a doc line a delegate follows is a control's procedure", f"{n(CRL['scanned'])} command references today", ""),
+    "One surface is held to the dispatch",
+    ("a doc line a delegate follows is a procedure", f"{n(CRL['scanned'])} command references today", ""),
     [
-        ("in code", "a fenced block or a backtick span: every keel token", "all", "ok"),
-        ("in prose", "only a phrase with a flag or a root argument", "flag or .", "ok"),
+        ("in code", "every keel token in a code span", "all", "ok"),
+        ("in prose", "only a phrase with a flag or a root", "flag or .", "ok"),
         ("after a router", "a declared sub-verb of that router", "gate, record, audit, process, library, github, hook", "ok"),
         ("after show", "a lens the binary lists", "lens", "ok"),
+    ],
+)
+
+# ---- D0472: the two doc guards read one surface ---------------------------------------------------------
+SWD = v("sharedWalkDecision")
+SWS = v("sharedWalkSource")
+TRL = v("toolReferenceLive")
+SWI = v("sharedWalkIssue")
+if not (SWD["status"] == "proposed" and SWD["marker"] == "#ProspectiveChange" and SWD["acceptance"] is None and SWD["notAFork"]):
+    sys.exit(f"refusing: the page says a proposed, process-marked, unaccepted, non-fork Decision; the record reads {SWD['status']}, {SWD['marker']}, {SWD['acceptance']}, fork={not SWD['notAFork']}")
+if not (SWD["measuredToken"] and SWD["dependsOnD0471"] and SWD["namesAba396e"] and SWD["namesIssue533"] and SWD["namesBuilderRefusal"]):
+    sys.exit(f"refusing: the page says the Decision carries MEASURED:, layers on D0471, names aba396e, issue533 and the builder's refusal; the record reads {SWD}")
+if SWD["pathWordsInDecision"]:
+    sys.exit(f"refusing: the page says the decision text names no D0469 path word; it names {SWD['pathWordsInDecision']}")
+if not (SWS["toolReferenceCallsSharedWalk"] and not SWS["toolReferenceHasInlineWalk"] and SWS["livingDocFilesDefinitions"] == 1 and SWS["callers"] == 2):
+    sys.exit(f"refusing: the page says tool_reference opens with the shared call, carries no walk of its own, and the walk is defined once with two callers; the source reads {SWS}")
+if not (CRG["sharedWalk"]["toolReference"] and CRG["sharedWalk"]["cliReference"]):
+    sys.exit("refusing: the page says both doc guards walk one surface; the source does not share living_doc_files")
+if not (TRL["verdict"] == "PASS" and TRL["violations"] == 0 and TRL["scanned"] == 3):
+    sys.exit(f"refusing: the page says tool-reference passes live over the same three files as before the edit; it reads {TRL['line']}")
+if not (SWI["exists"] and SWI["severity"] == "Medium" and SWI["resolver"] == "dcDeliveredClaimsAreReadBackFromSource" and SWI["resolverDodNamesIssue"] and SWI["namesBuilder"] and SWI["namesD0472"]):
+    sys.exit(f"refusing: the page says a Medium Issue naming the builder and D0472, with a resolver whose DoD names it; the record reads {SWI}")
+if SWI["resolverPosition"] is None or SWI["resolverPosition"] > SWI["nextWorkItems"]:
+    sys.exit(f"refusing: the page places the resolver in NextWork; it reads {SWI['resolverPosition']} of {SWI['nextWorkItems']}")
+fig19 = logic_lanes(
+    "Two copies of one scope were recorded as one",
+    ("before", [
+        ("tool_reference", "its own walk of the same six directories", "bad", ""),
+        ("cli_reference", "the shared call", "ok", ""),
+    ], ["", ""]),
+    ("changed", [
+        (f"tool_reference, line {n(SWS['toolReferenceLine'])}", SWS["toolReferenceFirstStatement"], "ok", ""),
+        (f"cli_reference, line {n(SWS['cliReferenceLine'])}", "let mut files = living_doc_files(root);", "ok", ""),
+    ], ["", ""]),
+)
+fig20 = downstream(
+    "What the shared call lands on",
+    (f"living_doc_files, defined once at line {n(SWS['livingDocFilesLine'])}", f"{SWS['callers']} callers", ""),
+    [
+        ("tool-reference", "every tool path a doc names exists", f"{n(TRL['scanned'])} files", "ok" if TRL["verdict"] == "PASS" else "bad"),
+        ("cli-reference", "every keel verb a doc names is dispatched", f"{n(CRL['scanned'])} references", "ok" if CRL["verdict"] == "PASS" else "bad"),
+        ("a directory added", "both guards read it, one edit", "same commit", "ok"),
+        ("the finding", f"a claim passed unread; resolver at {n(SWI['resolverPosition'])} of {n(SWI['nextWorkItems'])}", SWI["severity"], "warn"),
     ],
 )
 
@@ -502,7 +552,8 @@ ASKS = [
     ("d0468", "ask-host-cost", "Host costs", "hostcost"),
     ("d0469", "ask-measured", "Measured cost", "measured"),
     ("d0470", "ask-reject", "Reject verdict", "reject"),
-    ("d0471", "ask-cliref", "Doc verbs", "cliref"),
+    ("d0471", "ask-cliref", "Verbs", "cliref"),
+    ("d0472", "ask-sharedwalk", "Walk", "sharedwalk"),
 ]
 NOTE_SHORT = "I usually want issues coming out of retros, not decisions"
 if NOTE_SHORT not in NOTE_CORE:
@@ -603,17 +654,29 @@ panel_bodies = {
 <p><strong>True in the model:</strong> {RC['rejected']} rejected Decisions, each judged by {', '.join(REJ_JUDGES)}; the rule reads them with {AR['rejection']['live']['violations']} violators; the write refuses before it reads; both lists read {', '.join(VERDICTS)}. <strong>Mine:</strong> a promised symmetry the write lacks is a gap you cannot see from the command line; the list test runs one direction only, tracked. <strong>What decides it:</strong> nothing observable - the layers mirror accept's, which you accepted; a reject says an AI may reject in your name. <strong>Wrong if</strong> you want the AI to withdraw its own proposed Decisions by rejection, not supersession.</p>
 <div class="opts" data-records="d0470"><label><input type="radio" name="ask-reject" value="Accept: a rejection is human-judged at every layer an acceptance is - the write refuses an AI-kind judge under the lock, reject is in HUMAN_ONLY_WRITE_COMMANDS and HUMAN_AUTHORITY_COMMANDS, and rejectionAuthenticityRule blocks over rejected Decisions (recommended)">Accept (recommended)</label><label><input type="radio" name="ask-reject" value="Hold: the reject-verdict Decision stays proposed; the three layers stand on the tree">Hold</label><label><input type="radio" name="ask-reject" value="Reject: the refusal, the list members and the rule are reverted; an AI actor may record a rejection; recorded rejected">Reject</label></div>""",
     "cliref": f"""<h2>A living doc names only verbs this binary runs</h2>
-<p>The item: <q>every command reference on the living doc surface names a verb this binary dispatches, and after a router or show a declared sub-verb or lens.</q> In code every keel token is one; in prose only a phrase with a flag or a root, because keel is also the project's name.</p>
-<p><strong>Why yours:</strong> a new hard guard is an enforcement change; applied, held for your word. <strong>Accepting binds:</strong> a doc that names a retired command fails the gate until it reads the spelling the message names; Decisions and history stay out of scope.</p>
+<p>The item: <q>every command reference on the living doc surface names a verb this binary dispatches, and after a router or show a declared sub-verb or lens.</q> Code spans count always; prose only with a flag or a root, since keel is also the project's name.</p>
+<p><strong>Why yours:</strong> a new hard guard is an enforcement change, held for your word. <strong>Accepting binds:</strong> a doc naming a retired command fails until it reads the current spelling; history stays out of scope.</p>
 {fig17}
 {fig18}
 {courses([
     ("Accept", "the record matches the tree", "eight lines corrected; the guard on every edit"),
     ("Hold", "nothing", "the guard runs unratified"),
-    ("Reject", "one revert, quoting you", "a skill may again name a verb that exits 2"),
+    ("Reject", "one revert, quoting you", "a skill may name a verb exiting 2"),
 ])}
-<p><strong>True in the model:</strong> {n(CRL['scanned'])} command references read, {CRL['violations']} violators; before the corrections the guard named all eight retired lines, and three in its own catalogue row that quoted them; the skill's gate lines exit 0 here; {CRG['guardCount']} guards. <strong>Mine:</strong> the code-or-flag rule is fitted to this surface; its one false positive - a sentence ending <q>keel itself.</q> - was found on the real tree, not by the pair, and is a test line now; the Issue counted ten, the guard eight, and a lens to make the next count re-runnable is tracked. <strong>What decides it:</strong> whether a doc may quote a retired command inside a code span for history; today it may not. <strong>Wrong if</strong> you want the docs held looser than the dispatch - a mention tolerated, a usage dump not.</p>
+<p><strong>True in the model:</strong> {n(CRL['scanned'])} command references read, {CRL['violations']} violators; before the corrections the guard named all eight retired lines; the skill's gate lines exit 0 here. <strong>Mine:</strong> the code-or-flag rule is fitted to this surface, its false positive is a test line now. <strong>What decides it:</strong> whether a doc may quote a retired command in a code span for history; today it may not. <strong>Wrong if</strong> you want docs held looser than the dispatch.</p>
 <div class="opts" data-records="d0471"><label><input type="radio" name="ask-cliref" value="Accept: every command reference on the living doc surface names a verb this binary dispatches, and after a router or show a declared sub-verb or lens; guard cli-reference holds it as a hard forward guard (recommended)">Accept (recommended)</label><label><input type="radio" name="ask-cliref" value="Hold: the doc-verb Decision stays proposed; the guard runs on the tree">Hold</label><label><input type="radio" name="ask-cliref" value="Reject: guard cli-reference and its rows are reverted; the eight corrected lines stay; recorded rejected">Reject</label></div>""",
+    "sharedwalk": f"""<h2>The two doc guards read one living surface</h2>
+<p>The item: <q>{escape(SWD['decision'])}</q></p>
+<p><strong>Why yours:</strong> guard source is the enforcement surface, held for your word. <strong>Accepting binds:</strong> a guard meaning the same surface as another takes its list from the one function. <strong>How it surfaced:</strong> this page's builder refused at aba396e - <q>the source does not share living_doc_files</q>; the recorded sentence was false when judged.</p>
+{fig19}
+{fig20}
+{courses([
+    ("Accept", "the record matches the tree", "one walk; the recorded sentence true"),
+    ("Hold", "nothing", "the edit stands"),
+    ("Reject", "one revert, quoting you", "two walks; the recorded sentence false again"),
+])}
+<p><strong>True in the model:</strong> tool_reference opens with <code>{escape(SWS['toolReferenceFirstStatement'])}</code>; the walk is defined once, {SWS['callers']} callers; tool-reference passes over {n(TRL['scanned'])} files as before; the finding is a {SWI['severity']} Issue whose resolver has the verifier read such claims back first. <strong>Mine:</strong> that the copies would part is a forecast; that no test could tell them apart is the finding. <strong>What decides it:</strong> whether a guard's scope is part of its meaning; if two matching lists are one to you, hold. <strong>Wrong if</strong> each guard should own its scope.</p>
+<div class="opts" data-records="d0472"><label><input type="radio" name="ask-sharedwalk" value="Accept: the living doc surface a guard reads exists once in source, living_doc_files, and both tool-reference and cli-reference take their file list from it (recommended)">Accept (recommended)</label><label><input type="radio" name="ask-sharedwalk" value="Hold: the shared-walk Decision stays proposed; the edit stands on the tree">Hold</label><label><input type="radio" name="ask-sharedwalk" value="Reject: tool_reference regains its own walk; recorded rejected">Reject</label></div>""",
 }
 
 
@@ -623,7 +686,7 @@ def frame(panels_html, tabs_html, title, sub):
 <h1 data-digest="title">{title}</h1>
 <div class="topbar"><p class="sub" data-digest="subtitle">{sub}</p><button class="copy" data-copy type="button" aria-label="Copy this brief for AI">&#8681; Copy for AI</button></div>
 
-<div class="ask"><p class="verdict"><strong>Accept the seven controls</strong> and <strong>read the recall rule at {N100} cases</strong> so {MID} stands. <strong>Wrong if</strong> a one-position median move at {N50} cases is signal to you.</p></div>
+<div class="ask"><p class="verdict"><strong>Accept the eight controls</strong> and <strong>read the recall rule at {N100} cases</strong> so {MID} stands. <strong>Wrong if</strong> a one-position median move at {N50} cases is signal to you.</p></div>
 <div class="chips"><span class="chip"><b>Waiting on you</b> {pending}</span><span class="chip"><b>Forks</b> 1</span><span class="chip"><b>Hook p90</b> {n(P90)} ms</span></div>
 
 <div class="tabs" role="tablist" aria-label="The asks">{tabs_html}</div>
@@ -634,8 +697,8 @@ def frame(panels_html, tabs_html, title, sub):
 </div>
 """
 
-TITLE = f"Accept seven controls, and read the recall rule at {N100} cases so its setting stands"
-SUB = "Seven ratifications and one fork"
+TITLE = f"Accept eight controls, and read the recall rule at {N100} cases so its setting stands"
+SUB = "Eight ratifications, one fork"
 
 
 def render(panel_bodies):

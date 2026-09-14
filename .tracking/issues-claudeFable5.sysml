@@ -1258,4 +1258,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcRecorderReportRefusesNonRecordWrites to issue532;
+
+    part issue533 : Issue {
+        :>> id = "4394abf4-96f8-4568-ba75-6a05bf2dfddc";
+        :>> title = "A DELIVERED claim about source structure was recorded as a pass that nothing had read back";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 703's Story DoD (storyLivingDocsNameOnlyDeclaredCliVerbsDoD) says DELIVERED: cli_reference beside tool_reference, sharing living_doc_files, and D0471's consequences say the same; the RECORDER wrote a proposed pass on it at 32d9424 from a VERIFIER receipt that had read every gate and test green. The sentence was false of the source: tool_reference (keel-cli/src/guards.rs:4336 at aba396e) carried its own copy of the walk and only cli_reference called living_doc_files. No gate, test or receipt line had read the claim back from the tree - the verifier's brief has it run the gate set and the D0388 pair, not read the DoD's DELIVERED text - and the two walks agreed at that commit, so nothing computed could disagree with the sentence. It was caught by the twenty-fourth brief builder (scripts/exec_brief/build_2026_09_13_cli_reference.py), which refused the page because facts.py's sharedWalk sensor found no living_doc_files call inside tool_reference. A control that fires only when a brief happens to repeat the claim is not a control over the claim; the pass stands recorded on a sentence that was not true when it was judged. Corrected at the root by D0472 (tool_reference now takes its files from living_doc_files); this Issue is the finding that a DELIVERED claim naming a source relation can be recorded as a pass unread.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcDeliveredClaimsAreReadBackFromSource to issue533;
 }

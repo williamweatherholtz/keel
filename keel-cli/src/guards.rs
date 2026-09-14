@@ -4334,27 +4334,7 @@ fn non_v4_ids_in(file: &str, text: &str) -> Vec<(String, String)> {
 /// immutability applies to what it does not.
 #[must_use]
 pub fn tool_reference(root: &Path) -> GuardReport {
-    fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
-        let Ok(rd) = std::fs::read_dir(dir) else { return };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                walk(&p, out);
-            } else if p.extension().is_some_and(|x| {
-                x.eq_ignore_ascii_case("md") || x.eq_ignore_ascii_case("sysml") || x.eq_ignore_ascii_case("toml")
-            }) {
-                out.push(p);
-            }
-        }
-    }
-    let mut files = Vec::new();
-    for base in ["processes", "skills", "docs", "contracts", "workflows", "rules"] {
-        walk(&root.join(".engine").join(base), &mut files);
-    }
-    let claude = root.join("CLAUDE.md");
-    if claude.exists() {
-        files.push(claude);
-    }
+    let files = living_doc_files(root);
     let needle = ".engine/tools/";
     let mut scanned = 0usize;
     let mut violations = Vec::new();

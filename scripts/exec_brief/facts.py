@@ -2417,6 +2417,102 @@ if _s703 is not None:
 else:
     fact("cliReferenceSprint", {"exists": False}, "the delivery record", "the file " + _s703p + " does not exist")
 
+# ================================================================ 26. the two doc guards read one surface (D0472 / issue533)
+# --- D0472: the Decision's own fields, read from its file the way the guard reads them
+_d0472 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0472-"):
+        _d0472 = read(os.path.join(DEC_DIR, _fn)) or ""
+_dec2 = _guard_field(_d0472, "d0472", "decision")
+_rat2 = _guard_field(_d0472, "d0472", "rationale")
+_con2 = _guard_field(_d0472, "d0472", "consequences")
+_ctx2 = _guard_field(_d0472, "d0472", "context")
+fact("sharedWalkDecision", {
+    "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0472) or [None, None])[1],
+    "createdAt": _guard_field(_d0472, "d0472", "createdAt") or None,
+    "marker": "#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+d0472\s*:", _d0472, re.M) else None,
+    "acceptance": _acceptance_kind(_d0472, "d0472"),
+    "notAFork": "NOT A FORK" in (_dec2 + _rat2),
+    "measuredToken": "MEASURED:" in _rat2,
+    "dependsOnD0471": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0472\s+to\s+d0471\s*;", _d0472)),
+    "decision": _dec2, "rationale": _rat2, "consequences": _con2, "context": _ctx2,
+    "namesAba396e": "aba396e" in _ctx2,
+    "namesIssue533": "issue533" in _con2,
+    "namesBuilderRefusal": "the source does not share living_doc_files" in _ctx2,
+    "pathWordsInDecision": sorted({w for w in re.findall(r"[a-z]+", _dec2.lower()) if w in ("land", "push", "refuse", "gate")}),
+} if _d0472 else None, "the Decision's fields as the guard reads them",
+     "regex over .engine/decisions/0472-*.sysml: status from `DecisionStatus::x`; marker = a line `#ProspectiveChange part d0472 :`; "
+     "acceptance mirrors guards.rs acceptance_kind (None = no passing AcceptR segment); the four fields read as guards.rs "
+     "unmeasured_path_decisions reads a field; notAFork / MEASURED: by literal search; dependsOnD0471 = a `#DependsOn dependency "
+     "from d0472 to d0471;` line; namesAba396e / namesIssue533 / the builder's refusal sentence by literal search in the field "
+     "named; pathWordsInDecision = the D0469 PATH_WORDS present as whole lower-case words in the decision text.")
+
+# --- D0472: the relation in source - tool_reference's first statement, one definition of the walk, and who calls it
+_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_grl = _gr.splitlines()
+def _lineno(pattern):
+    for _i, _l in enumerate(_grl, 1):
+        if re.search(pattern, _l):
+            return _i
+    return None
+_tr_line = _lineno(r"^pub fn tool_reference\(root: &Path\) -> GuardReport \{")
+_tr_body = ""
+if _tr_line:
+    for _l in _grl[_tr_line:]:
+        if re.match(r"^(pub )?fn ", _l):
+            break
+        _tr_body += _l + "\n"
+fact("sharedWalkSource", {
+    "toolReferenceLine": _tr_line,
+    "cliReferenceLine": _lineno(r"^pub fn cli_reference\(root: &Path\) -> GuardReport \{"),
+    "livingDocFilesLine": _lineno(r"^fn living_doc_files\(root: &Path\)"),
+    "livingDocFilesDefinitions": len(re.findall(r"^fn living_doc_files\(", _gr, re.M)),
+    "callers": len(re.findall(r"living_doc_files\(root\)", _gr)),
+    "toolReferenceFirstStatement": (_grl[_tr_line].strip() if _tr_line and _tr_line < len(_grl) else None),
+    "toolReferenceCallsSharedWalk": bool(_tr_line) and _grl[_tr_line].strip() == "let files = living_doc_files(root);",
+    "toolReferenceHasInlineWalk": "fn walk(" in _tr_body,
+    "toolReferenceBodyLines": _tr_body.count("\n"),
+} if _gr else None, "the guard source",
+     "keel-cli/src/guards.rs read as lines: the 1-based line of `pub fn tool_reference(...) {`, `pub fn cli_reference(...) {` and "
+     "`fn living_doc_files(...)`; definitions = lines beginning `fn living_doc_files(`; callers = occurrences of "
+     "`living_doc_files(root)` (two = both guards, since the definition's own line does not carry `(root)` followed by `)`); "
+     "toolReferenceFirstStatement = the stripped line after the fn header, compared to `let files = living_doc_files(root);`; "
+     "toolReferenceHasInlineWalk = `fn walk(` anywhere in the body up to the next top-level `fn`.")
+
+# --- D0472: the guard whose walk moved, run live
+ok, out = run([KEEL, "gate", "guard", "tool-reference", "--no-receipt", "."], timeout=300)
+_last = (out or "").strip().splitlines()[-1] if (out or "").strip() else ""
+_m = re.search(r"\[guard:tool-reference\] (PASS|FAIL) \W+ (\d+) scanned, (\d+) warning\(s\), (\d+) violation\(s\)", _last)
+fact("toolReferenceLive", {
+    "verdict": _m.group(1) if _m else None, "scanned": int(_m.group(2)) if _m else None,
+    "violations": int(_m.group(4)) if _m else None, "line": _last,
+} if _m else None, "the guard on this tree",
+     "`keel gate guard tool-reference --no-receipt .`: the last line `[guard:tool-reference] PASS|FAIL - N scanned, N warning(s), "
+     "N violation(s)` parsed; scanned counts the living-doc files that carry a `.engine/tools/` path.")
+
+# --- issue533: the finding, and where its resolver sits
+_i533 = re.search(r"part issue533 : Issue\s*\{(.*?)\n\s*\}", _iss or "", re.S)
+_i533b = _i533.group(1) if _i533 else ""
+_bl = read(os.path.join(REPO, ".tracking", "backlog.sysml")) or ""
+_nw = re.search(r"action def NextWork \{(.*?)\n    \}", _bl, re.S)
+_nw_actions = re.findall(r"^\s{8}action (\w+);", _nw.group(1), re.M) if _nw else []
+fact("sharedWalkIssue", {
+    "exists": bool(_i533),
+    "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _i533b) or [None, None])[1],
+    "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _i533b) or [None, None])[1],
+    "resolver": (re.search(r"#Resolves dependency from (\w+) to issue533;", _iss or "") or [None, None])[1],
+    "title": (re.search(r'title\s*=\s*"([^"]+)"', _i533b) or [None, None])[1],
+    "namesBuilder": "build_2026_09_13_cli_reference.py" in _i533b,
+    "namesD0472": "D0472" in _i533b,
+    "resolverPosition": (_nw_actions.index("dcDeliveredClaimsAreReadBackFromSource") + 1) if "dcDeliveredClaimsAreReadBackFromSource" in _nw_actions else None,
+    "nextWorkItems": len(_nw_actions),
+    "resolverDodNamesIssue": bool(re.search(r"dcDeliveredClaimsAreReadBackFromSourceDoD[^\n]*Resolves issue533\.", _bl)),
+} if _iss else None, "the finding Issue and its resolver",
+     ".tracking/issues-claudeFable5.sysml: the `part issue533 : Issue {` body's severity / createdAt / title, the builder's file "
+     "name and `D0472` by literal search, and the `#Resolves dependency from <task> to issue533;` edge; .tracking/backlog.sysml: "
+     "the resolver's 1-based position among `action x;` lines inside `action def NextWork` (declaration order IS priority, D0052) "
+     "and whether its DoD line carries `Resolves issue533.` (guard issues, D0304).")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
