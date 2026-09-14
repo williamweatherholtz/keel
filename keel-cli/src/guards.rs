@@ -3655,8 +3655,8 @@ fn total_guard_count_claim(line: &str) -> Option<String> {
 /// flagged AS incomplete is honest state, not a failure. NOTE: critique INDEPENDENCE stays enforced
 /// (critic-independence — honesty); only critique COVERAGE demoted. The requirement-rootedness hard
 /// guard (D0098 honesty: a chartered capability with no driving Need) joins next (requirementRootednessGuard).
-pub const GUARD_NAMES: [&str; 73] =
-    ["evidence-cited", "gating-workflow-history", "process-applicability", "doc-guard-count", "actors", "acceptance-events", "sprint-coverage", "ceremony", "charter", "process-change", "issues", "viewpoint-renderer", "manifest-coverage", "critic-independence", "process-skill", "requirement-rootedness", "decision-rationale", "attestation-substance", "marker-vocabulary", "duplicate-identity", "decision-requirement-link", "verification-trace", "priority-inversion", "retro-backlog", "confirmation-authenticity", "engine-lint", "doc-sync", "hook-config-integrity", "activation-manifest", "sequence-multiplicity", "parser-coverage", "base-first-justification", "edge-endpoints", "ownership", "attestation-authority", "type-collision", "attribute-vocabulary", "resolver-kind", "stale-gate-prose", "impossible-evidence-date", "identity-present", "identity-well-formed", "tool-reference", "scaffold-placeholder", "claude-surface-drift", "decision-scaffolding", "release-recorded", "enrollment-binding", "control-event-coverage", "question-coverage", "claim-ancestry", "judgment-request-quality", "manifest-key-portability", "control-map-reconciled", "sprint-closure", "untrusted-routing", "control-defect-registry", "cli-surface-declared", "decision-amends-process", "unit-extras-present", "acceptance-binds-to-text", "stpa-currency", "untrusted-taint", "gate-environment-parity", "instruments-declared", "release-checksums-published", "wrapper-pin-checksummed", "plan-covers-step", "id-is-a-uuid", "step-check-resolves", "consent-scope", "working-tree-eol", "direction-cited"];
+pub const GUARD_NAMES: [&str; 74] =
+    ["evidence-cited", "gating-workflow-history", "process-applicability", "doc-guard-count", "actors", "acceptance-events", "sprint-coverage", "ceremony", "charter", "process-change", "issues", "viewpoint-renderer", "manifest-coverage", "critic-independence", "process-skill", "requirement-rootedness", "decision-rationale", "attestation-substance", "marker-vocabulary", "duplicate-identity", "decision-requirement-link", "verification-trace", "priority-inversion", "retro-backlog", "confirmation-authenticity", "engine-lint", "doc-sync", "hook-config-integrity", "activation-manifest", "sequence-multiplicity", "parser-coverage", "base-first-justification", "edge-endpoints", "ownership", "attestation-authority", "type-collision", "attribute-vocabulary", "resolver-kind", "stale-gate-prose", "impossible-evidence-date", "identity-present", "identity-well-formed", "tool-reference", "scaffold-placeholder", "claude-surface-drift", "decision-scaffolding", "release-recorded", "enrollment-binding", "control-event-coverage", "question-coverage", "claim-ancestry", "judgment-request-quality", "manifest-key-portability", "control-map-reconciled", "sprint-closure", "untrusted-routing", "control-defect-registry", "cli-surface-declared", "decision-amends-process", "unit-extras-present", "acceptance-binds-to-text", "stpa-currency", "untrusted-taint", "gate-environment-parity", "instruments-declared", "release-checksums-published", "wrapper-pin-checksummed", "plan-covers-step", "id-is-a-uuid", "step-check-resolves", "consent-scope", "working-tree-eol", "direction-cited", "cli-reference"];
 
 
 // ── control-map-reconciled guard (issue304, chartered by D0255) ──────────────────────────────────
@@ -4389,6 +4389,323 @@ pub fn tool_reference(root: &Path) -> GuardReport {
         }
     }
     GuardReport { name: "tool-reference", scanned, warnings: Vec::new(), violations }
+}
+
+/// Guard 74: every `keel <verb>` the LIVING doc surface names is a verb this binary dispatches (issue528/D0471).
+///
+/// Sprint 701's VERIFIER followed the test-verify skill verbatim; its three gate lines said `KEEL
+/// validate .`, `KEEL check-engine .`, `KEEL guard --no-receipt .` — top-level verbs D0452 folded under
+/// `gate` — so each exited 2 with a usage dump, and the receipt came back with no gate lines and
+/// `DISCREPANCIES: NONE`: a control (D0425) whose procedure had silently stopped naming real commands.
+/// `cli-surface-declared` holds facts = help = dispatch; nothing held the docs to any of the three.
+///
+/// WHAT IS A COMMAND REFERENCE. `keel`, `KEEL`, `keel.exe` or a copy (`keel-serve.exe`), then a verb.
+/// Inside code — a fenced block or a backtick span — every such token is one. In prose (a `.sysml`
+/// string, a `.toml` comment, a sentence) `keel` is also the project's name ("keel is a system", "the
+/// keel write API"), so a prose token counts only when it carries a flag or a root argument (`Run keel
+/// gate --fast .`, `keel suite --touched`). A prose mention of a bare verb is skipped, not judged.
+///
+/// WHAT IS CHECKED. The verb is in `cli_surface::COMMAND_NAMES`. When the verb is a router that declares
+/// sub-verbs (`gate`, `record`, `audit`, `process`, `library`, `github`, `hook`) and the next token is
+/// verb-shaped, it is one of that router's declared sub-verbs (`cli_facts`, D0451/D0454); after `show`
+/// it is a lens. A flag, a placeholder or a path as the next token is not checked. The message names
+/// the spelling that exists when the retired verb survives as a sub-verb or a lens.
+///
+/// SCOPE IS THE LIVING SURFACE ONLY, as tool-reference's: processes, skills, docs, contracts,
+/// workflows, rules, CLAUDE.md, and the output style (its rules bind every turn). Decisions and
+/// `.tracking` are history and may truthfully name a verb that no longer exists.
+#[must_use]
+pub fn cli_reference(root: &Path) -> GuardReport {
+    let mut files = living_doc_files(root);
+    let styles = root.join(".claude").join("output-styles");
+    if styles.is_dir() {
+        if let Ok(rd) = std::fs::read_dir(&styles) {
+            files.extend(rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("md"))));
+        }
+    }
+    let mut scanned = 0usize;
+    let mut violations = Vec::new();
+    for path in &files {
+        let Ok(text) = crate::corpus::read_to_string(path) else { continue };
+        let rel = relpath(root, path);
+        let markdown = path.extension().is_some_and(|x| x.eq_ignore_ascii_case("md"));
+        for (n, r) in cli_references(&text, markdown) {
+            scanned += 1;
+            if let Some(what) = cli_reference_defect(&r) {
+                violations.push(format!("{rel}:{n}: names `keel {}`{what} (issue528)", r.phrase()));
+            }
+        }
+    }
+    GuardReport { name: "cli-reference", scanned, warnings: Vec::new(), violations }
+}
+
+/// The `.md` / `.sysml` / `.toml` files of the living doc surface: `.engine/{processes,skills,docs,
+/// contracts,workflows,rules}` and `CLAUDE.md`. Shared by tool-reference and cli-reference so the two
+/// guards mean the same thing by "living".
+fn living_doc_files(root: &Path) -> Vec<std::path::PathBuf> {
+    fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| {
+                x.eq_ignore_ascii_case("md") || x.eq_ignore_ascii_case("sysml") || x.eq_ignore_ascii_case("toml")
+            }) {
+                out.push(p);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    for base in ["processes", "skills", "docs", "contracts", "workflows", "rules"] {
+        walk(&root.join(".engine").join(base), &mut files);
+    }
+    let claude = root.join("CLAUDE.md");
+    if claude.exists() {
+        files.push(claude);
+    }
+    files
+}
+
+/// One `keel <verb> [next]` token the guard judges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CliReference {
+    pub verb: String,
+    /// The token after the verb, if the line has one (`--fast`, `.`, `validate`, `<lens>`).
+    pub next: Option<String>,
+}
+
+impl CliReference {
+    fn phrase(&self) -> String {
+        match (&self.next, cli_reference_sub_verb(self)) {
+            (Some(n), Some(_)) => format!("{} {n}", self.verb),
+            _ => self.verb.clone(),
+        }
+    }
+}
+
+/// The next token when it is verb-shaped and follows a router that declares sub-verbs (or `show`).
+fn cli_reference_sub_verb(r: &CliReference) -> Option<&str> {
+    let n = r.next.as_deref()?;
+    let verb_shaped = n.starts_with(|c: char| c.is_ascii_lowercase()) && n.chars().all(|c| c.is_ascii_lowercase() || c == '-');
+    if !verb_shaped {
+        return None;
+    }
+    if r.verb == "show" || !router_sub_verbs(&r.verb).is_empty() {
+        Some(n)
+    } else {
+        None
+    }
+}
+
+/// The sub-verbs a command fact declares in its invocation (D0451); empty for a plain command.
+fn router_sub_verbs(verb: &str) -> Vec<String> {
+    crate::cli_facts::command_facts()
+        .find(|f| f.name == verb)
+        .map(|f| crate::cli_facts::sub_verbs_of(f.invocation))
+        .unwrap_or_default()
+}
+
+/// Why a reference is a defect, or `None` when the binary dispatches it. The text names the spelling
+/// that exists today when the retired verb survives as a sub-verb or a lens.
+#[must_use]
+pub fn cli_reference_defect(r: &CliReference) -> Option<String> {
+    let now = |verb: &str| -> String {
+        if crate::cli_surface::has_lens(verb) {
+            return format!("; today it is `keel show {verb}`");
+        }
+        let routers: Vec<&str> = crate::cli_facts::command_facts()
+            .filter(|f| crate::cli_facts::sub_verbs_of(f.invocation).iter().any(|s| s == verb))
+            .map(|f| f.name)
+            .collect();
+        match routers.as_slice() {
+            [] => String::new(),
+            [one] => format!("; today it is `keel {one} {verb}`"),
+            many => format!("; today it is a sub-verb of {}", many.join(", ")),
+        }
+    };
+    if !crate::cli_surface::has_command(&r.verb) {
+        return Some(format!(
+            ", which this binary does not dispatch - a follower's command exits 2 with a usage dump{}",
+            now(&r.verb)
+        ));
+    }
+    let sub = cli_reference_sub_verb(r)?;
+    let declared = if r.verb == "show" {
+        crate::cli_surface::has_lens(sub)
+    } else {
+        router_sub_verbs(&r.verb).iter().any(|s| s == sub)
+    };
+    if declared {
+        None
+    } else if r.verb == "show" {
+        Some(format!(", and `{sub}` is not a lens `keel show` lists{}", now(sub)))
+    } else {
+        Some(format!(", and `{sub}` is not a sub-verb `{}` declares in .engine/cli/commands.sysml{}", r.verb, now(sub)))
+    }
+}
+
+/// Every command reference in `text` with its 1-based line.
+///
+/// Inside code always; in prose only when the phrase carries a flag or a root argument. `markdown` turns
+/// on fence tracking; a `.sysml` or `.toml` file has no fences, only backtick spans in strings and comments.
+#[must_use]
+pub fn cli_references(text: &str, markdown: bool) -> Vec<(usize, CliReference)> {
+    let mut out = Vec::new();
+    let mut fenced = false;
+    for (i, line) in text.lines().enumerate() {
+        if markdown && line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        let spans = backtick_spans(line);
+        let mut from = 0usize;
+        while let Some((at, after_bin)) = find_keel_token(line, from) {
+            from = after_bin;
+            let rest = &line[after_bin..];
+            let ws = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+            if ws == 0 {
+                continue;
+            }
+            let rest = &rest[ws..];
+            let verb_len = rest.find(|c: char| !(c.is_ascii_lowercase() || c == '-')).unwrap_or(rest.len());
+            if verb_len == 0 || !rest.starts_with(|c: char| c.is_ascii_lowercase()) {
+                continue;
+            }
+            let verb = &rest[..verb_len];
+            // a verb ending in a letter-run glued to `'s`, `-`… is prose ("engine's"): the char after must not be a word char
+            if rest[verb_len..].starts_with(|c: char| c.is_alphanumeric() || c == '_' || c == '\'') {
+                continue;
+            }
+            // a root argument `.` is its own token: `keel itself.` ends a sentence, `keel gate .` names a root
+            let spaced = rest[verb_len..].starts_with([' ', '\t']);
+            let tail = rest[verb_len..].trim_start_matches([' ', '\t']);
+            let next = tail
+                .split(|c: char| c.is_whitespace() || c == '`' || c == '"' || c == ')' || c == ']' || c == ';' || c == ',')
+                .next()
+                .filter(|t| !t.is_empty())
+                .map(str::to_string);
+            let in_code = fenced || spans.iter().any(|(a, b)| *a < at && at < *b);
+            let command_shaped = spaced && next.as_deref().is_some_and(|n| n.starts_with('-') || n == ".");
+            if in_code || command_shaped {
+                out.push((i + 1, CliReference { verb: verb.to_string(), next }));
+            }
+        }
+    }
+    out
+}
+
+/// Byte ranges of the backtick spans on one line, `(open, close)`.
+fn backtick_spans(line: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut from = 0usize;
+    while let Some(a) = line[from..].find('`') {
+        let a = from + a;
+        let Some(b) = line[a + 1..].find('`') else { break };
+        let b = a + 1 + b;
+        out.push((a, b));
+        from = b + 1;
+    }
+    out
+}
+
+/// The next `keel` / `KEEL` / `keel.exe` / `keel-<copy>.exe` binary token at or after `from` that is
+/// not part of a longer word or a dotted name (`.keel/`, `keel-cli`): returns `(start, end)`.
+fn find_keel_token(line: &str, from: usize) -> Option<(usize, usize)> {
+    let mut search = from;
+    while let Some(i) = line[search..].find("keel").or_else(|| line[search..].find("KEEL")).map(|i| search + i) {
+        // both spellings may occur; take the earlier of the two
+        let i = match (line[search..].find("keel"), line[search..].find("KEEL")) {
+            (Some(a), Some(b)) => search + a.min(b),
+            _ => i,
+        };
+        search = i + 4;
+        let before = line[..i].chars().next_back();
+        if before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '-') {
+            continue;
+        }
+        let mut end = i + 4;
+        let rest = &line[end..];
+        if let Some(r) = rest.strip_prefix('-') {
+            // a copy of the binary: keel-serve.exe, keel-land.exe - only with the .exe suffix
+            let name_len = r.find(|c: char| !c.is_ascii_lowercase()).unwrap_or(r.len());
+            if name_len > 0 && r[name_len..].starts_with(".exe") {
+                end += 1 + name_len + 4;
+            } else {
+                continue;
+            }
+        } else if rest.starts_with(".exe") {
+            end += 4;
+        } else if rest.starts_with(|c: char| c.is_alphanumeric() || c == '_' || c == '.' || c == '-' || c == '/') {
+            continue;
+        }
+        return Some((i, end));
+    }
+    None
+}
+
+#[cfg(test)]
+mod cli_reference_tests {
+    use super::{cli_reference, cli_reference_defect, cli_references};
+
+    /// D0388 pair, chosen before the real tree was read. Known positive: a doc line naming a verb the
+    /// binary no longer dispatches fails naming the line. Known negative: the current spellings pass.
+    #[test]
+    fn a_retired_verb_in_code_fails_naming_its_line_and_the_current_spelling_passes() {
+        let root = std::env::temp_dir().join("keel-cliref-guard");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("skills")).expect("mkdir");
+        std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
+        std::fs::write(
+            root.join(".engine").join("skills").join("s.md"),
+            "run `keel guard .` first\nthen `keel gate guard .` and `keel show why`\n",
+        )
+        .expect("write");
+        std::fs::write(root.join(".tracking").join("h.sysml"), "// history: `keel guard .` once existed\n").expect("write");
+        let report = cli_reference(&root);
+        assert_eq!(report.scanned, 3, "{:?}", report.violations);
+        assert_eq!(report.violations.len(), 1, "{:?}", report.violations);
+        assert!(report.violations[0].starts_with(".engine/skills/s.md:1: names `keel guard`"), "{}", report.violations[0]);
+        assert!(report.violations[0].contains("today it is `keel gate guard`"), "{}", report.violations[0]);
+    }
+
+    /// The token shapes: a fence, an uppercase spelling, a copy of the binary, a prose command with a
+    /// flag, and the project's name in a sentence, which is not a command at all.
+    #[test]
+    fn code_and_flagged_prose_are_references_and_the_project_name_in_a_sentence_is_not() {
+        let md = "```\nKEEL validate .\n```\nkeel is also a system, and the keel write API is one channel.\n`./target/release/keel-serve.exe show orient .`\nThe keel engine's contract. Run it for keel itself. Then `keel gate .`\n";
+        let refs = cli_references(md, true);
+        let verbs: Vec<&str> = refs.iter().map(|(_, r)| r.verb.as_str()).collect();
+        assert_eq!(verbs, vec!["validate", "show", "gate"], "{refs:?}");
+        assert_eq!(refs[0].0, 2);
+        assert_eq!(refs[1].1.next.as_deref(), Some("orient"));
+        let sysml = ":>> actionText = \"Run keel gate --fast . after the last write; keel record verbs only; a keel process unit\";\n";
+        let refs = cli_references(sysml, false);
+        assert_eq!(refs.len(), 1, "{refs:?}");
+        assert_eq!(refs[0].1.verb, "gate");
+        assert_eq!(refs[0].1.next.as_deref(), Some("--fast"));
+    }
+
+    /// The second level: a router's next token is held to its declared sub-verbs, a lens to the lens
+    /// list, and a flag or placeholder is not judged.
+    #[test]
+    fn a_router_is_held_to_its_declared_sub_verbs_and_a_lens_to_the_lens_list() {
+        let refs = |s: &str| cli_references(&format!("`{s}`\n"), true).remove(0).1;
+        assert_eq!(cli_reference_defect(&refs("keel gate validate .")), None);
+        assert_eq!(cli_reference_defect(&refs("keel gate --fast")), None);
+        assert_eq!(cli_reference_defect(&refs("keel record gate-result --file F")), None);
+        assert_eq!(cli_reference_defect(&refs("keel show <lens> [ROOT]")), None);
+        assert_eq!(cli_reference_defect(&refs("keel render report assurance")), None, "render declares no sub-verbs");
+        assert_eq!(cli_reference_defect(&refs("keel activate stpa-self")), None, "activate declares no sub-verbs");
+        let d = cli_reference_defect(&refs("keel gate frobnicate .")).expect("undeclared sub-verb");
+        assert!(d.contains("`frobnicate` is not a sub-verb `gate` declares"), "{d}");
+        let d = cli_reference_defect(&refs("keel show nothing-here")).expect("unknown lens");
+        assert!(d.contains("not a lens"), "{d}");
+        let d = cli_reference_defect(&refs("keel knowledge question-coverage")).expect("retired top-level lens");
+        assert!(d.contains("today it is `keel show knowledge`"), "{d}");
+        let d = cli_reference_defect(&refs("keel workspace")).expect("never a verb");
+        assert!(d.ends_with("usage dump"), "{d}");
+    }
 }
 
 /// Guard 52: an AI-judged `method=test` result records WHAT WAS RUN (D0232/issue266).
@@ -5968,6 +6285,7 @@ pub fn run_one(name: &str, root: &Path) -> Option<GuardReport> {
         "manifest-key-portability" => Some(manifest_key_portability(root)), // issue301/D0250 — a unit manifest key naming one machine
         "control-map-reconciled" => Some(control_map_reconciled(root)), // issue304/D0255 — a firing control absent from the map
         "direction-cited" => Some(direction_cited(root)), // hard (D0463/issue428) - the human's quoted direction links the Statement holding it
+        "cli-reference" => Some(cli_reference(root)), // hard (D0471/issue528) - a living doc names only verbs this binary dispatches
 
         "critique" => Some(critique(root)),
         "assured" => Some(assured(root)),

@@ -2285,6 +2285,138 @@ if _s702 is not None:
 else:
     fact("rejectVerdictSprint", {"exists": False}, "the delivery record", "the file " + _s702p + " does not exist")
 
+# ================================================================ 25. the living-doc verb guard (D0471 / issue528)
+# --- D0471: the Decision's own fields, read from its file the way the guard reads them
+_d0471 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0471-"):
+        _d0471 = read(os.path.join(DEC_DIR, _fn)) or ""
+_dec1 = _guard_field(_d0471, "d0471", "decision")
+_rat1 = _guard_field(_d0471, "d0471", "rationale")
+_con1 = _guard_field(_d0471, "d0471", "consequences")
+_ctx1 = _guard_field(_d0471, "d0471", "context")
+fact("cliReferenceDecision", {
+    "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0471) or [None, None])[1],
+    "createdAt": _guard_field(_d0471, "d0471", "createdAt") or None,
+    "marker": "#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+d0471\s*:", _d0471, re.M) else None,
+    "acceptance": _acceptance_kind(_d0471, "d0471"),
+    "notAFork": "NOT A FORK" in (_dec1 + _rat1),
+    "decision": _dec1, "rationale": _rat1, "consequences": _con1, "context": _ctx1,
+    "namesIssue528": "issue528" in _ctx1,
+    "namesEightSites": "eight such lines" in _ctx1,
+    "processChangeWords": bool(re.search(r"process-change", _dec1 + _rat1 + _con1 + _ctx1)),
+} if _d0471 else None, "the Decision's fields as the guard reads them",
+     "regex over .engine/decisions/0471-*.sysml: status from `DecisionStatus::x`; marker = a line `#ProspectiveChange part d0471 :`; "
+     "acceptance mirrors guards.rs acceptance_kind (None = no passing AcceptR segment); the four fields read as guards.rs "
+     "unmeasured_path_decisions reads a field; notAFork = the literal `NOT A FORK` in the decision or rationale; namesIssue528 "
+     "and namesEightSites = those spans in the context; processChangeWords = `process-change` anywhere in the four.")
+
+# --- D0471: the guard in source - its name in GUARD_NAMES, its dispatch arm, the shared walk, and the three declaration surfaces
+_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gr, re.S)
+_gnames = re.findall(r'"([a-z0-9-]+)"', _gn.group(2)) if _gn else []
+_gmd = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_gcs = read(os.path.join(REPO, ".engine", "rules", "guard-constraints.sysml")) or ""
+_cmap = read(os.path.join(REPO, ".tracking", "architecture", "control-map.sysml")) or ""
+fact("cliReferenceGuardSource", {
+    "guardCount": int(_gn.group(1)) if _gn else None,
+    "guardCountMatchesList": bool(_gn) and int(_gn.group(1)) == len(_gnames),
+    "inGuardNames": "cli-reference" in _gnames,
+    "dispatchArm": bool(re.search(r'"cli-reference"\s*=>\s*Some\(cli_reference\(root\)\)', _gr)),
+    "sharedWalk": {"toolReference": bool(re.search(r"pub fn tool_reference\(root: &Path\) -> GuardReport \{[^}]*?living_doc_files\(root\)", _gr, re.S)),
+                   "cliReference": bool(re.search(r"pub fn cli_reference\(root: &Path\) -> GuardReport \{[^}]*?living_doc_files\(root\)", _gr, re.S))},
+    "readsDispatch": {"hasCommand": "crate::cli_surface::has_command(&r.verb)" in _gr,
+                      "hasLens": "crate::cli_surface::has_lens(" in _gr,
+                      "subVerbsOf": "crate::cli_facts::sub_verbs_of(f.invocation)" in _gr},
+    "unitTests": len(re.findall(r"^\s*#\[test\]\s*\n\s*fn (\w+)", _gr[_gr.find("mod cli_reference_tests"):_gr.find("\n}\n", _gr.find("mod cli_reference_tests")) + 3], re.M)) if "mod cli_reference_tests" in _gr else 0,
+    "catalogueRow": bool(re.search(r"^\| `cli-reference` \| HARD \(D0471 / issue528\)", _gmd, re.M)),
+    "constraintDecl": bool(re.search(r"constraint def cliReference;\s*// guard 74 \(D0471/issue528\)", _gcs)),
+    "controlMapPart": bool(re.search(r"part gCliReference : SystemSafetyConstraint \{", _cmap)),
+    "controlMapHazard": (re.search(r"dependency from gCliReference to (ehz\d+);", _cmap) or [None, None])[1],
+} if _gr else None, "the guard as source declares it",
+     "keel-cli/src/guards.rs: `pub const GUARD_NAMES: [&str; N] = [...]` (N and the quoted names), the dispatch arm "
+     "`\"cli-reference\" => Some(cli_reference(root))`, both `pub fn tool_reference` and `pub fn cli_reference` bodies calling "
+     "`living_doc_files(root)`, the three dispatch reads by their literal call text, `#[test] fn` count inside `mod "
+     "cli_reference_tests`; .engine/docs/guards.md row `| `cli-reference` | HARD (D0471 / issue528)`; "
+     ".engine/rules/guard-constraints.sysml `constraint def cliReference; // guard 74 (D0471/issue528)`; "
+     ".tracking/architecture/control-map.sysml `part gCliReference : SystemSafetyConstraint {` and its `dependency from "
+     "gCliReference to ehzN;` edge.")
+
+# --- D0471: the guard run live on this tree, and the three gate lines a verifier follows, run as written
+ok, out = run([KEEL, "gate", "guard", "cli-reference", "--no-receipt", "."], timeout=300)
+_last = (out or "").strip().splitlines()[-1] if (out or "").strip() else ""
+_m = re.search(r"\[guard:cli-reference\] (PASS|FAIL) \W+ (\d+) scanned, (\d+) warning\(s\), (\d+) violation\(s\)", _last)
+fact("cliReferenceLive", {
+    "verdict": _m.group(1) if _m else None, "scanned": int(_m.group(2)) if _m else None,
+    "violations": int(_m.group(4)) if _m else None, "line": _last,
+} if _m else None, "the guard on this tree",
+     "`keel gate guard cli-reference --no-receipt .`: the last line `[guard:cli-reference] PASS|FAIL - N scanned, N warning(s), "
+     "N violation(s)`; scanned = command references examined (code always, prose only with a flag or root)"
+     + ("" if _m else "; the guard did not print its summary line: " + (out or "")[-300:]))
+
+_tv = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
+_tv_lines = _tv.splitlines()
+_gate_lines = [l for l in _tv_lines if re.match(r"^KEEL gate (validate|check-engine|guard --no-receipt) \.", l)]
+_retired_lines = [l for l in _tv_lines if re.match(r"^KEEL (validate|check-engine|guard) ", l)]
+_ran = {}
+for _verb in (["gate", "validate", "."], ["gate", "check-engine", "."]):
+    _ok, _out = run([KEEL] + _verb, timeout=300)
+    _ran[" ".join(_verb)] = {"exit0": _ok, "lastLine": (_out or "").strip().splitlines()[-1][:160] if (_out or "").strip() else ""}
+_mirror_ok, _mirror_out = run([KEEL, "sync-claude", "--check", "."], timeout=120)
+fact("cliReferenceProcedure", {
+    "testVerifyGateLines": len(_gate_lines), "testVerifyRetiredLines": len(_retired_lines),
+    "gateLinesRun": _ran,
+    "claudeMirrorClean": _mirror_ok,
+    "knowledgeGraphMemory": {"showWhy": "`keel show why`" in (read(os.path.join(REPO, ".engine", "skills", "knowledge-graph-memory", "SKILL.md")) or ""),
+                             "showKnowledge": "`keel show knowledge question-coverage`" in (read(os.path.join(REPO, ".engine", "skills", "knowledge-graph-memory", "SKILL.md")) or "")},
+}, "the verifier's procedure as written today, and run",
+     ".engine/skills/test-verify/SKILL.md: lines beginning `KEEL gate validate .` / `KEEL gate check-engine .` / `KEEL gate guard "
+     "--no-receipt .` (the current spelling) and lines beginning `KEEL validate ` / `KEEL check-engine ` / `KEEL guard ` (the retired "
+     "one); gateLinesRun = `keel gate validate .` and `keel gate check-engine .` run here, their exit and last line; "
+     "claudeMirrorClean = `keel sync-claude --check .` exit 0; the knowledge-graph-memory skill's two backticked spellings by "
+     "literal search.")
+
+# --- D0471: the origin Issue, the retro Issue, and the sprint record
+_iss = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_i528 = re.search(r"part issue528 : Issue\s*\{(.*?)\n    \}", _iss, re.S)
+_i528b = _i528.group(1) if _i528 else ""
+fact("cliReferenceIssue", {
+    "exists": bool(_i528),
+    "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _i528b) or [None, None])[1],
+    "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _i528b) or [None, None])[1],
+    "resolver": (re.search(r"#Resolves dependency from (\w+) to issue528;", _iss) or [None, None])[1],
+    "title": (re.search(r'title\s*=\s*"([^"]+)"', _i528b) or [None, None])[1],
+    "descriptionSaysTen": "Ten sites" in _i528b,
+    "retroIssue531": bool(re.search(r"part issue531 : Issue\b", _iss)),
+    "retroIssue531Resolver": (re.search(r"#Resolves dependency from (\w+) to issue531;", _iss) or [None, None])[1],
+} if _iss else None, "the origin Issue and the retro Issue",
+     ".tracking/issues-claudeFable5.sysml: the `part issue528 : Issue {` body's severity / createdAt / title, whether its "
+     "description opens `Ten sites`, and the `#Resolves dependency from <task> to issue528;` edge; issue531 by `part issue531 : "
+     "Issue` and its own #Resolves edge.")
+
+_s703p = os.path.join(REPO, ".tracking", "delivery", "sprint703_livingDocsNameOnlyDeclaredCliVerbs.sysml")
+_s703 = read(_s703p) if os.path.exists(_s703p) else None
+if _s703 is not None:
+    _res = re.findall(r"part \w+\s*:\s*TestResult\s*\{[^}]*?outcome\s*=\s*VerdictKind::(\w+)", _s703)
+    _before = re.search(r"before the corrections FAILED naming all eight", _s703)
+    _pair = re.search(r"cli_reference_tests[^\n]*?(\d+) passed; (\d+) failed", _s703)
+    fact("cliReferenceSprint", {
+        "exists": True, "results": len(_res),
+        "byOutcome": {o: _res.count(o) for o in sorted(set(_res))},
+        "ranReceipts": len(re.findall(r"// RAN:", _s703)),
+        "dodStatesBeforeFailure": bool(_before),
+        "probePair": {"passed": int(_pair.group(1)), "failed": int(_pair.group(2))} if _pair else None,
+        "chartersD0471": bool(re.search(r"#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+d0471\s*;", _s703)),
+        "namesIssue531": "issue531" in _s703,
+        "statesOvercount": "overcounted by two" in _s703,
+    }, "the delivery record",
+         ".tracking/delivery/sprint703_livingDocsNameOnlyDeclaredCliVerbs.sysml: results = `part x : TestResult {` segments and "
+         "their `VerdictKind::x`; ranReceipts = `// RAN:` lines; dodStatesBeforeFailure = the DoD's span `before the corrections "
+         "FAILED naming all eight`; probePair = a receipt line naming cli_reference_tests with `N passed; N failed`; chartersD0471 "
+         "= a `#CharteredBy dependency from <story> to d0471;` line; issue531 and `overcounted by two` by literal search.")
+else:
+    fact("cliReferenceSprint", {"exists": False}, "the delivery record", "the file " + _s703p + " does not exist")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

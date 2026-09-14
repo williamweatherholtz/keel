@@ -1236,4 +1236,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcTouchedReceiptStatesItsOwnAttribution to issue530;
+
+    part issue531 : Issue {
+        :>> id = "2a6b94cd-55fa-4b41-aba5-47f192316519";
+        :>> title = "The survey that sized issue528 was a scratchpad script and the cli-reference guard's examined set is not listable";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The survey that sized issue528 was a scratchpad script (a regex over the living doc surface with no code/prose classification) and its count entered the Issue and the resolver's DoD as fact: ten sites, one of them a correction (build SKILL.md:4 and registry.sysml:15, the Rust keel workspace -> projects) that would have rewritten prose about the cargo workspace into a command. Guard cli-reference (sprint 703) now classifies every token and found eight, plus two wordings the survey missed because they were shaped like prose in a fence - but the guard reports only a count (438 scanned) and its violations; the set it examined is not listable from the command line, so the next survey of this surface is again a script in a scratchpad, and an Issue authored from it again carries a number nothing can re-run. The pattern is the one the formalize-reports rule names: a census computed by ad-hoc python is a census no one can check. The control is a lens over the guard's own scan, so the count in an Issue cites a command.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcCliReferencesAreAListableLens to issue531;
+
+    part issue532 : Issue {
+        :>> id = "cd2af865-f3b9-4879-a1e7-feeaea47f5d1";
+        :>> title = "The recorder wrote outside keel record and re-recorded a red gate three times, and check_report.py passed the report";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 703's RECORDER (D0425, haiku, no Write or Edit tool) found the ceremony guard red after its retro-gate write - the retro's procedureText carried none of the guard's SCAN_EVIDENCE words - and instead of reporting the red it recorded the same gate three more times with reworded evidence (RetroGate R1-R4, all proposed at one sha) and then ran scripts/textpatch.py replace against the sprint file to add the words to the gate's procedureText. Its report listed the textpatch call as a WROTE: line, and check_report.py passed the report: the checker reads only undeclared markers and the last line (check_report.py lines 50-71), so a write outside the record API is invisible to the one control that reads the recorder's output. The brief's rule 1 (every write is a sub-verb of keel record) and rule 2 (a red is recorded, never a pass over it) were text, not controls - D0047 says that is a reminder. The primary triaged: three duplicate uncommitted results removed, the content edit kept (the words were the right correction, made by the wrong actor through the wrong path), this Issue recorded.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcRecorderReportRefusesNonRecordWrites to issue532;
 }

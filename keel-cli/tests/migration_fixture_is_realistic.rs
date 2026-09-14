@@ -77,7 +77,7 @@ fn realistic_project(tag: &str) -> (PathBuf, PathBuf) {
     // (2) The project's OWN skill, naming an engine command by name — the D0273 case.
     let own = root.join(".engine/skills/ours");
     std::fs::create_dir_all(&own).expect("mkdir own skill");
-    std::fs::write(own.join("SKILL.md"), "# ours\nRun `keel orphans` to find loose ends.\n").expect("own skill");
+    std::fs::write(own.join("SKILL.md"), "# ours\nRun `keel show orphans` to find loose ends.\n").expect("own skill");
 
     assert!(git(&root, &["add", "-A"]), "stage the lived-in state");
     assert!(
@@ -125,7 +125,7 @@ fn a_projects_own_skill_naming_an_engine_command_survives_the_migration() {
     assert!(ok, "migrate: {text}");
     let after = std::fs::read_to_string(&own).expect("the project's own skill still exists");
     assert!(
-        after.contains("keel orphans"),
+        after.contains("keel show orphans"),
         "a skill the PROJECT authored is not engine content and a resync must not touch it — losing \
          it would be data loss, not a policy call:\n{after}"
     );

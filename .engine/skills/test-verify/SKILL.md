@@ -80,9 +80,9 @@ it from the copy the dispatch names.
 Each line of the receipt is `<command> -> <the verdict line the command printed>; exit=<code>`.
 
 ```
-KEEL validate .                       # the .tracking semantic authority
-KEEL check-engine .                   # .engine instance reference resolution
-KEEL guard --no-receipt .             # every enforced forward guard; --no-receipt forces the run
+KEEL gate validate .                  # the .tracking semantic authority
+KEEL gate check-engine .              # .engine instance reference resolution
+KEEL gate guard --no-receipt .        # every enforced forward guard; --no-receipt forces the run
 KEEL sync-claude --check .            # the claude-surface-drift check
 git rev-parse --short HEAD
 git status --short                    # count and list; the recorder needs to know the tree was dirty
@@ -137,9 +137,9 @@ Plain text, this shape, in the scratchpad path the dispatch gives (never under t
 
 ```
 VERIFIER RECEIPT  <date>  head=<sha>  tree=<clean|N dirty paths>
-KEEL validate . -> <line>; exit=<n>
-KEEL check-engine . -> <line>; exit=<n>
-KEEL guard --no-receipt . -> PASS <n>; FAIL <m> [<guard>: <line>]; exit=<n>
+KEEL gate validate . -> <line>; exit=<n>
+KEEL gate check-engine . -> <line>; exit=<n>
+KEEL gate guard --no-receipt . -> PASS <n>; FAIL <m> [<guard>: <line>]; exit=<n>
 KEEL sync-claude --check . -> <line>; exit=<n>
 cargo clippy ... -> <pass|TIMEOUT|fail: first error>; exit=<n>
 PROBE PAIR: <check> -> positive <case>: <outcome>; negative <case>: <outcome>
