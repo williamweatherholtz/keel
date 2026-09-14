@@ -29,7 +29,8 @@ Every rule below names its Decision; the Decision holds the history. Don't resta
    monitored, no threshold (`keel show indicators`). No defensible boundary → stays indicator.
 8. **CLI surface is an authored fact (D0271).** Every command/lens is a `CliCommand` in
    `.engine/cli/commands.sysml` (family, effect, stability). `--help` renders from it; guard
-   `cli-surface-declared` holds facts = help = dispatch. Never author an ICD.
+   `cli-surface-declared` holds facts = help = dispatch (invocation included). A fact another actor owns is
+   retired by a `#Supersede` edge beside it in that file, never deleted and re-authored (D0108, issue547). Never author an ICD.
 9. **CLI/JSON is authority; HTML is the human's lens (D0093).** HTML stores nothing.
 
 ---

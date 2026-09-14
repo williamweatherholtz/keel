@@ -135,13 +135,15 @@ pub fn supersede_targets(root: &Path) -> std::collections::HashSet<String> {
 
 /// Every authored `#Supersede dependency from X to Y;` line, as `(X, Y)`: X retired Y.
 ///
-/// Scans `.engine/decisions/` and `.tracking/`. The pair is kept for the readers that name the
-/// superseder in what they report (issue423: a synopsis citing a retired Decision is told which
-/// Decision retired it).
+/// Scans `.engine/decisions/`, `.engine/cli/` and `.tracking/`. The pair is kept for the readers that
+/// name the superseder in what they report (issue423: a synopsis citing a retired Decision is told
+/// which Decision retired it). `.engine/cli/` joined in issue547: a `CliCommand` fact is retired by an
+/// edge authored beside it in `commands.sysml`, and the retired set every kernel-free reader shares
+/// has to agree with the one `guards::parse_cli_facts` reads from that file.
 #[must_use]
 pub fn supersede_edges(root: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    let dirs = [root.join(".engine").join("decisions"), root.join(".tracking")];
+    let dirs = [root.join(".engine").join("decisions"), root.join(".engine").join("cli"), root.join(".tracking")];
     for f in dirs.iter().flat_map(|d| collect_sysml(d)) {
         let Ok(text) = corpus::read_to_string(&f) else { continue };
         for line in text.lines() {

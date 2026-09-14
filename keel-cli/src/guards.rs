@@ -6919,6 +6919,8 @@ pub fn engine_lint(root: &Path) -> GuardReport {
 /// One CLI fact as authored in `.engine/cli/commands.sysml`, reduced to the fields the guard compares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthoredCliFact {
+    /// The `part <name>` the fact is declared as - what a `#Supersede` edge names (issue547).
+    pub part: String,
     pub name: String,
     pub family: String,
     pub effect: String,
@@ -6944,11 +6946,31 @@ fn cli_attr(line: &str, key: &str) -> Option<String> {
 /// Pure, so the comparison is unit-testable on a fixture; the model loader is not used because this guard must also run in a tree whose `.tracking`
 /// is unrelated to the engine (a downstream project).
 #[must_use]
+///
+/// FACTS IN FORCE (issue547). D0108 says a non-owner ADDS or SUPERSEDES another actor's item and never
+/// overwrites it, and guard `ownership` enforces that. For a `CliCommand` the supersede remedy has to
+/// be honoured HERE: the edge `#Supersede dependency from cliX2 to cliX;` is authored beside the facts
+/// in the same file, and a fact whose part name is such a target is retired - not parsed as a second
+/// fact of the same command name that `cli-surface-declared` then compares against the mirror. Before
+/// this read, the only path past `ownership` for a fact authored by a retired actor was to delete the
+/// part and re-author it under a NEW id (74c1923 `cliGithub`, sprint 711 `cliRecord`) - discarding
+/// Invariant 3's immutable identity to satisfy a rule whose own remedy this reader could not see.
 pub fn parse_cli_facts(text: &str) -> Vec<AuthoredCliFact> {
+    let retired: HashSet<String> = text
+        .lines()
+        .filter_map(|l| l.trim_start().strip_prefix("#Supersede dependency from "))
+        .filter_map(|rest| rest.split_once(" to "))
+        .map(|(_, to)| to.trim().trim_end_matches(';').trim().to_string())
+        .collect();
     text.lines()
         .filter(|l| l.contains(": CliCommand {"))
         .filter_map(|l| {
+            let part = l.trim_start().strip_prefix("part ")?.split_whitespace().next()?.to_string();
+            if retired.contains(&part) {
+                return None;
+            }
             Some(AuthoredCliFact {
+                part,
                 name: cli_attr(l, "name")?,
                 family: cli_attr(l, "family")?,
                 effect: cli_attr(l, "effect")?,
@@ -6973,14 +6995,24 @@ pub fn cli_surface_violations(
 ) -> Vec<String> {
     use std::collections::BTreeMap;
     let mut out = Vec::new();
+    // issue548: two facts IN FORCE declaring one command name were collapsed into this map silently, the
+    // later one winning. A superseder shares its target's name by design, but the target is dropped by
+    // `parse_cli_facts` before it reaches here, so a duplicate at this point is two live declarations.
+    let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
+    for f in authored {
+        if let Some(first) = seen.insert(f.name.as_str(), f.part.as_str()) {
+            out.push(format!("`{}` is declared by two CliCommand facts in force (`{first}` and `{}`) - retire one with a #Supersede edge (D0108)", f.name, f.part));
+        }
+    }
     let by_name: BTreeMap<&str, &AuthoredCliFact> = authored.iter().map(|f| (f.name.as_str(), f)).collect();
     let mirror_by: BTreeMap<&str, &crate::cli_facts::CliFact> = mirror.iter().map(|f| (f.name, f)).collect();
-    // authored <-> mirror
+    // authored <-> mirror. The invocation is compared too (issue548): it is the field `--help` renders as
+    // the command's shape, and it was the one field the two homes could disagree on unseen.
     for f in authored {
         match mirror_by.get(f.name.as_str()) {
             None => out.push(format!("`{}` is an authored CliCommand fact with no entry in cli_facts.rs - the help cannot describe it", f.name)),
             Some(m) => {
-                for (what, a, b) in [("family", f.family.as_str(), m.family), ("effect", f.effect.as_str(), m.effect), ("stability", f.stability.as_str(), m.stability), ("synopsis", f.synopsis.as_str(), m.synopsis)] {
+                for (what, a, b) in [("family", f.family.as_str(), m.family), ("effect", f.effect.as_str(), m.effect), ("stability", f.stability.as_str(), m.stability), ("invocation", f.invocation.as_str(), m.invocation), ("synopsis", f.synopsis.as_str(), m.synopsis)] {
                     if a != b {
                         out.push(format!("`{}` {what} differs: facts say `{a}`, cli_facts.rs says `{b}` - one home, the .sysml; regenerate the mirror", f.name));
                     }
@@ -7294,6 +7326,40 @@ mod cli_surface_declared_tests {
         let v = cli_surface_violations(&authored, &m, &["status"], &[]);
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].contains("effect differs") && v[0].contains("`reads`") && v[0].contains("`writes`"), "{v:?}");
+    }
+
+    /// issue547, the probe pair (D0388). KNOWN-POSITIVE: `cliX` superseded by `cliX2` of the same command
+    /// name parses to ONE fact, the superseder's, and a mirror equal to it is clean. KNOWN-NEGATIVE: the
+    /// same two lines with no edge are two facts in force of one name - a violation naming both parts.
+    #[test]
+    fn a_superseded_fact_is_not_in_force_and_two_live_facts_of_one_name_are_a_violation() {
+        let old = format!("    part cliX : CliCommand {{ :>> id = \"a\"; {} }}", fact("x", "governance", "writes")).replace(":>> synopsis = \"s\";", ":>> synopsis = \"old\";");
+        let new = format!("    part cliX2 : CliCommand {{ :>> id = \"b\"; {} }}", fact("x", "governance", "writes"));
+        let with_edge = format!("{old}\n{new}\n    #Supersede dependency from cliX2 to cliX;\n");
+        let authored = parse_cli_facts(&with_edge);
+        assert_eq!(authored.len(), 1, "{authored:?}");
+        assert_eq!((authored[0].part.as_str(), authored[0].synopsis.as_str()), ("cliX2", "s"));
+        let m = [mirror("x", "governance", "writes")];
+        assert!(cli_surface_violations(&authored, &m, &["x"], &[]).is_empty());
+
+        let without = parse_cli_facts(&format!("{old}\n{new}\n"));
+        assert_eq!(without.len(), 2);
+        let v = cli_surface_violations(&without, &m, &["x"], &[]);
+        assert!(v.iter().any(|l| l.contains("two CliCommand facts in force") && l.contains("`cliX`") && l.contains("`cliX2`")), "{v:?}");
+    }
+
+    /// issue548, the probe pair: a mirror whose INVOCATION differs from the fact is a violation naming the
+    /// field (positive); the same mirror with the fact's invocation is clean (negative).
+    #[test]
+    fn an_invocation_that_drifts_between_the_two_homes_is_caught() {
+        let text = format!("    part cliA : CliCommand {{ :>> id = \"i\"; {} :>> invocation = \"<d> (--words TEXT | --note TEXT)\"; }}", fact("accept", "governance", "writes"));
+        let authored = parse_cli_facts(&text);
+        let drifted = [crate::cli_facts::CliFact { invocation: "<d> --note TEXT", ..mirror("accept", "governance", "writes") }];
+        let v = cli_surface_violations(&authored, &drifted, &["accept"], &[]);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].contains("invocation differs") && v[0].contains("--words"), "{v:?}");
+        let level = [crate::cli_facts::CliFact { invocation: "<d> (--words TEXT | --note TEXT)", ..mirror("accept", "governance", "writes") }];
+        assert!(cli_surface_violations(&authored, &level, &["accept"], &[]).is_empty());
     }
 
     #[test]

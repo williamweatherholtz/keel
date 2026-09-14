@@ -1423,4 +1423,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcCliFactSupersessionIsHonoured to issue547;
+
+    part issue548 : Issue {
+        :>> id = "7f57c201-c1e6-480e-aa84-658469f652d0";
+        :>> title = "cli-surface-declared never compares the invocation, and accept already drifts between its two homes";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found 2026-09-14 while reading parse_cli_facts for issue547. D0271 holds the CLI surface as facts = help = dispatch, and guard cli-surface-declared is the control: cli_surface_violations (guards.rs:6980-6984) compares each authored fact with its cli_facts.rs mirror on family, effect, stability and synopsis - and never on invocation, the one field keel --help renders as the command's shape. So the two homes can disagree on what a command takes and no guard says so. They already do: commands.sysml declares accept as <decision> (--words TEXT | --note TEXT) --by <person> --date YYYY-MM-DD and cli_facts.rs says <decision> --note TEXT --by <person> --date YYYY-MM-DD (check: a script over both homes, 86 facts each, one DIFF, accept). The --words form has been the recorded channel since D0375 and --help does not show it. The same reader also collapses two facts of one name into a BTreeMap silently, so a duplicate name is not a violation either. Resolver: dcCliFactSupersessionIsHonoured - the same reader change that drops a superseded fact adds invocation to the compared fields and makes two facts in force with one name a violation.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcCliFactSupersessionIsHonoured to issue548;
 }
