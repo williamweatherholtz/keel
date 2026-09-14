@@ -1434,4 +1434,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcCliFactSupersessionIsHonoured to issue548;
+
+    part issue549 : Issue {
+        :>> id = "3ba908e0-6969-4bb9-a898-73f3438dba78";
+        :>> title = "An item that #DependsOn another undone backlog item reads as ready: the frontier narrows on Decisions and claims, never on item-to-item edges";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The ready frontier honours only three narrowings (keel-cli/src/orient.rs narrowing_filters, read 2026-09-14): a superseded item, an item that #DependsOn a still-proposed Decision, and an item another contributor holds a claim on. An item that #DependsOn ANOTHER BACKLOG ITEM is not narrowed at all, so it reads as ready while its predecessor is undone. Found when the D0479 modularity pass recorded 13 items in a dependency chain and keel show whats-next listed all 13 as ready (dcGuardsViewOrientCycleIsBroken depends on dcWorkspaceHoldsTheLeafMembers, which has no result). The backlog carries 19 item-to-item #DependsOn edges today, none of which the frontier reads; D0052's auto-follow works only because declaration order happens to agree with the chain. The edge is authored and validated but does not compute - a dual truth the contract forbids.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcReadyHonoursItemDependencies to issue549;
 }

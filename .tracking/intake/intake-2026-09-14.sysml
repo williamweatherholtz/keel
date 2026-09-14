@@ -35,4 +35,12 @@ package ProjectIntake20260914 {
         :>> sourceUrl = "https://github.com/williamweatherholtz/sysmlv2-ai-toolkit/issues/72";
         :>> sourceTrust = SourceTrust::untrusted;
     }
+
+    part st126 : Statement {
+        :>> id = "23296527-7207-40df-b035-9639f93c8c49";
+        :>> title = "split keel into granular workspace members; keel-issues, not an external tracker";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> text = "totally agree on splitting the crate into workspace members.  give us lots of granularity - no need to couple code just to keep it in one place.  making it broad and uncoupled makes it modular and easy to rebuild.  i like the ''test binaries'' improvements and the Guards one also.  I think your identification of ''where the boundary sits'' is a bit naive.  What we're talking about here is the value of granularly splitting apart keel into disparate functions, which is a great idea and i expect will largely help the issues with recompiling, etc.  But the second implicit idea here is - use an issue tracker to enforce process and track/expose state.  I think that's fine, but I do think Keel does it better in many ways - we can read plain sysml processes, interpret them, add guards (really jsut CI/CD), etc.  This has become a more and more obvious need as this project goes forward - how to hook into custom processes that have absolute discipline?  You're proposing an issue tracker, which is fine.  I say let's just make keel-issues or something, which can manage the subset of processes related to items/issues (and not e.g. decisions about keel itself).  Big modularity pass incoming, I think.  Decouple the code wherever it's helpful, and let's divide and conquer to increase speed, reliability, and anchor points into our processes where possible.";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-14"; :>> channel = StatementChannel::chat;
+    }
 }
