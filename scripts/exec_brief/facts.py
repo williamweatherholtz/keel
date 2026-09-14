@@ -2513,6 +2513,133 @@ fact("sharedWalkIssue", {
      "the resolver's 1-based position among `action x;` lines inside `action def NextWork` (declaration order IS priority, D0052) "
      "and whether its DoD line carries `Resolves issue533.` (guard issues, D0304).")
 
+# ================================================================ 27. the recorder's report is refused on a non-record write or a record written twice (D0473 / issue532)
+# --- D0473: the Decision's own fields, read from its file the way the guard reads them
+_d0473 = ""
+for _fn in os.listdir(DEC_DIR):
+    if _fn.startswith("0473-"):
+        _d0473 = read(os.path.join(DEC_DIR, _fn)) or ""
+_dec3 = _guard_field(_d0473, "d0473", "decision")
+_rat3 = _guard_field(_d0473, "d0473", "rationale")
+_con3 = _guard_field(_d0473, "d0473", "consequences")
+_ctx3 = _guard_field(_d0473, "d0473", "context")
+fact("recorderRefusalDecision", {
+    "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0473) or [None, None])[1],
+    "createdAt": _guard_field(_d0473, "d0473", "createdAt") or None,
+    "marker": "#ProspectiveChange" if re.search(r"^\s*#ProspectiveChange\s+part\s+d0473\s*:", _d0473, re.M) else None,
+    "acceptance": _acceptance_kind(_d0473, "d0473"),
+    "notAFork": "NOT A FORK" in (_dec3 + _rat3),
+    "measuredToken": "MEASURED:" in _rat3,
+    "decision": _dec3, "rationale": _rat3, "consequences": _con3, "context": _ctx3,
+    "namesIssue532": "issue532" in _ctx3,
+    "namesTextpatch": "textpatch" in _ctx3,
+    "namesLineNine": "naming line 9" in _rat3,
+    "namesReminder": "D0047" in _ctx3,
+    "pathWordsInDecision": sorted({w for w in re.findall(r"[a-z]+", _dec3.lower()) if w in ("land", "push", "refuse", "gate")}),
+} if _d0473 else None, "the Decision's fields as the guard reads them",
+     "regex over .engine/decisions/0473-*.sysml: status from `DecisionStatus::x`; marker = a line `#ProspectiveChange part d0473 :`; "
+     "acceptance mirrors guards.rs acceptance_kind (None = no passing AcceptR segment); the four fields read as guards.rs "
+     "unmeasured_path_decisions reads a field; notAFork / MEASURED: / issue532 / textpatch / `naming line 9` / D0047 by literal "
+     "search in the field named; pathWordsInDecision = the D0469 PATH_WORDS present as whole lower-case words in the decision text "
+     "(`gate --fast` puts `gate` there, which is why the rationale must carry MEASURED:).")
+
+# --- D0473: the checker as source - the refusal sentences it can emit, the pair table, the fixtures on disk, and the .claude copy
+_ckp = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "check_report.py")
+_ck = read(_ckp) or ""
+_ck_claude = read(os.path.join(REPO, ".claude", "skills", "delegated-ceremony", "references", "check_report.py")) or ""
+_fx_dir = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "fixtures")
+_pairs_src = re.search(r"^PAIRS = \[(.*?)^\]", _ck, re.S | re.M)
+_pairs = re.findall(r'\("([^"]+)",\s*(None|"[^"]*")\)', _pairs_src.group(1)) if _pairs_src else []
+_refusal_sentences = re.findall(r'found\.append\(f?"(?:line \{n\}: )?([^`"{]+)', _ck)
+fact("recorderCheckerSource", {
+    "refusalKinds": len(_refusal_sentences),
+    "refusalSentences": [x.strip(" -") for x in _refusal_sentences],
+    "pairs": len(_pairs),
+    "positives": len([p for p in _pairs if p[1] != "None"]),
+    "negatives": len([p for p in _pairs if p[1] == "None"]),
+    "fixturesOnDisk": len([p for p in _pairs if os.path.exists(os.path.join(_fx_dir, p[0]))]),
+    "sprint703Fixtures": len([p for p in _pairs if "sprint703" in p[0]]),
+    "isRecordWriteFn": bool(re.search(r"^def is_record_write\(command\):", _ck, re.M)),
+    "recordKeyPattern": bool(re.search(r"^RECORD_KEY = re\.compile\(", _ck, re.M)),
+    "claudeCopyIdentical": _ck == _ck_claude and bool(_ck),
+    "lines": _ck.count("\n"),
+} if _ck else None, "the checker's source",
+     ".engine/skills/delegated-ceremony/references/check_report.py: refusalKinds = `found.append(` calls in refusals(); pairs = "
+     "the `(fixture, expectation)` tuples inside `PAIRS = [...]`, positives carry a quoted expectation and negatives `None`; "
+     "fixturesOnDisk = those whose file exists under references/fixtures/; isRecordWriteFn / RECORD_KEY = the def and the compiled "
+     "pattern the two new refusals read; claudeCopyIdentical = byte equality with .claude/skills/.../check_report.py (sync-claude).")
+
+# --- D0473: the checker run live - the pair table, then each sprint-703 fixture on its own
+ok, out = run([sys.executable, _ckp, "--probe", "--root", "."], timeout=120)
+_probe_lines = (out or "").strip().splitlines()
+_per_fixture = {}
+for _name, _expect in _pairs:
+    _fok, _fout = run([sys.executable, _ckp, os.path.join(_fx_dir, _name), "--root", "."], timeout=120)
+    _flines = [l for l in (_fout or "").strip().splitlines() if l.strip()]
+    _per_fixture[_name] = {"exit0": bool(_fok), "refusals": len([l for l in _flines if l.startswith("  line ") or l.startswith("line ")]),
+                           "firstLine": _flines[0] if _flines else "", "lastLine": _flines[-1] if _flines else ""}
+fact("recorderCheckerLive", {
+    "probeExit0": bool(ok),
+    "probeLastLine": _probe_lines[-1] if _probe_lines else "",
+    "pairsHolding": len([l for l in _probe_lines if l.startswith("probe: known-") and ("-> PASS" in l or "-> REFUSED naming" in l)]),
+    "perFixture": _per_fixture,
+} if _probe_lines else None, "the checker on this tree",
+     "`python check_report.py --probe --root .`: exit code and the last line (`probe: every pair holds.`); pairsHolding = probe lines "
+     "reading `-> PASS` (a negative) or `-> REFUSED naming` (a positive); then the checker run once per PAIRS fixture, its exit and "
+     "first/last output lines - a positive exits 1 with `REFUSED:` first, a negative exits 0 with the `check_report: pass` line.")
+
+# --- issue532: the finding, and where its resolver sits
+_i532 = re.search(r"part issue532 : Issue\s*\{(.*?)\n\s*\}", _iss or "", re.S)
+_i532b = _i532.group(1) if _i532 else ""
+fact("recorderRefusalIssue", {
+    "exists": bool(_i532),
+    "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _i532b) or [None, None])[1],
+    "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _i532b) or [None, None])[1],
+    "resolver": (re.search(r"#Resolves dependency from (\w+) to issue532;", _iss or "") or [None, None])[1],
+    "title": (re.search(r'title\s*=\s*"([^"]+)"', _i532b) or [None, None])[1],
+    "namesTextpatch": "textpatch" in _i532b,
+    "namesThreeMore": "three more times" in _i532b,
+    "namesCheckerLines": "check_report.py lines 50-71" in _i532b,
+    "resolverPosition": (_nw_actions.index("dcRecorderReportRefusesNonRecordWrites") + 1) if "dcRecorderReportRefusesNonRecordWrites" in _nw_actions else None,
+    "nextWorkItems": len(_nw_actions),
+    "resolverDodNamesIssue": bool(re.search(r"dcRecorderReportRefusesNonRecordWritesDoD[^\n]*Resolves issue532\.", _bl)),
+} if _iss else None, "the finding Issue and its resolver",
+     ".tracking/issues-claudeFable5.sysml: the `part issue532 : Issue {` body's severity / createdAt / title, textpatch, `three more "
+     "times` and the checker's line span by literal search, and the `#Resolves dependency from <task> to issue532;` edge; "
+     ".tracking/backlog.sysml: the resolver's 1-based position among `action x;` lines inside `action def NextWork` (declaration "
+     "order IS priority, D0052) and whether its DoD line carries `Resolves issue532.` (guard issues, D0304).")
+
+# --- sprint 704: the delivery record the recorder wrote through the API, and the doc surfaces D0473 amended
+_s704p = os.path.join(REPO, ".tracking", "delivery", "sprint704_recorderReportRefusesNonRecordWrites.sysml")
+_s704 = read(_s704p) or ""
+_proc = read(os.path.join(REPO, ".engine", "processes", "delegated-ceremony.sysml")) or ""
+_skill = read(os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_cmd = read(os.path.join(REPO, "CLAUDE.md")) or ""
+if _s704:
+    _res4 = re.findall(r"part \w+\s*:\s*TestResult\s*\{[^}]*?outcome\s*=\s*VerdictKind::(\w+)", _s704)
+    _shas = sorted(set(re.findall(r'judgedAgainst\s*=\s*"([^"]+)"', _s704)))
+    fact("recorderRefusalSprint", {
+        "exists": True, "results": len(_res4),
+        "byOutcome": {o: _res4.count(o) for o in sorted(set(_res4))},
+        "judgedAgainst": _shas,
+        "gateResults": len(re.findall(r"part \w+GateR\d*\s*:\s*TestResult", _s704)),
+        "chartersD0473": bool(re.search(r"#CharteredBy\s+dependency\s+from\s+\w+\s+to\s+d0473\s*;", _s704)),
+        "evidenceNamesProbe": _s704.count("PROBE PAIR:"),
+        "evidenceNamesOldReportRefused": _s704.count("REFUSED: write outside the record API"),
+        "processNamesD0473": _proc.count("D0473"),
+        "processNamesOneWrite": "One write per owed record" in _proc,
+        "skillRuleFive": "(5) one write per owed record" in _skill,
+        "skillNamesFiveFixtures": "five" in _skill and "fixtures" in _skill,
+        "claudeMdNamesD0473": "D0473" in _cmd,
+    }, "the delivery record and the amended surfaces",
+         ".tracking/delivery/sprint704_recorderReportRefusesNonRecordWrites.sysml: results = `part x : TestResult {` segments and their "
+         "`VerdictKind::x`; judgedAgainst = the distinct `judgedAgainst = \"sha\"` values; gateResults = `part xGateRn : TestResult`; "
+         "chartersD0473 = a `#CharteredBy dependency from <story> to d0473;` line; evidence spans by literal count. "
+         ".engine/processes/delegated-ceremony.sysml counts `D0473` and carries `One write per owed record`; the recorder brief in "
+         ".engine/skills/delegated-ceremony/SKILL.md carries rule `(5) one write per owed record`; CLAUDE.md names D0473 (doc-sync).")
+else:
+    fact("recorderRefusalSprint", {"exists": False}, "the delivery record", "the file " + _s704p + " does not exist")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

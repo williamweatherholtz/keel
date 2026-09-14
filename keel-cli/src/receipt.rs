@@ -483,10 +483,16 @@ mod tests {
         assert!(!record_green(&d, &k, &[GUARDS], &red, &[]), "a red run never writes");
         delete(&d);
         assert!(read(&d, &k).is_none(), "a red run leaves no receipt");
-        // Fresh write inside the racy window: unsettled.
+        // A write inside the racy window: unsettled. Stamped NOW it raced the wall clock - `key` spawns
+        // two git commands, and under keel land's load (58 test binaries beside this one) they took longer
+        // than the two seconds the window allows, so the file read as settled and land withheld the push of
+        // 08268f9 (issue534; issue481 was the same race in the self-build hook test). An mtime the window
+        // cannot age past while this test runs, however slow the host, tests the same clause.
         std::fs::write(d.join("fresh.txt"), "f").expect("w");
+        let young = SystemTime::now() + Duration::from_mins(10);
+        std::fs::OpenOptions::new().write(true).open(d.join("fresh.txt")).expect("open").set_modified(young).expect("mtime");
         let ku = key(&d).expect("key");
-        assert!(!ku.settled, "a file written just now is inside the racy window");
+        assert!(!ku.settled, "a file whose mtime is not two seconds old is inside the racy window");
         assert!(!record_green(&d, &ku, &[GUARDS], &green(), &[]), "an unsettled key is not written");
         assert!(read(&d, &ku).is_none(), "nor honoured");
         let _ = std::fs::remove_dir_all(&d);

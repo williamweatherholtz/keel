@@ -19,7 +19,15 @@ the two guards take their files from one function; issue533 records that a DELIV
 resolver that has the VERIFIER read such claims back before the RECORDER writes. The builder refuses unless tool_reference's
 first statement is the shared call, the walk is defined once with two callers, tool-reference passes live, the Decision
 carries MEASURED: and the edge, and the Issue and resolver are recorded with the resolver's DoD naming it.
-One tab per ask (D0404); the seven carried tabs are the twenty-third builder's, every count a facts.py fact (sections 21-26),
+D0473 joined at the twenty-fifth publish: sprint 703's RECORDER, red after its retro-gate write, recorded the gate three
+more times with reworded evidence and then ran textpatch against the sprint file, listing the call as a WROTE: line, and
+check_report.py passed the report (issue532, High). The checker now refuses a WROTE: line whose command is not `keel record
+<sub-verb>` and two WROTE: lines naming one --gate or --task; five fixtures drive --probe, three cut from the real report. The
+builder refuses unless the Decision is proposed, marked, unaccepted, carries MEASURED: (its text says `gate --fast`, a D0469
+path word) and names issue532 and line 9; the checker's source carries both new refusals, five pairs on disk, a byte-identical
+.claude copy; the probe holds live and each fixture answers as its pair says; the Issue is High with a resolver whose DoD
+names it; sprint 704's seven results are all proposed at one sha through the record API.
+One tab per ask (D0404); the eight carried tabs are the twenty-fourth builder's, every count a facts.py fact (sections 21-27),
 never typed.
 
 Usage: python scripts/exec_brief/build_2026_09_13_cli_reference.py <facts.json> <previous.html> <out.html>
@@ -62,18 +70,18 @@ def n(x):
     return f"{int(x):,}" if float(x) == int(x) else f"{x:,}"
 
 
-# ---- the queue: eight ratifications and one fork -------------------------------------------------------
-QUEUE = ["d0461", "d0465", "d0466", "d0467", "d0468", "d0469", "d0470", "d0471", "d0472"]
+# ---- the queue: nine ratifications and one fork -------------------------------------------------------
+QUEUE = ["d0461", "d0465", "d0466", "d0467", "d0468", "d0469", "d0470", "d0471", "d0472", "d0473"]
 pending = v("pendingAcceptances")
 members = v("pendingMembers")
 AQ = v("authorityQueuePending")
 if len(members) != pending or v("pendingForks") != 1:
     sys.exit(f"refusing: facts disagree - {len(members)} members, {pending} pending, {v('pendingForks')} forks")
 if [p["slug"] for p in members] != QUEUE:
-    sys.exit(f"refusing: this page is written for the retro name, the keystone, the sample fork, the Issue-first retro, the host-cost thresholds, the measured-cost token, the reject verdict, the doc-verb guard and the shared walk; the queue is {[p['slug'] for p in members]}")
+    sys.exit(f"refusing: this page is written for the retro name, the keystone, the sample fork, the Issue-first retro, the host-cost thresholds, the measured-cost token, the reject verdict, the doc-verb guard, the shared walk and the recorder refusal; the queue is {[p['slug'] for p in members]}")
 if AQ["decisions"] != QUEUE:
     sys.exit(f"refusing: the authority-queue lens reads {AQ['decisions']}; the file-derived set is {QUEUE}")
-if [p["fork"] for p in members] != [False, False, True, False, False, False, False, False, False]:
+if [p["fork"] for p in members] != [False, False, True, False, False, False, False, False, False, False]:
     sys.exit("refusing: the fork must be the third member and the only one")
 
 tests, failing = v("suiteTests"), v("suiteFailed")
@@ -393,6 +401,65 @@ fig20 = downstream(
     ],
 )
 
+# ---- D0473: the recorder's report is refused on a non-record write or a record written twice ---------------
+RRD = v("recorderRefusalDecision")
+RCS = v("recorderCheckerSource")
+RCL = v("recorderCheckerLive")
+RRI = v("recorderRefusalIssue")
+RRS = v("recorderRefusalSprint")
+if not (RRD["status"] == "proposed" and RRD["marker"] == "#ProspectiveChange" and RRD["acceptance"] is None and RRD["notAFork"]):
+    sys.exit(f"refusing: the page says a proposed, process-marked, unaccepted, non-fork Decision; the record reads {RRD['status']}, {RRD['marker']}, {RRD['acceptance']}, fork={not RRD['notAFork']}")
+if not (RRD["measuredToken"] and RRD["pathWordsInDecision"] == ["gate"]):
+    sys.exit(f"refusing: the page says the decision text names `gate` and the rationale carries MEASURED: for it (D0469); the record reads {RRD['pathWordsInDecision']}, measured={RRD['measuredToken']}")
+if not (RRD["namesIssue532"] and RRD["namesTextpatch"] and RRD["namesLineNine"] and RRD["namesReminder"]):
+    sys.exit(f"refusing: the page says the Decision names issue532, the textpatch call, line 9 and D0047; the record reads {RRD}")
+if not (RCS["isRecordWriteFn"] and RCS["recordKeyPattern"] and RCS["refusalKinds"] == 6 and RCS["pairs"] == 5 and RCS["positives"] == 3 and RCS["negatives"] == 2):
+    sys.exit(f"refusing: the page says six refusal sentences (two new), five pairs, three positives; the source reads {RCS}")
+if not (RCS["fixturesOnDisk"] == 5 and RCS["sprint703Fixtures"] == 3 and RCS["claudeCopyIdentical"]):
+    sys.exit(f"refusing: the page says five fixtures on disk, three from sprint 703, and a byte-identical .claude copy; it reads {RCS}")
+if not (RCL["probeExit0"] and RCL["pairsHolding"] == 5 and RCL["probeLastLine"] == "probe: every pair holds."):
+    sys.exit(f"refusing: the page says every pair holds live; the probe reads {RCL['probeLastLine']} with {RCL['pairsHolding']} holding")
+_pos = [k for k in RCL["perFixture"] if k.startswith("positive-")]
+_neg = [k for k in RCL["perFixture"] if k.startswith("negative-")]
+if not (all(not RCL["perFixture"][k]["exit0"] and RCL["perFixture"][k]["firstLine"].startswith("REFUSED:") for k in _pos)
+        and all(RCL["perFixture"][k]["exit0"] and RCL["perFixture"][k]["lastLine"].startswith("check_report: pass") for k in _neg)):
+    sys.exit(f"refusing: the page says each positive exits 1 with REFUSED first and each negative exits 0 with the pass line; it reads {RCL['perFixture']}")
+if not (RRI["exists"] and RRI["severity"] == "High" and RRI["resolver"] == "dcRecorderReportRefusesNonRecordWrites" and RRI["resolverDodNamesIssue"] and RRI["namesTextpatch"] and RRI["namesThreeMore"]):
+    sys.exit(f"refusing: the page says a High Issue naming the textpatch call and the three re-records, with a resolver whose DoD names it; the record reads {RRI}")
+if RRI["resolverPosition"] is None or RRI["resolverPosition"] > RRI["nextWorkItems"]:
+    sys.exit(f"refusing: the page places the resolver in NextWork; it reads {RRI['resolverPosition']} of {RRI['nextWorkItems']}")
+if not (RRS["exists"] and RRS["results"] == 7 and RRS["byOutcome"] == {"pass": 7} and len(RRS["judgedAgainst"]) == 1 and RRS["chartersD0473"] and RRS["evidenceNamesOldReportRefused"] >= 2):
+    sys.exit(f"refusing: the page says seven passing results at one sha, chartered by d0473, with the old report's refusal as evidence; the record reads {RRS}")
+if not (RRS["processNamesD0473"] >= 2 and RRS["processNamesOneWrite"] and RRS["skillRuleFive"] and RRS["claudeMdNamesD0473"]):
+    sys.exit(f"refusing: the page says the process step, the recorder brief and CLAUDE.md carry the rule; they read {RRS}")
+TP = RCL["perFixture"]["positive-sprint703-textpatch-write.txt"]
+TW = RCL["perFixture"]["positive-sprint703-retro-recorded-twice.txt"]
+RO = RCL["perFixture"]["negative-sprint703-record-only.txt"]
+fig21 = logic_lanes(
+    "The same report, read by the checker before and after",
+    ("before", [
+        ("WROTE: python scripts/textpatch.py ...", "a write the API did not make", "bad", ""),
+        ("check_report.py", "read markers and the last line", "warn", ""),
+        ("pass", "exit 0", "bad", ""),
+    ], ["", ""]),
+    ("changed", [
+        ("the same WROTE: line", "line 9 of the report", "bad", ""),
+        ("check_report.py", "reads every WROTE: command", "ok", ""),
+        ("REFUSED", f"exit 1; {n(TP['refusals'])} line(s) named", "ok", ""),
+    ], ["", ""]),
+)
+fig22 = downstream(
+    "What the two refusals land on",
+    (f"check_report.py, {n(RCS['refusalKinds'])} refusal sentences", f"{n(RCS['pairs'])} fixtures under --probe", ""),
+    [
+        ("a non-record write", "refused naming the command", f"{n(TP['refusals'])} line", "ok" if not TP["exit0"] else "bad"),
+        ("one gate written twice", "refused naming both lines", f"{n(TW['refusals'])} lines", "ok" if not TW["exit0"] else "bad"),
+        ("the report with both removed", "passes", "exit 0", "ok" if RO["exit0"] else "bad"),
+        ("the finding", f"a report passed over its own admission; resolver at {n(RRI['resolverPosition'])} of {n(RRI['nextWorkItems'])}", RRI["severity"], "warn"),
+    ],
+)
+
+
 
 def courses(rows):
     body = "".join(f"<tr><td>{a}</td><td>{b}</td><td>{c}</td></tr>" for a, b, c in rows)
@@ -554,6 +621,7 @@ ASKS = [
     ("d0470", "ask-reject", "Reject verdict", "reject"),
     ("d0471", "ask-cliref", "Verbs", "cliref"),
     ("d0472", "ask-sharedwalk", "Walk", "sharedwalk"),
+    ("d0473", "ask-recorder", "Recorder", "recorder"),
 ]
 NOTE_SHORT = "I usually want issues coming out of retros, not decisions"
 if NOTE_SHORT not in NOTE_CORE:
@@ -677,6 +745,18 @@ panel_bodies = {
 ])}
 <p><strong>True in the model:</strong> tool_reference opens with <code>{escape(SWS['toolReferenceFirstStatement'])}</code>; the walk is defined once, {SWS['callers']} callers; tool-reference passes over {n(TRL['scanned'])} files as before; the finding is a {SWI['severity']} Issue whose resolver has the verifier read such claims back first. <strong>Mine:</strong> that the copies would part is a forecast; that no test could tell them apart is the finding. <strong>What decides it:</strong> whether a guard's scope is part of its meaning; if two matching lists are one to you, hold. <strong>Wrong if</strong> each guard should own its scope.</p>
 <div class="opts" data-records="d0472"><label><input type="radio" name="ask-sharedwalk" value="Accept: the living doc surface a guard reads exists once in source, living_doc_files, and both tool-reference and cli-reference take their file list from it (recommended)">Accept (recommended)</label><label><input type="radio" name="ask-sharedwalk" value="Hold: the shared-walk Decision stays proposed; the edit stands on the tree">Hold</label><label><input type="radio" name="ask-sharedwalk" value="Reject: tool_reference regains its own walk; recorded rejected">Reject</label></div>""",
+    "recorder": f"""<h2>The recorder's report is refused on a write it should not have made</h2>
+<p>The item: <q>{escape(RRD['decision'])}</q></p>
+<p><strong>Why yours:</strong> the checker is an enforcement surface, held for your word. <strong>Accepting binds:</strong> a recorder that admits a write outside the record API, or a second record of one gate, gets its report back refused; the primary triages. <strong>How it surfaced:</strong> sprint 703's recorder hit a red, recorded the gate three more times, then ran textpatch on the sprint file and said so - and the checker passed the report.</p>
+{fig21}
+{fig22}
+{courses([
+    ("Accept", "the record matches the tree", "two rules the report can no longer admit and pass"),
+    ("Hold", "nothing", "the checker runs unratified"),
+    ("Reject", "one revert, quoting you", "the brief's rules 1 and 2 stay text a report can pass over"),
+])}
+<p><strong>True in the model:</strong> the old checker passed that report; the new one refuses it naming line 9; {n(RCS['pairs'])} pairs hold live, {n(RCS['sprint703Fixtures'])} cut from the real report; sprint 704's {n(RRS['results'])} results are all proposed at one sha through the API. <strong>Mine:</strong> that a recorder will do this again is a forecast; that the one control reading its output could not see it is the finding. <strong>What decides it:</strong> whether a red after a write should ever be retried by the recorder itself; today it is reported. <strong>Wrong if</strong> you want the recorder to correct its own reds.</p>
+<div class="opts" data-records="d0473"><label><input type="radio" name="ask-recorder" value="Accept: check_report.py refuses a recorder report whose WROTE: line names a command that is not keel record with a sub-verb, and one with two WROTE: lines naming one --gate or --task; the brief states both rules (recommended)">Accept (recommended)</label><label><input type="radio" name="ask-recorder" value="Hold: the recorder-refusal Decision stays proposed; the checker runs on the tree">Hold</label><label><input type="radio" name="ask-recorder" value="Reject: the two refusals and their fixtures are reverted; a recorder report may name a non-record write and pass; recorded rejected">Reject</label></div>""",
 }
 
 
@@ -686,7 +766,7 @@ def frame(panels_html, tabs_html, title, sub):
 <h1 data-digest="title">{title}</h1>
 <div class="topbar"><p class="sub" data-digest="subtitle">{sub}</p><button class="copy" data-copy type="button" aria-label="Copy this brief for AI">&#8681; Copy for AI</button></div>
 
-<div class="ask"><p class="verdict"><strong>Accept the eight controls</strong> and <strong>read the recall rule at {N100} cases</strong> so {MID} stands. <strong>Wrong if</strong> a one-position median move at {N50} cases is signal to you.</p></div>
+<div class="ask"><p class="verdict"><strong>Accept the nine controls</strong> and <strong>read the recall rule at {N100} cases</strong> so {MID} stands. <strong>Wrong if</strong> a one-position median move at {N50} cases is signal to you.</p></div>
 <div class="chips"><span class="chip"><b>Waiting on you</b> {pending}</span><span class="chip"><b>Forks</b> 1</span><span class="chip"><b>Hook p90</b> {n(P90)} ms</span></div>
 
 <div class="tabs" role="tablist" aria-label="The asks">{tabs_html}</div>
@@ -697,8 +777,8 @@ def frame(panels_html, tabs_html, title, sub):
 </div>
 """
 
-TITLE = f"Accept eight controls, and read the recall rule at {N100} cases so its setting stands"
-SUB = "Eight ratifications, one fork"
+TITLE = f"Accept nine controls, and read the recall rule at {N100} cases so its setting stands"
+SUB = "Nine ratifications, one fork"
 
 
 def render(panel_bodies):
@@ -756,5 +836,6 @@ print(f"wrote {out_path}: {len(page)} bytes; frame {frame_words} words; panels "
       ", ".join(f"{k} {n_}" for k, n_ in sorted(panel_words.items(), key=lambda kv: -kv[1])) +
       f"; per tab " + ", ".join(f"{k} {frame_words + n_}" for k, n_ in panel_words.items()) +
       f"; summed {words(page)}; cli-reference {CRL['line']}; guards {CRG['guardCount']}; rejected {RC['rejected']} all-human={RC['allHumanJudged']}; would-warn {PW['wouldWarn']} of {UNACC} unaccepted marked ({PROPOSED_MARKED} proposed, {REJECTED} rejected); "
-      f"clause inert (armed={PW['armed']}); guard run {B_MED} s before / {W_MED} s with; live set {LG['liveSetSeconds']} s of {LG['fullSuiteSeconds']}")
+      f"clause inert (armed={PW['armed']}); guard run {B_MED} s before / {W_MED} s with; live set {LG['liveSetSeconds']} s of {LG['fullSuiteSeconds']}; "
+      f"recorder checker {RCL['probeLastLine']} ({RCS['refusalKinds']} refusals, {RCS['pairs']} pairs); sprint 704 {RRS['results']} results at {RRS['judgedAgainst']}")
 assert_fits(out_path)   # probe first, then measure in a browser with and without web fonts; findings remove the page

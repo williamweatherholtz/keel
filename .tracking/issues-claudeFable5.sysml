@@ -1269,4 +1269,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcDeliveredClaimsAreReadBackFromSource to issue533;
+
+    part issue534 : Issue {
+        :>> id = "7bda1105-682e-4bda-bd03-d5030949dd11";
+        :>> title = "a_red_run_deletes_the_receipt_and_an_unsettled_key_is_never_trusted races the wall clock: under keel land's load key() reached the mtime after the two-second window and land withheld the push of 08268f9";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel land withheld the push of 08268f9 (D0473, sprint 704: no .rs change, the lib tests ran because a source path changed) on one lib test: receipt::tests::a_red_run_deletes_the_receipt_and_an_unsettled_key_is_never_trusted panicked at keel-cli/src/receipt.rs:489 - 'a file written just now is inside the racy window' - after 578 lib tests passed (.keel/metrics/touched-1789352135.log line 475; touched receipt outcome fail, passed 767, failed 1, 967 s). The test writes fresh.txt and asserts key() reads it as unsettled; the only path to settled = true for an existing readable file is hash_path (receipt.rs 158): now - mtime >= RACY, two seconds. key() spawns git status and git ls-files before it reaches the mtime; under the land's load (58 touched test binaries beside the lib tests) those spawns took longer than the window, so the file read as settled. The same test passed in the land of 8cb5b2d one commit earlier (1032 s, 801/0); the tree it ran over holds no change to receipt.rs. This is issue481's shape (sprint 670: the self-build hook test stamped a fixture NOW and raced the two-second grace) in a second test: an assertion whose truth depends on how fast the host reaches a clock read is judging the host, not the change, and it can withhold a push the verifier's run of the same set had passed. The touched log line span: 475 (FAILED), 587-591 (the panic), 597 (578 passed; 1 failed).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcReceiptTestDoesNotRaceTheClock to issue534;
+
+    part issue535 : Issue {
+        :>> id = "64b9f699-852f-46ff-b91e-43b8fd2a2a56";
+        :>> title = "the console's whats-next is computed by a second frontier (lib.rs compute_orient_state, alphabetical, unfiltered) and does not match keel show whats-next";
+        :>> createdAt = "2026-09-13";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The console's whats-next is not the CLI's whats-next. keel-cli/src/serve.rs 2239 binds the served 'whats-next' view to crate::whats_next_root, which is lib.rs 429-430 returning orient_root(root).ready, which is lib.rs 371-417 compute_orient_state: a second frontier computation that (a) sorts the ready list alphabetically (lib.rs 417, ready.sort()) where the CLI ranks by backlog declaration order (orient.rs 1052, sort_by_key on TaskData.order, D0052), and (b) applies none of the CLI's filters - no retired-work or awaiting-a-human removal, no invalidEvidence re-entry, no fail-closed compute_failures (orient.rs 1044-1050, issue247). The CliCommand cliWhatsNext (.engine/cli/commands.sysml 28) declares one synopsis, 'the ready list in priority order - declaration order is priority'; the console answers it with a different list in a different order. D0093 says CLI/JSON is authority and HTML is the human's lens; here the lens computes its own answer. Found 2026-09-13 while checking why a backlog reorder (dcReceiptTestDoesNotRaceTheClock moved to the head of NextWork) left the item at position 45 of the CLI list: the CLI was right - EngineBuild's 44 ready actions are declared first - and the check exposed the second computation on the served path. Not yet reproduced against a running server; the claim is the code read at the lines named.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcServedWhatsNextIsTheCliFrontier to issue535;
 }
