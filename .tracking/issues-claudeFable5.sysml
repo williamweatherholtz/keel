@@ -1291,4 +1291,48 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcServedWhatsNextIsTheCliFrontier to issue535;
+
+    part issue536 : Issue {
+        :>> id = "d0e2af6f-2503-4bb2-aef8-28ca98b84266";
+        :>> title = "The lib unit-test binary is the critical path twice (283 s compile, 136-193 s run) and nothing measures its tests";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The lib unit-test binary is the critical path twice with no per-test measurement. cargo --timings on a one-file touch (target/cargo-timings/cargo-timing-20260914T035135064Z-ab7d6a9c844cc68e.html): lib cfg(test) 283 s compile, the longest unit of the build; the six most recent touched logs (touched_breakdown.py over .keel/metrics/touched-*.log) put the same binary at 136-193 s to run, four times the next slowest (42 s). touched.rs:178 still describes it as '~15 s on this host'. Nothing measures which unit tests cost the time.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcNextestIsTheTouchedRunner to issue536;
+
+    part issue537 : Issue {
+        :>> id = "eec6eb28-312a-4328-a973-a9e42afedf52";
+        :>> title = "Every .engine edit reruns 57 of 71 test binaries and nothing memoises a green run, so one fix ran them three times";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Every .engine edit reruns 57 of 71 test binaries, repeatedly. touched.rs:68-74 embedded_stem attributes any .engine/** path to init, which 57 test files name; that attribution is correct (the tree is embedded) but nothing memoises the outcome, so the same binaries ran three times for one one-line fix (touched-1789357116.log: build 1.08 s, tests 736 s). The waste is the repeat, not the attribution.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcTouchedReceiptIsContentKeyedPerBinary to issue537;
+
+    part issue538 : Issue {
+        :>> id = "d229825c-5865-4304-b634-90ec144e625b";
+        :>> title = "A CliCommand fact owned by a retired actor cannot be amended by any live actor: D0108 says supersede, cli-surface-declared compares every authored fact to the mirror";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A CliCommand fact owned by a retired actor cannot be amended by any live actor. Found 2026-09-14 while landing D0474: `keel gate guard ownership --no-receipt .` read two violations - `.engine/cli/commands.sysml: 'cliSuite' is owned by 'claudeOpus5' and its fields were edited by 'claudeFable5' - D0108 ...` and the same for `cliLand` - when the synopses were amended to name the new skip rule. D0108 says a non-owner SUPERSEDES, never overwrites in place. But guard cli-surface-declared (keel-cli/src/guards.rs, cli_surface_violations) collects every `: CliCommand {` line of commands.sysml, indexes by `name`, and compares EVERY authored fact to cli_facts.rs field by field: a superseded fact left in the file with its old synopsis fails the mirror, and deleting it is an edit to a field nobody living owns. The previous synopsis amendment (8857173, 2026-09-11, issue478) passed only because the bound actor was the owner, claudeOpus5. So the CLI surface as an authored fact (D0271) is amendable by exactly one actor per command, and that actor is no longer the one working here. The D0474 landing left the synopses as authored (still true, silent on the skip) and carried the rule in `suite --help` (code, not a fact) and in the skill. Control wanted: cli-surface-declared excludes #Supersede targets from the authored set and fails two live facts sharing a name, so the D0108 route actually exists for CLI facts.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcCliFactsOwnedByARetiredActorAreSupersedable to issue538;
+
+    part issue539 : Issue {
+        :>> id = "1c14d0c8-a8e5-41a8-9327-784c74636a4f";
+        :>> title = "KEEL_PERF in the operator's environment leaks into the tests' child keel processes and turns the touched run red";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "An operator's KEEL_PERF in the environment leaks into every keel process the integration tests spawn, and the touched run fails on it. Found 2026-09-14 on the first D0474 run over the real tree: `KEEL_PERF=1 keel suite --touched .` executed 63 binaries in 1246 s and reported 792 passed, 5 failed in control_structure_is_computed, library_read_side and stop_says_nothing_about_decisions. Every failure is the same shape: `the view is JSON: trailing characters at line 2681` (control_structure_is_computed.rs:40), `the lens speaks JSON: Error('trailing characters', line: 21)` (stop_says_nothing_about_decisions.rs:84), and the library differential (`a_projects_gate_is_byte_identical_with_and_without_the_library`) whose left and right differ only in `keel perf:` timing lines. The perf report is written to stdout after the command's own output when KEEL_PERF is set, and cargo test inherits the env of `keel suite`, so the tests' child keel processes printed it too. The rerun with the variable unset passed those three binaries (12 passed, 56 s) and the other 60 were skipped on their observations - the D0474 table did what it was built for, but the first receipt was red for a reason that was not the code's. Control wanted: `keel suite` (and `land`) scrub KEEL_PERF from the cargo child's environment - the operator's profiling request is for the suite process, never for the code under test - and the perf report goes to stderr so a JSON consumer never reads it.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcTouchedRunScrubsPerfFromTheChildEnv to issue539;
 }

@@ -222,10 +222,12 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         println!("  --touched: instead run ONLY the integration tests that name a module changed since the base");
         println!("  of the push (origin/<branch>, else the last suite receipt's head, else HEAD~1) and write");
         println!("  {}: the base, stems, set and cost - an empty set is recorded too (D0421).", crate::touched::RECEIPT);
+        println!("  A binary of the set observed green at the current content (the code, and the tree too when the");
+        println!("  test reads this repository) is SKIPPED; --no-receipt or KEEL_NO_RECEIPT=1 runs every one (D0474).");
         return 0;
     }
     if args.iter().take_while(|a| *a != "--").any(|a| a == "--touched") {
-        return crate::touched::cmd(repo);
+        return crate::touched::cmd(repo, crate::receipt::forced(args));
     }
     if !is_self_build(repo) {
         eprintln!("keel suite: {} holds no keel-cli/Cargo.toml - there is no suite to run here (a downstream project's gate is `keel gate`)", repo.display());

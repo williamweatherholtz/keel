@@ -56,6 +56,9 @@ fn fixture_with(tag: &str, accepted: bool, prose_names_token: bool) -> PathBuf {
     std::fs::create_dir_all(&root).expect("mkdir");
     assert!(run(&root, &["init", "."]).0, "scaffold");
     write(&root, "keel-cli/Cargo.toml", "[package]\nname = \"fake\"\nversion = \"0.0.1\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n");
+    // What cargo writes is ignored here as it is in the real repository: an untracked, unignored
+    // `target/` is a tree that moves under every run, and no D0474 observation would ever be kept.
+    write(&root, "keel-cli/.gitignore", "target/\nCargo.lock\n");
     write(&root, "keel-cli/src/lib.rs", "pub mod widget;\n");
     write(&root, "keel-cli/src/widget.rs", "pub fn answer() -> u8 { 1 }\n");
     write(&root, "keel-cli/tests/widget_check.rs", "#[test]\nfn widget_answers() { assert_eq!(fake::widget::answer(), 1); }\n");
@@ -161,4 +164,68 @@ fn the_set_is_computed_from_text_by_whole_word() {
     assert_eq!(keel_cli::touched::touched_tests(&tests, &["sync".to_string()], &[]), vec!["land_gate".to_string()]);
     assert!(keel_cli::touched::touched_tests(&tests, &["synced".to_string()], &[]).is_empty());
     assert_eq!(keel_cli::touched::module_stem("keel-cli/src/main.rs"), None, "main.rs names no module");
+}
+
+/// D0474 (issue537), the probe pair chosen before the rule was written. Known-positive: a second
+/// `suite --touched` over the unchanged tree executes NOTHING - every binary was observed green at
+/// this content; a records-only write moves the tree key alone, so exactly the self-reading `lib`
+/// reruns and `widget_check` is skipped, on `suite --touched` and on `land` alike. Known-negative: a
+/// source edit moves the code key and everything reruns; `--no-receipt` reruns everything on a green
+/// tree; a red binary loses its observation and is not skipped next time.
+#[test]
+fn a_binary_observed_green_at_this_content_is_skipped_and_a_moved_key_reruns_it() {
+    let root = fixture("memo", true);
+    write(&root, "keel-cli/src/widget.rs", "pub fn answer() -> u8 { 2 }\n");
+    write(&root, "keel-cli/tests/widget_check.rs", "#[test]\nfn widget_answers() { assert_eq!(fake::widget::answer(), 2); }\n");
+    commit(&root, "widget and its test move together");
+    let receipt = || std::fs::read_to_string(root.join(keel_cli::touched::RECEIPT)).expect("receipt written");
+
+    // First run: nothing is observed yet, both binaries run and both are recorded green.
+    let (ok, out) = run(&root, &["suite", "--touched", "."]);
+    assert!(ok, "the consistent tree passes: {out}");
+    let r = receipt();
+    assert!(r.contains("outcome = \"pass\"") && r.contains("ran = [\"lib\", \"widget_check\"]") && r.contains("skipped = []"), "the first run executes the whole set: {r}");
+    assert!(r.contains("binary = \"widget_check\"") && r.contains("binary = \"lib\"") && r.contains("code_key = \"") && r.contains("self_reading = [\"lib\"]"), "and observes both: {r}");
+
+    // Known-positive: the same tree again executes nothing.
+    let (ok, out) = run(&root, &["suite", "--touched", "."]);
+    assert!(ok, "{out}");
+    assert!(out.contains("nothing to execute") && out.contains("2 skipped, observed green at this content [lib, widget_check]"), "an unchanged tree runs no binary: {out}");
+    let r = receipt();
+    assert!(r.contains("outcome = \"pass\"") && r.contains("ran = []") && r.contains("skipped = [\"lib\", \"widget_check\"]"), "{r}");
+    assert!(r.contains("binary = \"widget_check\""), "the table is carried, not consumed: {r}");
+
+    // A ceremony write: the tree key moves, the code key holds - the self-reading lib reruns alone.
+    write(&root, "records.md", "a record no binary reads\n");
+    let (ok, out) = run(&root, &["suite", "--touched", "."]);
+    assert!(ok, "{out}");
+    assert!(out.contains("over [lib]") && out.contains("1 skipped, observed green at this content [widget_check]"), "a .tracking write reruns exactly the self-reading binary: {out}");
+
+    // And `land` after the ceremony is committed: HEAD moved, the code did not - the same split.
+    commit(&root, "the ceremony");
+    let (ok, out) = run(&root, &["land", "."]);
+    assert!(ok && out.contains("landed"), "{out}");
+    assert!(out.contains("touched tests pass") && out.contains("over [lib]") && out.contains("[widget_check]"), "land skips the binary observed green at this code: {out}");
+    assert!(out.contains("are skipped, D0474"), "and says the rule it applied: {out}");
+
+    // Known-negative: a source edit moves the code key - everything reruns.
+    write(&root, "keel-cli/src/widget.rs", "pub fn answer() -> u8 { 2 }\npub fn other() -> u8 { 3 }\n");
+    let (ok, out) = run(&root, &["suite", "--touched", "."]);
+    assert!(ok, "{out}");
+    assert!(out.contains("over [lib, widget_check]") && !out.contains("skipped, observed"), "a code edit reruns the whole set: {out}");
+
+    // Known-negative: --no-receipt on a green tree reruns everything.
+    let (ok, out) = run(&root, &["suite", "--touched", ".", "--no-receipt"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("over [lib, widget_check]") && !out.contains("skipped, observed"), "--no-receipt is the caller's word to run it all: {out}");
+
+    // Known-negative: a red binary loses its observation; the next run does not skip it.
+    write(&root, "keel-cli/tests/widget_check.rs", "#[test]\nfn widget_answers() { assert_eq!(fake::widget::answer(), 9); }\n");
+    let (ok, out) = run(&root, &["suite", "--touched", "."]);
+    assert!(!ok && out.contains("failing [widget_check]"), "the stale test fails: {out}");
+    let r = receipt();
+    assert!(r.contains("outcome = \"fail\"") && !r.contains("binary = \"widget_check\"") && r.contains("binary = \"lib\""), "the red loses its row, the green keeps it: {r}");
+    let (ok, out) = run(&root, &["suite", "--touched", "."]);
+    assert!(!ok && out.contains("over [widget_check]") && out.contains("1 skipped, observed green at this content [lib]"), "the red reruns; the green at this content does not: {out}");
+    let _ = std::fs::remove_dir_all(root.parent().expect("base"));
 }

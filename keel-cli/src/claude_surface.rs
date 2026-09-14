@@ -77,12 +77,15 @@ pub const OUTPUT_STYLE: &str = include_str!("../../.claude/output-styles/keel.md
 ///
 /// Owned by D-P0a; P1/D-P1a layers ask/override semantics on top. Paths are substring-matched with
 /// both separators.
-pub const PROTECTED_PATHS: [(&str, &str); 5] = [
+pub const PROTECTED_PATHS: [(&str, &str); 6] = [
     (".tracking/issues", "keel record issue"), // prefix: covers issues.sysml AND per-actor issues-<actor>.sysml (issue210)
     (".tracking/backlog.sysml", "keel record task"),
     (".tracking/critiques", "the disposition write API (POST /api/disposition) or keel record review"), // prefix: covers per-actor files too (issue210)
     (".tracking/delivery/", "keel record sprint / keel record gate-result / keel record result"),
     (".engine/decisions/", "keel record decision, accepted only via keel accept (human-only)"),
+    // D0474: the receipts memoise which test binaries were observed green at which content, and
+    // `keel land` skips on them. A receipt a tool could Write is a green nobody ran.
+    (".keel/metrics/", "keel suite / keel land / keel gate - the runs write their own receipts"),
 ];
 
 /// Control-plane surfaces (D0179/K7): a write here weakens or redirects enforcement.

@@ -20,6 +20,19 @@
 //! costs a test run; under-inclusion is the CI red this replaces, so the match is generous and pure
 //! (`names_stem`, `touched_tests` - unit-tested below).
 //!
+//! WHAT IS RUN of the set (D0474, issue537). One touched run costs ~936 s on this host, and the same
+//! one-line fix ran three times in sprint 705 - the third time cargo rebuilt in 1.08 s and the tests
+//! ran 736 s, because nothing held a memo of the RUN. The receipt now records, per binary, the
+//! content its outcome depends on (`contentkey`): `code`, the bytes compiled into or run by the
+//! binaries, and `tree`, every path outside `.keel/` plus HEAD. A binary whose text names
+//! `CARGO_MANIFEST_DIR` is SELF-READING - it reads this repository's own tree (eighteen of them on
+//! 2026-09-14; the lib's unit tests always are) - and is keyed on both; every other binary is keyed on
+//! `code` alone. A binary with a green observation at the current key is SKIPPED; the rest run, and
+//! the run's greens join the table. The invariant is that every binary in the set was observed green
+//! against the content its outcome depends on - not that this run produced the observation. Skipping
+//! is a memo of a run, never a substitute for one: a red drops the entry, `--no-receipt` or
+//! `KEEL_NO_RECEIPT=1` runs everything, and a tree that moved during the run records nothing.
+//!
 //! THE BASE is `origin/<branch>` when it resolves (what the push will land on), else the head the
 //! last suite receipt recorded, else `HEAD~1`; a tree with none of those reads every tracked module
 //! as changed and says so. THE CHANGED SET is measured from the merge-base to the WORKING TREE -
@@ -34,11 +47,20 @@
 //! `keel suite --touched` runs the set on demand regardless: an explicit command is the caller's word.
 //!
 //! THE RECEIPT is machine-local, beside the suite's (`.keel/metrics/touched-receipt.toml`): the base,
-//! the stems, the tests, what they cost, and the outcome - an empty set is a receipt too.
+//! the stems, the tests, what they cost, the outcome, and the `[[observed]]` table - an empty set is a
+//! receipt too, and carries the table forward. The receipt files are pre-write protected surfaces
+//! (`claude_surface::PROTECTED_PATHS`): a memo a tool could Write would be an honour system.
 
 use std::path::{Path, PathBuf};
 
 pub const RECEIPT: &str = ".keel/metrics/touched-receipt.toml";
+
+/// The name the lib's own unit tests carry in the set, the receipt and cargo's rerun hint.
+pub const LIB: &str = "lib";
+
+/// The env var a test reads to reach this repository's own tree; a test whose text names it is
+/// self-reading (D0474).
+const SELF_READING_MARK: &str = "CARGO_MANIFEST_DIR";
 
 /// The module stem a changed path contributes, or `None` for a path that names no module.
 ///
@@ -129,6 +151,21 @@ pub fn touched_tests(tests: &[(String, String)], stems: &[String], changed_tests
     out
 }
 
+/// The self-reading tests, pure (D0474).
+///
+/// Every test whose text names `CARGO_MANIFEST_DIR` - the one way the eighteen that read this
+/// repository's own tree reach it - plus `lib`, whose unit tests read live facts by construction
+/// (`adherence.rs`, `cli_surface_declared_tests` among them). Sorted. A second idiom, when one
+/// appears, is added HERE, not to a reminder.
+#[must_use]
+pub fn self_reading_tests(tests: &[(String, String)]) -> Vec<String> {
+    let mut out: Vec<String> = tests.iter().filter(|(_, text)| text.contains(SELF_READING_MARK)).map(|(name, _)| name.clone()).collect();
+    out.push(LIB.to_string());
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// The test binaries cargo reported as failed (pure, over cargo's captured output).
 ///
 /// Read from cargo's OWN attribution on stderr - `error: test failed, to rerun pass \`--test <name>\``
@@ -143,8 +180,8 @@ pub fn failing_binaries(cargo_output: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for line in cargo_output.lines() {
         // The lib's hint is `--lib`, with no name: it is reported as `lib`.
-        if line.contains("`--lib`") && !out.iter().any(|n| n == "lib") {
-            out.push("lib".to_string());
+        if line.contains("`--lib`") && !out.iter().any(|n| n == LIB) {
+            out.push(LIB.to_string());
         }
         let mut rest = line;
         while let Some(i) = rest.find("`--test ") {
@@ -164,6 +201,84 @@ pub fn failing_binaries(cargo_output: &str) -> Vec<String> {
     out
 }
 
+/// One green observation (D0474): `binary` passed at content `code` (and `tree`, which matters only
+/// when the binary is self-reading), `at` seconds since the epoch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Observed {
+    pub binary: String,
+    pub code: String,
+    pub tree: String,
+    pub at: u64,
+}
+
+/// The skip computation, pure (D0474): which binaries of `set` have a green observation at `keys`.
+///
+/// A binary is skipped when an observation names it at an equal `code` key and - if it is in
+/// `self_reading` - an equal `tree` key. Both vectors come back sorted; together they are `set`.
+#[must_use]
+pub fn split(set: &[String], self_reading: &[String], observed: &[Observed], keys: &crate::contentkey::ContentKeys) -> (Vec<String>, Vec<String>) {
+    let mut run = Vec::new();
+    let mut skipped = Vec::new();
+    for b in set {
+        let green = observed.iter().any(|o| o.binary == *b && o.code == keys.code && (!self_reading.contains(b) || o.tree == keys.tree));
+        if green {
+            skipped.push(b.clone());
+        } else {
+            run.push(b.clone());
+        }
+    }
+    run.sort();
+    skipped.sort();
+    (run, skipped)
+}
+
+/// The observation table after a run, pure.
+///
+/// Every binary that RAN loses its old entry; those that passed gain one at `keys` (when `keys` is
+/// `Some` - the tree held still through the run); a binary that was not run keeps whatever it had. A
+/// run cargo did not finish (`cargo_ok` false with no attributed failure - a build error, a killed
+/// process) is nobody's green.
+#[must_use]
+pub fn merge_observed(prior: &[Observed], ran: &[String], failing: &[String], cargo_ok: bool, keys: Option<&crate::contentkey::ContentKeys>, at: u64) -> Vec<Observed> {
+    let mut out: Vec<Observed> = prior.iter().filter(|o| !ran.contains(&o.binary)).cloned().collect();
+    let attributed = cargo_ok || !failing.is_empty();
+    if let Some(k) = keys {
+        if attributed {
+            for b in ran.iter().filter(|b| !failing.contains(b)) {
+                out.push(Observed { binary: b.clone(), code: k.code.clone(), tree: k.tree.clone(), at });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.binary.cmp(&b.binary));
+    out
+}
+
+/// The `[[observed]]` table of the receipt at `repo`, empty when there is none or it does not parse -
+/// no observation is never wrong, only slow.
+#[must_use]
+pub fn read_observed(repo: &Path) -> Vec<Observed> {
+    let Ok(text) = std::fs::read_to_string(repo.join(RECEIPT)) else { return Vec::new() };
+    parse_observed(&text)
+}
+
+/// Pure over the receipt's text.
+#[must_use]
+pub fn parse_observed(text: &str) -> Vec<Observed> {
+    let Ok(v) = toml::from_str::<toml::Value>(text) else { return Vec::new() };
+    let Some(rows) = v.get("observed").and_then(|o| o.as_array()) else { return Vec::new() };
+    let s = |row: &toml::Value, k: &str| row.get(k).and_then(|x| x.as_str()).map(str::to_string);
+    rows.iter()
+        .filter_map(|row| {
+            Some(Observed {
+                binary: s(row, "binary")?,
+                code: s(row, "code")?,
+                tree: s(row, "tree")?,
+                at: row.get("at").and_then(toml::Value::as_integer).and_then(|i| u64::try_from(i).ok()).unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
 /// What was computed for one push: the base compared against, the stems, and the set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Touched {
@@ -177,6 +292,9 @@ pub struct Touched {
     /// synopsis and hardcoded which Decisions it may cite, and CI went red on cab7cac when the
     /// synopsis gained a citation the set never ran (issue438). ~15 s on this host.
     pub lib: bool,
+    /// The self-reading binaries among ALL integration tests plus `lib` (D0474) - keyed on the tree
+    /// as well as the code.
+    pub self_reading: Vec<String>,
     /// Every path the working tree changed since the base (tracked edits and untracked crate files),
     /// repo-relative - what the eol refusal names first (issue478).
     pub changed: Vec<String>,
@@ -194,6 +312,17 @@ impl Touched {
     #[must_use]
     pub const fn nothing_to_run(&self) -> bool {
         self.tests.is_empty() && !self.lib
+    }
+
+    /// The whole set as binary names: the integration tests plus `lib` when it is in.
+    #[must_use]
+    pub fn binaries(&self) -> Vec<String> {
+        let mut v = self.tests.clone();
+        if self.lib {
+            v.push(LIB.to_string());
+        }
+        v.sort();
+        v
     }
 
     /// The eol refusal line, or `None` when every declared path holds its ending: the changed paths by
@@ -278,6 +407,7 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
             }
         }
     }
+    let self_reading = self_reading_tests(&tests);
     let tests = touched_tests(&tests, &stems, &changed_tests);
     // The lib is in the set when any source changed - and the embedded tree IS source: its bytes are
     // in the binary and the lib's own tests read `ENGINE_DIR` (issue524).
@@ -285,7 +415,7 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
     // issue478: the endings are read with the set, before any decision to run - the receipt this
     // computation writes must be able to say `eol-mismatch` in place of a verdict cargo never reached.
     let census = crate::eol::census(repo)?;
-    Ok(Touched { base, stems, unattributed, tests, lib, changed, eol: census.mismatches, eol_scanned: census.scanned, eol_millis: census.millis })
+    Ok(Touched { base, stems, unattributed, tests, lib, self_reading, changed, eol: census.mismatches, eol_scanned: census.scanned, eol_millis: census.millis })
 }
 
 /// Is the land refusal ARMED - has the human accepted D0421? The D0338 pattern: the decision file
@@ -326,6 +456,33 @@ pub struct Run {
     pub seconds: u64,
     pub cargo_ok: bool,
     pub log: PathBuf,
+    /// The binaries this run executed (D0474) - the set minus `skipped`.
+    pub ran: Vec<String>,
+    /// The binaries observed green at this content by an earlier run, and not executed (D0474).
+    pub skipped: Vec<String>,
+}
+
+impl Run {
+    /// Green: cargo finished and nothing failed. An all-skipped run is green with nothing counted.
+    #[must_use]
+    pub const fn green(&self) -> bool {
+        self.cargo_ok && self.failed == 0
+    }
+
+    /// `N passed in Ns; M skipped (green at this content)` - the line `land` and `suite --touched` print.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        use std::fmt::Write as _;
+        let mut s = if self.ran.is_empty() {
+            "nothing to execute".to_string()
+        } else {
+            format!("{} passed in {}s over [{}]", self.passed, self.seconds, self.ran.join(", "))
+        };
+        if !self.skipped.is_empty() {
+            let _ = write!(s, "; {} skipped, observed green at this content [{}]", self.skipped.len(), self.skipped.join(", "));
+        }
+        s
+    }
 }
 
 fn now_secs() -> u64 {
@@ -339,18 +496,26 @@ fn now_secs() -> u64 {
 #[derive(Debug, Clone, Copy)]
 pub enum Phase<'a> {
     NotRun,
-    Running { started: u64, log: &'a Path },
+    Running { started: u64, log: &'a Path, skipped: &'a [String] },
     Done(&'a Run),
     /// The working tree's line endings disagree with the attribute (issue478): cargo never started,
     /// and the receipt names the paths in place of a verdict.
     EolMismatch,
 }
 
-fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>) -> String {
+/// The D0474 memo that rides every receipt: the keys the run was judged at (absent when git could
+/// not name the tree) and the observation table as it stands after the run.
+#[derive(Debug, Clone, Default)]
+pub struct Memo {
+    pub keys: Option<crate::contentkey::ContentKeys>,
+    pub observed: Vec<Observed>,
+}
+
+fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Memo) -> String {
     use std::fmt::Write as _;
     let list = |v: &[String]| v.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(", ");
     let mut s = format!(
-        "# touched receipt (D0421): the integration tests that NAME a module changed since the base, and what\n# running exactly those cost. An empty set is a receipt too. Beside the suite's receipt, never in it.\n# `eol_scanned` / `eol_ms`: the working tree's line endings against .gitattributes, read with the set\n# (issue478); `outcome = \"eol-mismatch\"` names the paths that broke it and means cargo never started.\nhead = \"{}\"\nat = {}\nbase = \"{}\"\nstems = [{}]\nunattributed = [{}]\ntests = [{}]\nlib = {}\neol_scanned = {}\neol_ms = {}\n",
+        "# touched receipt (D0421): the integration tests that NAME a module changed since the base, and what\n# running exactly those cost. An empty set is a receipt too. Beside the suite's receipt, never in it.\n# `eol_scanned` / `eol_ms`: the working tree's line endings against .gitattributes, read with the set\n# (issue478); `outcome = \"eol-mismatch\"` names the paths that broke it and means cargo never started.\n# `code_key` / `tree_key` (D0474): the content the run was judged at; `skipped` the binaries observed\n# green at that content by an earlier run; `[[observed]]` one green observation per binary, kept until\n# the binary runs again. A self-reading binary (`self_reading`) is skipped only when both keys hold.\nhead = \"{}\"\nat = {}\nbase = \"{}\"\nstems = [{}]\nunattributed = [{}]\ntests = [{}]\nlib = {}\nself_reading = [{}]\neol_scanned = {}\neol_ms = {}\n",
         head,
         at,
         t.base,
@@ -358,9 +523,13 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>) -> String 
         list(&t.unattributed),
         list(&t.tests),
         t.lib,
+        list(&t.self_reading),
         t.eol_scanned,
         t.eol_millis
     );
+    if let Some(k) = &memo.keys {
+        let _ = write!(s, "code_key = \"{}\"\ntree_key = \"{}\"\n", k.code, k.tree);
+    }
     match phase {
         Phase::EolMismatch => {
             let paths: Vec<String> = t.eol.iter().map(|m| m.path.clone()).collect();
@@ -370,23 +539,26 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>) -> String 
         // this receipt): a reader during the run - or after a killed one - sees `running` with THIS
         // run's set and log, never the last run's pass over a different change set. The verifier of
         // sprint 661 read the prior run's 546/0 as its own while its own run was failing two lib tests.
-        Phase::Running { started, log } => {
+        Phase::Running { started, log, skipped } => {
             let _ = write!(
                 s,
-                "outcome = \"running\"\npassed = 0\nfailed = 0\nfailing = []\nseconds = {}\nlog = \"{}\"\n",
+                "outcome = \"running\"\npassed = 0\nfailed = 0\nfailing = []\nskipped = [{}]\nseconds = {}\nlog = \"{}\"\n",
+                list(skipped),
                 at.saturating_sub(started),
                 log.to_string_lossy().replace('\\', "/")
             );
         }
         Phase::Done(r) => {
-            let outcome = if r.cargo_ok && r.failed == 0 { "pass" } else { "fail" };
+            let outcome = if r.green() { "pass" } else { "fail" };
             let _ = write!(
                 s,
-                "outcome = \"{}\"\npassed = {}\nfailed = {}\nfailing = [{}]\nseconds = {}\nlog = \"{}\"\n",
+                "outcome = \"{}\"\npassed = {}\nfailed = {}\nfailing = [{}]\nran = [{}]\nskipped = [{}]\nseconds = {}\nlog = \"{}\"\n",
                 outcome,
                 r.passed,
                 r.failed,
                 list(&r.failing),
+                list(&r.ran),
+                list(&r.skipped),
                 r.seconds,
                 r.log.to_string_lossy().replace('\\', "/")
             );
@@ -396,39 +568,65 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>) -> String 
             let _ = write!(s, "outcome = \"{}\"\npassed = 0\nfailed = 0\nseconds = 0\n", if t.nothing_to_run() { "empty" } else { "not-run" });
         }
     }
+    for o in &memo.observed {
+        let _ = write!(s, "\n[[observed]]\nbinary = \"{}\"\ncode = \"{}\"\ntree = \"{}\"\nat = {}\n", o.binary, o.code, o.tree, o.at);
+    }
     s
 }
 
-fn write_receipt(repo: &Path, t: &Touched, phase: Phase<'_>) {
+fn write_receipt(repo: &Path, t: &Touched, phase: Phase<'_>, memo: &Memo) {
     let metrics = repo.join(".keel").join("metrics");
     let _ = std::fs::create_dir_all(&metrics);
     let head = git_out(repo, &["rev-parse", "--short", "HEAD"]).unwrap_or_default();
-    if let Err(e) = crate::write::write_atomic(&repo.join(RECEIPT), render_receipt(t, &head, now_secs(), phase)) {
+    if let Err(e) = crate::write::write_atomic(&repo.join(RECEIPT), render_receipt(t, &head, now_secs(), phase, memo)) {
         eprintln!("touched: receipt could not be written: {e}");
     }
 }
 
-/// Run exactly `t.tests` as one cargo invocation (`--release`, so the binaries CI links are the ones
-/// exercised; `--no-fail-fast`, so every named test reports). Writes the log and the receipt.
+/// A receipt that records no run carries the observation table forward: the table is a fact about
+/// earlier runs, and an empty set is not a reason to forget it.
+fn carry(repo: &Path) -> Memo {
+    Memo { keys: None, observed: read_observed(repo) }
+}
+
+/// Run the set, minus the binaries observed green at this content (D0474), unless `force`.
+///
+/// One cargo invocation (`--release`, so the binaries CI links are the ones exercised;
+/// `--no-fail-fast`, so every named test reports). Writes the log and the receipt.
 ///
 /// # Errors
 /// When the metrics directory cannot be created or cargo cannot be started at all.
-pub fn run(repo: &Path, t: &Touched) -> Result<Run, String> {
+pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
+    let none = || Run { passed: 0, failed: 0, failing: vec![], seconds: 0, cargo_ok: true, log: PathBuf::new(), ran: vec![], skipped: vec![] };
     if t.nothing_to_run() {
-        write_receipt(repo, t, Phase::NotRun);
-        return Ok(Run { passed: 0, failed: 0, failing: vec![], seconds: 0, cargo_ok: true, log: PathBuf::new() });
+        write_receipt(repo, t, Phase::NotRun, &carry(repo));
+        return Ok(none());
     }
     let metrics = repo.join(".keel").join("metrics");
     std::fs::create_dir_all(&metrics).map_err(|e| format!("cannot create {}: {e}", metrics.display()))?;
+    let set = t.binaries();
+    let prior = read_observed(repo);
+    let keys = crate::contentkey::compute(repo);
+    let (to_run, skipped) = match (&keys, force) {
+        (Some(k), false) => split(&set, &t.self_reading, &prior, k),
+        _ => (set, Vec::new()),
+    };
+    if to_run.is_empty() {
+        // Every binary was observed green at exactly this content: the invariant holds and there is
+        // nothing left to execute. The receipt says so, and keeps the table that says why.
+        let r = Run { skipped, ..none() };
+        write_receipt(repo, t, Phase::Done(&r), &Memo { keys, observed: prior });
+        return Ok(r);
+    }
     let started = now_secs();
     let log = metrics.join(format!("touched-{started}.log"));
-    write_receipt(repo, t, Phase::Running { started, log: &log });
+    write_receipt(repo, t, Phase::Running { started, log: &log, skipped: &skipped }, &Memo { keys: keys.clone(), observed: prior.clone() });
     let mut cmd = std::process::Command::new("cargo");
     cmd.arg("test").arg("--release").arg("--manifest-path").arg(repo.join("keel-cli").join("Cargo.toml")).arg("--no-fail-fast");
-    for name in &t.tests {
+    for name in to_run.iter().filter(|n| *n != LIB) {
         cmd.arg("--test").arg(name);
     }
-    if t.lib {
+    if to_run.iter().any(|n| n == LIB) {
         cmd.arg("--lib");
     }
     let out = cmd.current_dir(repo).output().map_err(|e| format!("cargo could not be run: {e}"))?;
@@ -437,9 +635,13 @@ pub fn run(repo: &Path, t: &Touched) -> Result<Run, String> {
     let (passed, failed) = crate::suite::count_results(&text);
     // A build failure is not a verdict about the tests - but it IS a reason not to push: the
     // binaries CI will link do not link here either. Every named test is reported as not run.
-    let failing = if crate::suite::never_ran(out.status.success(), passed, failed) { t.tests.clone() } else { failing_binaries(&text) };
-    let r = Run { passed, failed, failing, seconds: now_secs().saturating_sub(started), cargo_ok: out.status.success(), log };
-    write_receipt(repo, t, Phase::Done(&r));
+    let failing = if crate::suite::never_ran(out.status.success(), passed, failed) { to_run.clone() } else { failing_binaries(&text) };
+    let at = now_secs();
+    // The keys again: a tree that moved while cargo ran is not one tree, and its greens are nobody's.
+    let held = keys.as_ref().filter(|k| crate::contentkey::compute(repo).as_ref() == Some(*k));
+    let observed = merge_observed(&prior, &to_run, &failing, out.status.success(), held, at);
+    let r = Run { passed, failed, failing, seconds: at.saturating_sub(started), cargo_ok: out.status.success(), log, ran: to_run, skipped };
+    write_receipt(repo, t, Phase::Done(&r), &Memo { keys, observed });
     Ok(r)
 }
 
@@ -491,7 +693,7 @@ pub fn before_gate(repo: &Path) -> Option<Result<Touched, i32>> {
     // touched run's verdict depended on the tree's endings, and a verdict that depends on which tool
     // last wrote a file is not the verdict D0421 armed.
     if let Some(line) = t.eol_refusal() {
-        write_receipt(repo, &t, Phase::EolMismatch);
+        write_receipt(repo, &t, Phase::EolMismatch, &carry(repo));
         eprintln!("keel land: {line}");
         eprintln!("  REFUSING to push: the touched tests would read these bytes, not the ones git normalises at the commit (issue478). Receipt {RECEIPT} says eol-mismatch. Nothing was pushed.");
         return Some(Err(1));
@@ -505,22 +707,23 @@ pub fn before_gate(repo: &Path) -> Option<Result<Touched, i32>> {
 #[must_use]
 pub fn after_gate(repo: &Path, t: &Touched) -> Option<i32> {
     if t.nothing_to_run() {
-        write_receipt(repo, t, Phase::NotRun);
+        write_receipt(repo, t, Phase::NotRun, &carry(repo));
         return None;
     }
     if !gate_accepted(repo) {
         println!("keel land: not run - D0421 is proposed; the touched-test refusal is declared but INERT until the human's word (D0337); the set is in the receipt ({RECEIPT}).");
-        write_receipt(repo, t, Phase::NotRun);
+        write_receipt(repo, t, Phase::NotRun, &carry(repo));
         return None;
     }
     if let Some(reason) = crate::suite::own_image_refusal(repo, "keel land") {
         eprintln!("{reason}");
         return Some(2);
     }
-    println!("keel land: running {} touched test binar{} before the push (cargo test --release --test ...)", t.tests.len(), if t.tests.len() == 1 { "y" } else { "ies" });
-    match run(repo, t) {
-        Ok(r) if r.cargo_ok && r.failed == 0 => {
-            println!("keel land: touched tests pass - {} passed in {}s (receipt {RECEIPT})", r.passed, r.seconds);
+    let n = t.binaries().len();
+    println!("keel land: {n} touched test binar{} before the push (cargo test --release --test ...; those observed green at this content are skipped, D0474)", if n == 1 { "y" } else { "ies" });
+    match run(repo, t, crate::receipt::forced(&[])) {
+        Ok(r) if r.green() => {
+            println!("keel land: touched tests pass - {} (receipt {RECEIPT})", r.summary());
             None
         }
         Ok(r) => {
@@ -535,9 +738,10 @@ pub fn after_gate(repo: &Path, t: &Touched) -> Option<i32> {
     }
 }
 
-/// `keel suite --touched [ROOT]`: compute and run the set now, on the caller's word.
+/// `keel suite --touched [ROOT] [--no-receipt]`: compute and run the set now, on the caller's word.
+/// `force` (`--no-receipt` / `KEEL_NO_RECEIPT=1`) runs every binary in the set, observed or not.
 #[must_use]
-pub fn cmd(repo: &Path) -> i32 {
+pub fn cmd(repo: &Path, force: bool) -> i32 {
     if !crate::suite::is_self_build(repo) {
         eprintln!("keel suite --touched: {} holds no keel-cli/Cargo.toml - there is no test set to compute here", repo.display());
         return 2;
@@ -551,14 +755,14 @@ pub fn cmd(repo: &Path) -> i32 {
     };
     println!("keel suite --touched: {}", describe(&t));
     if let Some(line) = t.eol_refusal() {
-        write_receipt(repo, &t, Phase::EolMismatch);
+        write_receipt(repo, &t, Phase::EolMismatch, &carry(repo));
         eprintln!("keel suite --touched: {line}");
         eprintln!("  REFUSING to run: cargo would compile and test these bytes, not the ones git normalises at the commit (issue478). Receipt {RECEIPT} says eol-mismatch; nothing was measured.");
         return 1;
     }
     println!("keel suite --touched: {}", t.eol_line());
     if t.nothing_to_run() {
-        write_receipt(repo, &t, Phase::NotRun);
+        write_receipt(repo, &t, Phase::NotRun, &carry(repo));
         println!("keel suite --touched: empty set recorded in {RECEIPT}");
         return 0;
     }
@@ -566,13 +770,13 @@ pub fn cmd(repo: &Path) -> i32 {
         eprintln!("{reason}");
         return 2;
     }
-    match run(repo, &t) {
+    match run(repo, &t, force) {
         Ok(r) => {
             for l in std::fs::read_to_string(&r.log).unwrap_or_default().lines().filter(|l| l.contains("FAILED") || l.contains("panicked at")).take(20) {
                 println!("  {l}");
             }
-            let outcome = if r.cargo_ok && r.failed == 0 { "pass" } else { "fail" };
-            println!("keel suite --touched: {outcome} - {} passed, {} failed in {}s; failing [{}]; receipt {RECEIPT}", r.passed, r.failed, r.seconds, r.failing.join(", "));
+            let outcome = if r.green() { "pass" } else { "fail" };
+            println!("keel suite --touched: {outcome} - {}; {} failed, failing [{}]; receipt {RECEIPT}", r.summary(), r.failed, r.failing.join(", "));
             if outcome == "pass" { 0 } else { 101 }
         }
         Err(e) => {
@@ -584,6 +788,12 @@ pub fn cmd(repo: &Path) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        compute, embedded_stem, failing_binaries, merge_observed, module_stem, names_stem, parse_observed, render_receipt, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests, Memo, Observed,
+        Phase, Run, Touched, LIB,
+    };
+    use crate::contentkey::ContentKeys;
+
     fn fixture() -> Touched {
         Touched {
             base: "origin/main".into(),
@@ -591,11 +801,21 @@ mod tests {
             unattributed: vec![],
             tests: vec!["orient_bdd".into()],
             lib: true,
+            self_reading: vec![LIB.into()],
             changed: vec!["keel-cli/src/scaffold.rs".into()],
             eol: vec![],
             eol_scanned: 3,
             eol_millis: 7,
         }
+    }
+
+    fn keys(code: &str, tree: &str) -> ContentKeys {
+        ContentKeys { code: code.into(), tree: tree.into() }
+    }
+
+    fn run_of(passed: u64, failed: u64, failing: &[&str], cargo_ok: bool, ran: &[&str], skipped: &[&str]) -> Run {
+        let v = |xs: &[&str]| xs.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        Run { passed, failed, failing: v(failing), seconds: 9, cargo_ok, log: std::path::PathBuf::from("x.log"), ran: v(ran), skipped: v(skipped) }
     }
 
     /// issue478 known-positive: a set whose tree holds a CRLF `eol=lf` path renders `eol-mismatch` with
@@ -605,7 +825,7 @@ mod tests {
     fn an_eol_mismatch_is_a_receipt_in_place_of_a_verdict() {
         let mut t = fixture();
         assert!(t.eol_refusal().is_none(), "a clean census refuses nothing");
-        let clean = render_receipt(&t, "1234567", 100, Phase::NotRun);
+        let clean = render_receipt(&t, "1234567", 100, Phase::NotRun, &Memo::default());
         assert!(clean.contains("eol_scanned = 3\n") && clean.contains("eol_ms = 7\n"), "{clean}");
         t.eol = vec![
             crate::eol::Mismatch { path: "keel-cli/src/scaffold.rs".into(), declared: "lf".into(), worktree: "crlf".into() },
@@ -614,7 +834,7 @@ mod tests {
         let line = t.eol_refusal().expect("a mismatch refuses");
         assert!(line.contains("changed by this push: [keel-cli/src/scaffold.rs (w/crlf where eol=lf)]"), "{line}");
         assert!(line.contains("and 1 unchanged path (first: .tracking/backlog.sysml)"), "{line}");
-        let text = render_receipt(&t, "1234567", 100, Phase::EolMismatch);
+        let text = render_receipt(&t, "1234567", 100, Phase::EolMismatch, &Memo::default());
         assert!(text.contains("outcome = \"eol-mismatch\""), "{text}");
         assert!(text.contains("eol_mismatch = [\"keel-cli/src/scaffold.rs\", \".tracking/backlog.sysml\"]"), "{text}");
         assert!(text.contains("passed = 0\nfailed = 0\n"), "{text}");
@@ -624,10 +844,11 @@ mod tests {
     /// issue468, known-negative: a finished run's receipt carries its verdict and counts.
     #[test]
     fn a_finished_run_renders_its_verdict() {
-        let run = Run { passed: 5, failed: 1, failing: vec!["lib".into()], seconds: 9, cargo_ok: false, log: std::path::PathBuf::from("x.log") };
-        let text = render_receipt(&fixture(), "1234567", 100, Phase::Done(&run));
+        let run = run_of(5, 1, &[LIB], false, &[LIB, "orient_bdd"], &[]);
+        let text = render_receipt(&fixture(), "1234567", 100, Phase::Done(&run), &Memo::default());
         assert!(text.contains("outcome = \"fail\""), "{text}");
         assert!(text.contains("passed = 5") && text.contains("failed = 1"), "{text}");
+        assert!(text.contains("ran = [\"lib\", \"orient_bdd\"]") && text.contains("skipped = []"), "{text}");
         assert!(!text.contains("outcome = \"running\""), "{text}");
     }
 
@@ -637,15 +858,94 @@ mod tests {
     #[test]
     fn a_running_stub_is_not_a_verdict() {
         let log = std::path::PathBuf::from(".keel/metrics/touched-100.log");
-        let text = render_receipt(&fixture(), "1234567", 103, Phase::Running { started: 100, log: &log });
+        let skipped = vec!["orient_bdd".to_string()];
+        let text = render_receipt(&fixture(), "1234567", 103, Phase::Running { started: 100, log: &log, skipped: &skipped }, &Memo::default());
         assert!(text.contains("outcome = \"running\""), "{text}");
         assert!(text.contains("passed = 0") && text.contains("failed = 0"), "{text}");
         assert!(text.contains("seconds = 3"), "{text}");
         assert!(text.contains("touched-100.log"), "{text}");
+        assert!(text.contains("skipped = [\"orient_bdd\"]"), "the stub says what this run is not executing: {text}");
         assert!(text.contains("\"scaffold\"") && text.contains("lib = true"), "the stub carries the set it is running:\n{text}");
         assert!(!text.contains("\"pass\""), "{text}");
     }
-    use super::{compute, embedded_stem, failing_binaries, module_stem, names_stem, render_receipt, test_name, text_carries_acceptance, touched_tests, Phase, Run, Touched};
+
+    /// D0474 round trip: the receipt renders its keys and its `[[observed]]` table, and `parse_observed`
+    /// reads the table back exactly. A receipt with no table, or one that is not TOML, reads as no
+    /// observation (known-negative) - never as a green.
+    #[test]
+    fn the_observation_table_round_trips_through_the_receipt() {
+        let observed = vec![Observed { binary: "orient_bdd".into(), code: "c1".into(), tree: "t1".into(), at: 50 }, Observed { binary: LIB.into(), code: "c1".into(), tree: "t2".into(), at: 51 }];
+        let run = run_of(3, 0, &[], true, &[LIB], &["orient_bdd"]);
+        let text = render_receipt(&fixture(), "1234567", 100, Phase::Done(&run), &Memo { keys: Some(keys("c1", "t2")), observed: observed.clone() });
+        assert!(text.contains("code_key = \"c1\"\ntree_key = \"t2\"\n"), "{text}");
+        assert!(text.contains("self_reading = [\"lib\"]"), "{text}");
+        assert!(text.contains("outcome = \"pass\"") && text.contains("skipped = [\"orient_bdd\"]") && text.contains("ran = [\"lib\"]"), "{text}");
+        assert_eq!(parse_observed(&text), observed, "the table reads back as written:\n{text}");
+        assert!(parse_observed("outcome = \"pass\"\n").is_empty(), "no table is no observation");
+        assert!(parse_observed("this is not = = toml").is_empty(), "an unparseable receipt is no observation");
+    }
+
+    /// D0474 known-positive: a binary observed green at the current code key is skipped; a self-reading
+    /// binary observed at the current code key but an older tree key is RUN. Known-negative: a binary
+    /// with no observation, or one at an older code key, is run. The two halves are the whole set.
+    #[test]
+    fn a_binary_is_skipped_only_at_the_content_its_outcome_depends_on() {
+        let set: Vec<String> = vec!["a_gate".into(), "b_reads_repo".into(), LIB.into(), "z_new".into()];
+        let self_reading: Vec<String> = vec!["b_reads_repo".into(), LIB.into()];
+        let observed = vec![
+            Observed { binary: "a_gate".into(), code: "c2".into(), tree: "t1".into(), at: 1 },
+            Observed { binary: "b_reads_repo".into(), code: "c2".into(), tree: "t1".into(), at: 1 },
+            Observed { binary: LIB.into(), code: "c2".into(), tree: "t2".into(), at: 1 },
+        ];
+        // The unchanged tree: everything observed is skipped, the new binary runs.
+        let (run, skipped) = split(&set, &self_reading, &observed, &keys("c2", "t1"));
+        assert_eq!(skipped, vec!["a_gate".to_string(), "b_reads_repo".to_string()]);
+        assert_eq!(run, vec![LIB.to_string(), "z_new".to_string()], "lib was observed at another tree and is self-reading");
+        // A ceremony write: the tree moved, the code did not - exactly the self-reading binaries run.
+        let (run, skipped) = split(&set, &self_reading, &observed, &keys("c2", "t3"));
+        assert_eq!(skipped, vec!["a_gate".to_string()]);
+        assert_eq!(run, vec!["b_reads_repo".to_string(), LIB.to_string(), "z_new".to_string()]);
+        // A code edit: the code moved - everything runs.
+        let (run, skipped) = split(&set, &self_reading, &observed, &keys("c3", "t1"));
+        assert!(skipped.is_empty());
+        assert_eq!(run, set);
+    }
+
+    /// D0474: after a run, the binaries that ran and passed are observed at the run's keys, the one that
+    /// failed loses its entry, and a binary not run keeps its old entry (known-positive). A run whose
+    /// tree moved (`keys` None) or that cargo never finished records no green (known-negative).
+    #[test]
+    fn the_table_gains_the_greens_that_ran_and_drops_the_red() {
+        let prior = vec![
+            Observed { binary: "kept".into(), code: "c1".into(), tree: "t1".into(), at: 1 },
+            Observed { binary: "red".into(), code: "c1".into(), tree: "t1".into(), at: 1 },
+            Observed { binary: "green".into(), code: "c1".into(), tree: "t1".into(), at: 1 },
+        ];
+        let ran: Vec<String> = vec!["green".into(), "red".into(), LIB.into()];
+        let k = keys("c2", "t2");
+        let got = merge_observed(&prior, &ran, &["red".to_string()], false, Some(&k), 9);
+        let names: Vec<&str> = got.iter().map(|o| o.binary.as_str()).collect();
+        assert_eq!(names, vec!["green", "kept", LIB]);
+        assert!(got.iter().filter(|o| o.binary != "kept").all(|o| o.code == "c2" && o.tree == "t2" && o.at == 9), "{got:?}");
+        assert_eq!(got.iter().find(|o| o.binary == "kept").map(|o| o.code.as_str()), Some("c1"), "a binary not run keeps its observation");
+        // The tree moved mid-run: nothing new, the ran entries are gone.
+        let moved = merge_observed(&prior, &ran, &[], true, None, 9);
+        assert_eq!(moved.iter().map(|o| o.binary.as_str()).collect::<Vec<_>>(), vec!["kept"]);
+        // Cargo did not finish and attributed nothing (a build error): nobody's green.
+        let built_not = merge_observed(&prior, &ran, &[], false, Some(&k), 9);
+        assert_eq!(built_not.iter().map(|o| o.binary.as_str()).collect::<Vec<_>>(), vec!["kept"]);
+    }
+
+    /// D0474: the scan names the one idiom the eighteen use; `lib` is always in.
+    #[test]
+    fn a_test_that_names_the_manifest_dir_is_self_reading_and_lib_always_is() {
+        let tests = vec![
+            ("reads_repo".to_string(), "let root = Path::new(env!(\"CARGO_MANIFEST_DIR\")).parent();".to_string()),
+            ("scaffolds".to_string(), "keel init over a temp dir".to_string()),
+        ];
+        assert_eq!(self_reading_tests(&tests), vec![LIB.to_string(), "reads_repo".to_string()]);
+        assert_eq!(self_reading_tests(&[]), vec![LIB.to_string()]);
+    }
 
     #[test]
     fn a_stem_is_the_module_a_path_names() {
@@ -747,6 +1047,7 @@ mod tests {
         let clean = compute(&dir).unwrap();
         assert!(clean.stems.is_empty(), "known-negative: a clean tree reads no stem, got {:?}", clean.stems);
         assert!(!clean.lib, "known-negative: no source path changed");
+        assert_eq!(clean.self_reading, vec![LIB.to_string()], "no test names the manifest dir; lib always is");
 
         std::fs::write(dir.join("keel-cli").join("src").join("foo.rs"), "pub fn foo() { /* edited, uncommitted */ }\n").unwrap();
         std::fs::write(dir.join("keel-cli").join("src").join("newmod.rs"), "pub fn newmod() {}\n").unwrap();
@@ -754,16 +1055,18 @@ mod tests {
         assert_eq!(dirty.stems, vec!["foo".to_string(), "newmod".to_string()], "known-positive: the uncommitted edit and the untracked module are the change");
         assert!(dirty.lib, "a source path changed, so the lib's own tests run");
         assert_eq!(dirty.tests, vec!["foo_bites".to_string()], "the test naming the changed stem is in the set");
+        assert_eq!(dirty.binaries(), vec!["foo_bites".to_string(), LIB.to_string()]);
 
         // issue524: an UNTRACKED new file under the embedded tree is a change too, and it names `init`
         // - sprint 699's skill was exactly this when the verifier ran, and the set had no way to see it.
         std::fs::create_dir_all(dir.join(".engine").join("skills").join("x")).unwrap();
         std::fs::write(dir.join(".engine").join("skills").join("x").join("check.py"), "print(1)\n").unwrap();
-        std::fs::write(dir.join("keel-cli").join("tests").join("scaffolds.rs"), "// runs keel init over the tree\n").unwrap();
+        std::fs::write(dir.join("keel-cli").join("tests").join("scaffolds.rs"), "// runs keel init over the tree at CARGO_MANIFEST_DIR\n").unwrap();
         let embedded = compute(&dir).unwrap();
         assert_eq!(embedded.stems, vec!["foo".to_string(), "init".to_string(), "newmod".to_string()], "the untracked engine file contributes init");
         assert!(embedded.changed.iter().any(|c| c.ends_with(".engine/skills/x/check.py")), "the untracked engine file is in the changed set: {:?}", embedded.changed);
         assert!(embedded.tests.contains(&"scaffolds".to_string()), "the test that runs keel init is in the set: {:?}", embedded.tests);
+        assert_eq!(embedded.self_reading, vec![LIB.to_string(), "scaffolds".to_string()], "the test naming the manifest dir is self-reading");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

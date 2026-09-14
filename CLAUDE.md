@@ -151,7 +151,8 @@ Change Request cross-cuts and is itself frozen.
 - CI verdict = `conclusion` field (`gh run list --json conclusion` or `keel show status`), never a wrapper's exit
   (D0420). CI runs `audit adherence`, `audit ci-runs`, `audit history`.
 - `land` runs the touched test set before the first push (D0421) inside the post-commit hook from a copy
-  `target/release/keel-land.exe` (D0422). It takes 7–15 min: run `git commit` DETACHED, then read
+  `target/release/keel-land.exe` (D0422). A binary observed green at the current content is skipped (D0474: keyed
+  on the code, plus the tree for a test that reads this repo; `--no-receipt` runs all). A full set takes 7–15 min: run `git commit` DETACHED, then read
   `git status -sb` and the CI conclusion (issue453). Receipts (`.keel/metrics/*-receipt.toml`) say `running`
   while cargo runs; read `at`/`stems`/`head` after exit (D0387).
 - `keel suite` gates nothing; it writes a receipt (D0356).

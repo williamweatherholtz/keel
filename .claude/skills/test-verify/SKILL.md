@@ -52,7 +52,9 @@ Run from the project root. `KEEL` below is the binary named in the dispatch (def
 text names a changed `keel-cli/src/<stem>.rs`, plus the lib's own unit tests whenever any
 `keel-cli/src` path changed. With the lib it takes 7-12 minutes on this host (434 s, 623 s, 713 s,
 727 s measured) and a harness foreground call is capped at 600 s — the cap killed one run
-(issue469). So:
+(issue469). A binary observed green at the current content by an earlier run is SKIPPED and
+named in the receipt's `skipped` (D0474): a rerun over an unchanged tree executes nothing, and that
+is a receipt too - `--no-receipt` runs every binary when the dispatch asks for it. So:
 
 ```
 python -c "import time; print(int(time.time()))" > .keel/metrics/verify-launch.epoch
@@ -126,6 +128,7 @@ Wait until the process is gone (`tasklist | grep -i cargo` / `pgrep cargo` is em
 | `stems` | == the sorted set of `<stem>` for every changed `keel-cli/src/<stem>.rs` (`git diff --name-only origin/main -- keel-cli/src` plus untracked) | the receipt must be over THIS change set |
 | `lib` | `true` whenever any `keel-cli/src` path changed | the lib run is where pass-alone/fail-together tests show (issue459) |
 | `passed` / `failed` / `failing` | copied verbatim | the recorder's `--evidence` quotes these |
+| `ran` / `skipped` | together they are the set; `skipped` names only binaries with an `[[observed]]` row at `code_key` (and `tree_key` when in `self_reading`) | a skipped binary was observed green at this content by an earlier run (D0474) - report it as skipped, never as passed by this run |
 | `head` | == `git rev-parse --short HEAD` | |
 
 An empty `stems` with no `keel-cli/src` change is a receipt too: report it as such and run

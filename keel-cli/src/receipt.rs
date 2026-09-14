@@ -8,19 +8,24 @@
 //!
 //! WHAT MAKES THE SHORTCUT HONEST is the KEY: a digest of every input a guard can read. HEAD's full id
 //! covers every tracked file's committed content; `git status --porcelain -z -uall` names every path that
-//! is modified, staged, deleted or untracked, and each such path contributes its `(len, mtime)`; every
-//! tracked path (`git ls-files -z`) contributes its `(len, mtime)` too, because a file rewritten with the
-//! other line ending is clean to status while `working-tree-eol` reads its bytes (issue478); every
-//! file under `.keel/` outside `metrics/` and `bin/` contributes the same (a guard reads `.keel/actor`
-//! and orient reads `.keel/cache/`; `metrics/` is written by the hooks themselves at every fire and
-//! `bin/` holds binaries no guard opens); and the binary contributes its build commit, length and mtime,
-//! so a rebuilt engine never answers from an older engine's judgment. An equal key means the same
-//! inputs, and the same inputs to a pure computation are the same answer - not a skipped one.
+//! is modified, staged, deleted or untracked, and each such path contributes its BYTES; every tracked
+//! path (`git ls-files -z`) contributes its bytes too, because a file rewritten with the other line
+//! ending is clean to status while `working-tree-eol` reads its bytes (issue478); every file under
+//! `.keel/` outside `metrics/` and `bin/` contributes the same (a guard reads `.keel/actor` and orient
+//! reads `.keel/cache/`; `metrics/` is written by the hooks themselves at every fire and `bin/` holds
+//! binaries no guard opens); and the binary contributes its build commit, length and mtime, so a rebuilt
+//! engine never answers from an older engine's judgment. An equal key means the same inputs, and the
+//! same inputs to a pure computation are the same answer - not a skipped one.
 //!
-//! THREE REFUSALS keep it that way. A key is computed BEFORE the run and AGAIN after it, and the receipt
+//! BYTES, NOT `(len, mtime)` (D0474). The first cut keyed each path on its stat and needed a two-second
+//! RACY window before it would trust a stamp; under `keel land`'s load the window raced the wall clock
+//! and withheld a push (issue534; issue481 before it). A digest of the bytes is settled when it is
+//! computed - equal bytes are equal inputs whatever the clock said - and costs about 0.2 s over the
+//! 30 MB tracked corpus (`contentkey`), against the five seconds it saves.
+//!
+//! TWO REFUSALS keep it that way. A key is computed BEFORE the run and AGAIN after it, and the receipt
 //! is written only when the two agree - a file changed mid-run is a run whose inputs were not one tree.
-//! A path whose mtime is younger than two seconds makes the key UNSETTLED (the same racy window `corpus`
-//! names) and an unsettled key is neither written nor honoured. And any red run DELETES the receipt.
+//! And any red run DELETES the receipt.
 //!
 //! WHAT IS STORED beside the key: the guards' reports (name, scanned count, warnings) so `keel gate guard`
 //! prints the population it printed before, plus one line naming the receipt's age. Violations are
@@ -36,9 +41,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::guards::GuardReport;
 
-/// A file touched within this window may still be changing; its key is not trusted (see `corpus`).
-const RACY: Duration = Duration::from_secs(2);
-
 /// The layers a receipt may vouch for. `guards` alone comes from `keel gate guard`; all three from the
 /// turn boundary and the commit gate.
 pub const VALIDATE: &str = "validate";
@@ -47,13 +49,11 @@ pub const RULES: &str = "rules";
 /// What the turn boundary and the commit gate vouch for.
 pub const ALL_LAYERS: [&str; 3] = [VALIDATE, GUARDS, RULES];
 
-/// The digest of every input a guard can read, and whether it can be trusted yet.
+/// The digest of every input a guard can read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Key {
     pub digest: String,
     pub head: String,
-    /// False when a listed path's mtime is inside [`RACY`]: neither written nor honoured.
-    pub settled: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -150,15 +150,14 @@ fn mtime_nanos(m: &std::fs::Metadata) -> u128 {
     m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos())
 }
 
-/// Hash one path's `(len, mtime)` - or its absence - and report whether its mtime is settled.
-fn hash_path(p: &Path, h: &mut impl Hasher) -> bool {
-    if let Ok(m) = std::fs::metadata(p) {
-        m.len().hash(h);
-        mtime_nanos(&m).hash(h);
-        m.modified().ok().is_none_or(|t| SystemTime::now().duration_since(t).is_ok_and(|age| age >= RACY))
-    } else {
-        "absent".hash(h);
-        true
+/// Hash one path's bytes - or its absence.
+fn hash_path(p: &Path, h: &mut impl Hasher) {
+    match std::fs::read(p) {
+        Ok(bytes) => {
+            bytes.len().hash(h);
+            bytes.hash(h);
+        }
+        Err(_) => "absent".hash(h),
     }
 }
 
@@ -184,16 +183,16 @@ fn status_entries(out: &[u8]) -> Vec<(String, String)> {
     entries
 }
 
-fn walk_keel(dir: &Path, h: &mut impl Hasher, settled: &mut bool, root: &Path) {
+fn walk_keel(dir: &Path, h: &mut impl Hasher, root: &Path) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     let mut entries: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
     entries.sort();
     for p in entries {
         if p.is_dir() {
-            walk_keel(&p, h, settled, root);
+            walk_keel(&p, h, root);
         } else {
             p.strip_prefix(root).unwrap_or(&p).to_string_lossy().replace('\\', "/").hash(h);
-            *settled &= hash_path(&p, h);
+            hash_path(&p, h);
         }
     }
 }
@@ -211,17 +210,16 @@ pub fn key(root: &Path) -> Option<Key> {
             .ok()
             .filter(|o| o.status.success())?;
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        let mut settled = true;
         head.hash(&mut h);
         for (xy, rel) in status_entries(&status.stdout) {
             xy.hash(&mut h);
             rel.hash(&mut h);
-            settled &= hash_path(&root.join(&rel), &mut h);
+            hash_path(&root.join(&rel), &mut h);
         }
         // issue478: a tracked file rewritten with the other line ending is CLEAN to `git status` - git
         // would normalise it at the commit - yet `working-tree-eol` (and every run over the working
-        // tree) reads those bytes. Every tracked path's `(len, mtime)` therefore enters the key, about a
-        // tenth of a second over this tree, so a receipt never vouches for bytes no guard saw.
+        // tree) reads those bytes. Every tracked path's bytes therefore enter the key, so a receipt
+        // never vouches for bytes no guard saw.
         let tracked = crate::gitx::git()
             .args(["-C", &root_s, "ls-files", "-z"])
             .output()
@@ -230,7 +228,7 @@ pub fn key(root: &Path) -> Option<Key> {
         for rel in tracked.stdout.split(|b| *b == 0).filter(|f| !f.is_empty()) {
             let rel = String::from_utf8_lossy(rel);
             rel.hash(&mut h);
-            settled &= hash_path(&root.join(rel.as_ref()), &mut h);
+            hash_path(&root.join(rel.as_ref()), &mut h);
         }
         let keel = root.join(".keel");
         if let Ok(rd) = std::fs::read_dir(&keel) {
@@ -242,10 +240,10 @@ pub fn key(root: &Path) -> Option<Key> {
                     continue;
                 }
                 if p.is_dir() {
-                    walk_keel(&p, &mut h, &mut settled, root);
+                    walk_keel(&p, &mut h, root);
                 } else {
                     name.hash(&mut h);
-                    settled &= hash_path(&p, &mut h);
+                    hash_path(&p, &mut h);
                 }
             }
         }
@@ -253,16 +251,13 @@ pub fn key(root: &Path) -> Option<Key> {
         // Which population the diff-reading guards judged (D0440): a green working-tree run must not
         // answer for a hook's index read over the same paths, nor the reverse.
         crate::guards::ChangeRead::current().label().hash(&mut h);
-        Some(Key { digest: format!("{:016x}", h.finish()), head, settled })
+        Some(Key { digest: format!("{:016x}", h.finish()), head })
     })
 }
 
-/// The receipt at `root`, if one exists and its key equals `key` and `key` is settled.
+/// The receipt at `root`, if one exists and its key equals `key`.
 #[must_use]
 pub fn read(root: &Path, key: &Key) -> Option<Receipt> {
-    if !key.settled {
-        return None;
-    }
     let text = std::fs::read_to_string(path(root)).ok()?;
     let stored: Stored = toml::from_str(&text).ok()?;
     if stored.key != key.digest {
@@ -288,7 +283,7 @@ pub fn read(root: &Path, key: &Key) -> Option<Receipt> {
 /// after a green turn boundary does not narrow what the boundary proved.
 #[must_use]
 pub fn record_green(root: &Path, before: &Key, covers: &[&str], reports: &[GuardReport], durations: &[(&str, u64)]) -> bool {
-    if !before.settled || reports.iter().any(|r| !r.ok()) {
+    if reports.iter().any(|r| !r.ok()) {
         return false;
     }
     let Some(after) = key(root) else { return false };
@@ -345,8 +340,7 @@ mod tests {
         assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
     }
 
-    /// A scratch repository with one committed file and a `.keel/actor`, every mtime aged past the
-    /// racy window so its key is settled.
+    /// A scratch repository with one committed file and a `.keel/actor`.
     fn repo(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("keel-receipt-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
@@ -354,21 +348,7 @@ mod tests {
         git(&d, &["init", "-q"]);
         git(&d, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "root"]);
         std::fs::write(d.join(".keel").join("actor"), "someone").expect("actor");
-        age_all(&d);
         d
-    }
-
-    fn age(p: &Path) {
-        let f = std::fs::OpenOptions::new().write(true).open(p).expect("open");
-        f.set_modified(SystemTime::now() - Duration::from_mins(10)).expect("mtime");
-    }
-
-    fn age_all(d: &Path) {
-        for e in std::fs::read_dir(d.join(".keel")).expect("rd").flatten() {
-            if e.path().is_file() {
-                age(&e.path());
-            }
-        }
     }
 
     fn green() -> Vec<GuardReport> {
@@ -381,7 +361,6 @@ mod tests {
     fn a_green_run_writes_the_receipt_and_the_next_run_answers_from_it() {
         let d = repo("green");
         let k = key(&d).expect("key");
-        assert!(k.settled, "an aged scratch repo must be settled");
         assert!(read(&d, &k).is_none(), "no receipt before any run");
         assert!(record_green(&d, &k, &[GUARDS], &green(), &[]), "a green run writes");
         let r = read(&d, &k).expect("the receipt answers an equal key");
@@ -396,39 +375,39 @@ mod tests {
 
     /// Each input a guard can read forces a run when it changes: a touched tracked file, a new untracked
     /// file, a changed `.keel/` file. (A different build id is the same mechanism with a different
-    /// field; the binary running this test cannot change under it.)
+    /// field; the binary running this test cannot change under it.) D0474: the same bytes under a new
+    /// mtime are the same key - the clock is not an input.
     #[test]
     fn a_touched_tracked_file_a_new_untracked_file_and_a_changed_keel_file_each_force_a_run() {
         let d = repo("inputs");
         std::fs::write(d.join("tracked.txt"), "one").expect("w");
         git(&d, &["add", "tracked.txt"]);
         git(&d, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "tracked"]);
-        // Every tracked path's mtime is in the key (issue478), so the fresh file is aged past the window.
-        age(&d.join("tracked.txt"));
         let k0 = key(&d).expect("key");
-        assert!(k0.settled, "an aged tracked file settles the key");
         assert!(record_green(&d, &k0, &[GUARDS], &green(), &[]));
         assert!(read(&d, &k0).is_some());
 
+        // The same bytes, a fresh mtime: the key holds (D0474 known-negative).
+        std::fs::write(d.join("tracked.txt"), "one").expect("w");
+        std::fs::OpenOptions::new().write(true).open(d.join("tracked.txt")).expect("open").set_modified(SystemTime::now()).expect("mtime");
+        assert_eq!(key(&d).expect("key").digest, k0.digest, "an mtime alone moves nothing");
+
         // Untracked file: it appears in status, so the key moves.
         std::fs::write(d.join("new.txt"), "n").expect("w");
-        age(&d.join("new.txt"));
         let k1 = key(&d).expect("key");
         assert_ne!(k0.digest, k1.digest, "a new untracked file changes the key");
         assert!(read(&d, &k1).is_none(), "and the old receipt does not answer it");
 
-        // Touched tracked file: modified in status, its (len, mtime) in the key.
+        // Touched tracked file: modified in status, its bytes in the key.
         std::fs::remove_file(d.join("new.txt")).expect("rm");
         assert_eq!(key(&d).expect("key").digest, k0.digest, "removing it restores the key");
         std::fs::write(d.join("tracked.txt"), "two").expect("w");
-        age(&d.join("tracked.txt"));
         let k2 = key(&d).expect("key");
         assert_ne!(k0.digest, k2.digest, "a modified tracked file changes the key");
 
         // Changed .keel/ file.
         git(&d, &["checkout", "-q", "--", "tracked.txt"]);
         std::fs::write(d.join(".keel").join("actor"), "someone-else").expect("w");
-        age(&d.join(".keel").join("actor"));
         let k3 = key(&d).expect("key");
         assert_ne!(k0.digest, k3.digest, "a changed .keel/ file changes the key");
         // .keel/metrics/ is the hooks' own ledger and is NOT in the key.
@@ -440,8 +419,8 @@ mod tests {
 
     /// issue478: a tracked `eol=lf` file rewritten CRLF is clean to `git status` (git normalises it at
     /// the commit) yet the bytes a guard reads changed - the key moves and the old receipt does not
-    /// answer. Known-negative first: the same file rewritten with the bytes it had keeps the key once
-    /// its mtime is restored, so the movement is the rewrite's and not the test's.
+    /// answer. Known-negative first: the same file rewritten with the bytes it had keeps the key, so
+    /// the movement is the rewrite's and not the test's.
     #[test]
     fn an_eol_only_rewrite_that_status_calls_clean_still_moves_the_key() {
         let d = repo("eol");
@@ -449,21 +428,14 @@ mod tests {
         std::fs::write(d.join("tracked.txt"), "one\ntwo\n").expect("w");
         git(&d, &["add", ".gitattributes", "tracked.txt"]);
         git(&d, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "tracked"]);
-        let stamp = SystemTime::now() - Duration::from_mins(10);
-        for n in [".gitattributes", "tracked.txt"] {
-            std::fs::OpenOptions::new().write(true).open(d.join(n)).expect("open").set_modified(stamp).expect("mtime");
-        }
         let k0 = key(&d).expect("key");
-        assert!(k0.settled);
         assert!(record_green(&d, &k0, &[GUARDS], &green(), &[]));
         std::fs::write(d.join("tracked.txt"), "one\ntwo\n").expect("w");
-        std::fs::OpenOptions::new().write(true).open(d.join("tracked.txt")).expect("open").set_modified(stamp).expect("mtime");
-        assert_eq!(key(&d).expect("key").digest, k0.digest, "the same bytes at the same mtime are the same key");
+        assert_eq!(key(&d).expect("key").digest, k0.digest, "the same bytes are the same key");
         std::fs::write(d.join("tracked.txt"), "one\r\ntwo\r\n").expect("w");
-        std::fs::OpenOptions::new().write(true).open(d.join("tracked.txt")).expect("open").set_modified(stamp).expect("mtime");
         // The `git add` every commit does: the blob normalises to the one already in the index and
         // the index takes the file's stat, so status is clean - and the working copy is still CRLF
-        // (issue478's shape). Aged first so the index holds the aged stat and the key stays settled.
+        // (issue478's shape).
         git(&d, &["add", "tracked.txt"]);
         let status = crate::gitx::git().args(["-C", &d.to_string_lossy(), "status", "--porcelain", "--", "tracked.txt"]).output().expect("git");
         assert!(status.stdout.is_empty(), "git status calls the CRLF copy clean: {}", String::from_utf8_lossy(&status.stdout));
@@ -473,9 +445,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
-    /// A red run leaves no receipt; a file younger than the racy window is neither written nor honoured.
+    /// A red run leaves no receipt; a tree that changed between the before-key and the after-key is
+    /// not one tree and writes none.
     #[test]
-    fn a_red_run_deletes_the_receipt_and_an_unsettled_key_is_never_trusted() {
+    fn a_red_run_deletes_the_receipt_and_a_tree_that_moved_mid_run_writes_none() {
         let d = repo("red");
         let k = key(&d).expect("key");
         assert!(record_green(&d, &k, &[GUARDS], &green(), &[]));
@@ -483,18 +456,10 @@ mod tests {
         assert!(!record_green(&d, &k, &[GUARDS], &red, &[]), "a red run never writes");
         delete(&d);
         assert!(read(&d, &k).is_none(), "a red run leaves no receipt");
-        // A write inside the racy window: unsettled. Stamped NOW it raced the wall clock - `key` spawns
-        // two git commands, and under keel land's load (58 test binaries beside this one) they took longer
-        // than the two seconds the window allows, so the file read as settled and land withheld the push of
-        // 08268f9 (issue534; issue481 was the same race in the self-build hook test). An mtime the window
-        // cannot age past while this test runs, however slow the host, tests the same clause.
+        // The before-key was taken, then a file appeared: the after-key differs and nothing is written.
         std::fs::write(d.join("fresh.txt"), "f").expect("w");
-        let young = SystemTime::now() + Duration::from_mins(10);
-        std::fs::OpenOptions::new().write(true).open(d.join("fresh.txt")).expect("open").set_modified(young).expect("mtime");
-        let ku = key(&d).expect("key");
-        assert!(!ku.settled, "a file whose mtime is not two seconds old is inside the racy window");
-        assert!(!record_green(&d, &ku, &[GUARDS], &green(), &[]), "an unsettled key is not written");
-        assert!(read(&d, &ku).is_none(), "nor honoured");
+        assert!(!record_green(&d, &k, &[GUARDS], &green(), &[]), "a tree that moved mid-run is not one tree");
+        assert!(read(&d, &key(&d).expect("key")).is_none(), "and no receipt answers the moved tree");
         let _ = std::fs::remove_dir_all(&d);
     }
 

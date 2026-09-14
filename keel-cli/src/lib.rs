@@ -87,6 +87,7 @@ pub mod enroll;
 pub mod gitx;
 pub mod corpus;
 pub mod receipt;
+pub mod contentkey;
 pub mod gitfacts;
 pub mod binding;
 pub mod govern;
