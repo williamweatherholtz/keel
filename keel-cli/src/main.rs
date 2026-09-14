@@ -2488,7 +2488,11 @@ fn cmd_sync_claude(args: &[String]) -> i32 {
 /// write the API cannot express. Single-use, target-path-bound, expiring; consumption records an
 /// orient-visible obligation naming the path actually written (K7). Never a silent env var.
 fn cmd_override(args: &[String]) -> i32 {
-    const USAGE: &str = "keel override <path> --reason \"why the API cannot express this write\"";
+    const USAGE: &str = "keel override <path> (--reason-from FILE | --reason \"why the API cannot express this write\")";
+    let args = &match prose_args(args, &["reason"], "override") {
+        Ok(a) => a,
+        Err(code) => return code,
+    };
     let given = match positional_arg(args, USAGE, "a file path") {
         Ok(a) => a.replace('\\', "/"),
         Err(code) => return code,
@@ -2885,6 +2889,46 @@ fn prose_flag(args: &[String], name: &str, verb: &str) -> Result<Option<String>,
         },
         (None, inline) => Ok(inline),
     }
+}
+
+/// The argument list with every `--<name>-from FILE` of `names` rewritten into `--<name> TEXT`
+/// through `prose_flag`, for a command whose prose is read DOWNSTREAM of its entry - `accept`'s
+/// `--note` is read by `fold_words_into_note`, `fold_warnings_into_note` and the channel layer
+/// before the command itself reads it (issue546, sprint 713). Normalising the arguments once at
+/// the entry means every reader sees one form and none learns about files; the alternative,
+/// teaching each of seven reads about `-from`, is the verb-by-verb path D0224 refused. Both forms
+/// of one name is refused by name (the error is `prose_flag`'s) and nothing downstream runs.
+fn prose_args(args: &[String], names: &[&str], verb: &str) -> Result<Vec<String>, i32> {
+    let mut out = args.to_vec();
+    for name in names {
+        let from_key = format!("--{name}-from");
+        if !out.contains(&from_key) {
+            continue;
+        }
+        let text = match prose_flag(&out, name, verb) {
+            Ok(Some(t)) => t,
+            Ok(None) => continue,
+            Err(msg) => {
+                eprintln!("error: {msg}");
+                return Err(2);
+            }
+        };
+        let mut next = Vec::with_capacity(out.len());
+        let mut skip_value = false;
+        for a in &out {
+            if skip_value {
+                skip_value = false;
+            } else if *a == from_key {
+                skip_value = true;
+            } else {
+                next.push(a.clone());
+            }
+        }
+        next.push(format!("--{name}"));
+        next.push(text);
+        out = next;
+    }
+    Ok(out)
 }
 
 /// A provenance DATE, refused rather than defaulted (issue182).
@@ -3420,6 +3464,10 @@ fn cmd_record_statement(args: &[String]) -> i32 {
 /// `Statement` that does not exist is REFUSED with nothing written: a `UserStory` with no source is an
 /// invention wearing a story's clothes (D0216).
 fn cmd_record_story(args: &[String]) -> i32 {
+    let args = &match prose_args(args, &["i-want", "so-that", "triage-note"], "record story") {
+        Ok(a) => a,
+        Err(code) => return code,
+    };
     let root = flag(args, "root").map_or_else(
         || find_repo_root().unwrap_or_else(|| PathBuf::from(".")),
         PathBuf::from,
@@ -3431,13 +3479,14 @@ fn cmd_record_story(args: &[String]) -> i32 {
         flag(args, "i-want"),
         flag(args, "implication"),
     ) else {
-        eprintln!("usage: keel record story --from-statement stNNN --title T --as-a ROLE --i-want CAPABILITY");
+        eprintln!("usage: keel record story --from-statement stNNN --title T --as-a ROLE (--i-want-from FILE | --i-want CAPABILITY)");
         // Derived, not restated (issue300) — see the note at the `record statement` usage.
         eprintln!(
 "       --implication {}",
             keel_cli::schema::enum_members_union(&root, "ImplicationKind").join("|")
         );
-        eprintln!("       [--so-that OUTCOME] [--triage-note WHY] [--by RECORDER] [--at YYYY-MM-DD] [--root ROOT]");
+        eprintln!("       [--so-that-from FILE | --so-that OUTCOME] [--triage-note-from FILE | --triage-note WHY] [--by RECORDER] [--at YYYY-MM-DD] [--root ROOT]");
+        eprintln!("  Prose goes through a FILE (D0224): a backtick in a double-quoted shell argument is a command the shell runs into the record.");
         eprintln!("  --from-statement is REQUIRED: a UserStory with no cited source is an invention (D0216).");
         return 2;
     };
@@ -5021,6 +5070,10 @@ fn fold_words_into_note(args: &[String]) -> Vec<String> {
 }
 
 fn cmd_accept(args: &[String]) -> i32 {
+    let args = &match prose_args(args, &["note"], "accept") {
+        Ok(a) => a,
+        Err(code) => return code,
+    };
     let args = &fold_words_into_note(args);
     let tty_gesture = tty_gesture();
     let args = &match accept_channel_refusal(args, tty_gesture) {
@@ -5029,8 +5082,10 @@ fn cmd_accept(args: &[String]) -> i32 {
     };
     let root = find_repo_root().unwrap_or_else(|| PathBuf::from("."));
     let Some(decision) = args.first().filter(|a| !a.starts_with('-')) else {
-        eprintln!("usage: keel accept <decision> --note \"<what the human said>\" --by <humanActor> --date YYYY-MM-DD");
-        eprintln!("       keel accept <decision> --words \"<their words, verbatim>\" [--note \"<framing>\"] --by <humanActor> --date YYYY-MM-DD");
+        eprintln!("usage: keel accept <decision> (--note-from FILE | --note \"<what the human said>\") --by <humanActor> --date YYYY-MM-DD");
+        eprintln!("       keel accept <decision> --words \"<their words, verbatim>\" [--note-from FILE | --note \"<framing>\"] --by <humanActor> --date YYYY-MM-DD");
+        eprintln!("         --note is prose and goes through a FILE (D0224); --words stays a shell argument on purpose - it is the human's");
+        eprintln!("         short quote, read back and recorded as given (D0192), not AI-typed prose.");
         eprintln!("         --words records the words inside a typographic quote pair, so an apostrophe in the framing can never shift the span (D0375/issue397);");
         eprintln!("         they are recorded as given - short words or words that do not name the decision land as a WARN line in the note (D0423).");
         eprintln!();
@@ -5130,6 +5185,10 @@ fn cmd_accept(args: &[String]) -> i32 {
 /// history was a hand edit mirroring the writer's output, which no guard distinguishes from a
 /// fabricated one; `write::reject_decision` existed only behind the console.
 fn cmd_reject(args: &[String]) -> i32 {
+    let args = &match prose_args(args, &["note"], "reject") {
+        Ok(a) => a,
+        Err(code) => return code,
+    };
     let args = &fold_words_into_note(args);
     let tty_gesture = tty_gesture();
     let args = &match verdict_channel_refusal("reject", "rejecting", args, tty_gesture, "decisionAcceptance", true) {
@@ -5138,8 +5197,8 @@ fn cmd_reject(args: &[String]) -> i32 {
     };
     let root = find_repo_root().unwrap_or_else(|| PathBuf::from("."));
     let Some(decision) = args.first().filter(|a| !a.starts_with('-')) else {
-        eprintln!("usage: keel reject <decision> --words \"<their words, verbatim>\" [--note \"<framing>\"] --by <humanActor> --date YYYY-MM-DD");
-        eprintln!("       keel reject <decision> --note \"<what the human said>\" --by <humanActor> --date YYYY-MM-DD");
+        eprintln!("usage: keel reject <decision> --words \"<their words, verbatim>\" [--note-from FILE | --note \"<framing>\"] --by <humanActor> --date YYYY-MM-DD");
+        eprintln!("       keel reject <decision> (--note-from FILE | --note \"<what the human said>\") --by <humanActor> --date YYYY-MM-DD");
         eprintln!();
         eprintln!("Records a HUMAN's rejection of a proposed Decision (D0106): status becomes rejected and a");
         eprintln!("confirmation Test with a FAIL result carries their words. Same channel rules as `keel accept`.");
@@ -5250,6 +5309,10 @@ fn judge_set_items(root: &Path, path: &Path, rel: &str, all: bool, verdict: &str
 }
 
 fn cmd_judge_set(args: &[String]) -> i32 {
+    let args = &match prose_args(args, &["note"], "judge-set") {
+        Ok(a) => a,
+        Err(code) => return code,
+    };
     let args = &fold_words_into_note(args);
     let tty_gesture = tty_gesture();
     let args = &match verdict_channel_refusal("judge-set", "judging", args, tty_gesture, "confirmationRecord", false) {
@@ -5258,7 +5321,7 @@ fn cmd_judge_set(args: &[String]) -> i32 {
     };
     let root = find_repo_root().unwrap_or_else(|| PathBuf::from("."));
     let Some(file) = args.first().filter(|a| !a.starts_with('-')) else {
-        eprintln!("usage: keel judge-set <.tracking file> --words \"<their words, verbatim>\" [--note \"<framing>\"] --by <humanActor> --date YYYY-MM-DD [--verdict pass|fail] [--fail <test>,..] [--all]");
+        eprintln!("usage: keel judge-set <.tracking file> --words \"<their words, verbatim>\" [--note-from FILE | --note \"<framing>\"] --by <humanActor> --date YYYY-MM-DD [--verdict pass|fail] [--fail <test>,..] [--all]");
         eprintln!();
         eprintln!("Records a HUMAN's judgment of the SAMPLED proposed results in one file (D0443 on D0312 B): one TestResult");
         eprintln!("and one <test>Attest<N> quote receipt PER ITEM, never a count. The sample is computed from attestation-policy.toml");
