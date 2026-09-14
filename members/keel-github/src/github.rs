@@ -112,11 +112,22 @@ pub fn decider_cmd(args: &[String], root: &Path) -> i32 {
 mod tests {
     use std::path::Path;
 
+    /// The checkout root: the first ancestor of this crate that holds `.git`. Not a fixed count of
+    /// `..` - the tests keyed on one when the module lived in keel-cli and broke when it became a
+    /// member two levels down (sprint 714).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("this crate sits inside a git checkout")
+            .to_path_buf()
+    }
+
     /// issue279: `--root` must override, because the channel runs at a repository root where there is
     /// no project and therefore no table — and it authorised NOBODY there.
     #[test]
     fn the_decider_table_is_resolved_from_the_root_flag_when_given() {
-        let repo = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let repo = repo_root();
         let repo_s = repo.to_string_lossy().to_string();
         let declared: Vec<String> = super::deciders(&repo).keys().cloned().collect();
         let Some(login) = declared.first() else { return }; // no table, nothing to assert
@@ -137,8 +148,8 @@ mod tests {
     }
     #[test]
     fn this_project_declares_its_decider_and_refuses_others() {
-        let root = Path::new("..");
-        let map = super::deciders(root);
+        let root = repo_root();
+        let map = super::deciders(&root);
         assert!(!map.is_empty(), "this project runs the channel, so it must declare at least one decider");
         assert!(!map.contains_key("asirobots"), "an ORG is not a person and must never be a decider");
     }

@@ -17,6 +17,13 @@ path = "src/main.rs"
 
 [dependencies]
 keel-parser = { path = "../keel-parser" }
+# D0479 leaf members (sprint 714); each is re-exported under its old module path in lib.rs.
+keel-perf = { path = "../members/keel-perf" }
+keel-git = { path = "../members/keel-git" }
+keel-json = { path = "../members/keel-json" }
+keel-actor = { path = "../members/keel-actor" }
+keel-schema = { path = "../members/keel-schema" }
+keel-github = { path = "../members/keel-github" }
 # OS CSPRNG for UUID v4 identity (issue075/D0129) — already in the lock tree transitively.
 getrandom = "0.3"
 # HMAC-SHA256 for device-bound deck taps (D0201 B) - already in the lock tree via keel-parser.

@@ -1,0 +1,10 @@
+[package]
+name = "keel-github"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "GitHub gesture parsing and receipts (D0263/D0264) - the reading side of the intake router."
+
+[dependencies]
+

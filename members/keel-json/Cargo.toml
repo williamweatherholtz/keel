@@ -1,0 +1,10 @@
+[package]
+name = "keel-json"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Text encodings the surfaces share: the Python-compatible JSON writer and the terminal colour palette."
+
+[dependencies]
+

@@ -9,7 +9,7 @@ use include_dir::{include_dir, Dir};
 
 /// The reusable engine tree + operating manual, embedded at compile time so `keel init` is
 /// self-contained (no external fetch - the cytoscape precedent).
-pub static ENGINE_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../.engine");
+pub static ENGINE_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../.engine");
 
 /// The embedded engine's text at `rel` (a path relative to `.engine/`, forward slashes), or `None`
 /// when the engine ships no file there or the file is not UTF-8.

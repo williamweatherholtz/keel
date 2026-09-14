@@ -1,6 +1,12 @@
 [workspace]
 members = [
     "keel-parser",
+    "members/keel-perf",
+    "members/keel-git",
+    "members/keel-json",
+    "members/keel-actor",
+    "members/keel-schema",
+    "members/keel-github",
     "keel-cli",
 ]
 resolver = "2"

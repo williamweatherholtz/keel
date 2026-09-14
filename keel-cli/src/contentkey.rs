@@ -35,13 +35,22 @@ pub struct ContentKeys {
 
 /// Is `rel` (repo-relative, either separator) a path the test binaries are built from or run against?
 ///
-/// Pure. `keel-cli/src/x.rs`, `.engine/skills/y/SKILL.md`, `Cargo.lock`, `.githooks/post-commit`,
-/// `.claude/output-styles/keel.md`, `keelw` -> true; `.tracking/backlog.sysml`, `docs/x.md`,
-/// `fonts/a.ttf` -> false.
+/// Pure. `keel-cli/src/x.rs`, `members/keel-git/src/gitx.rs`, `keel-parser/src/lexer.rs`,
+/// `.engine/skills/y/SKILL.md`, `Cargo.lock`, `.githooks/post-commit`, `.claude/output-styles/keel.md`,
+/// `keelw` -> true; `.tracking/backlog.sysml`, `docs/x.md`, `fonts/a.ttf` -> false. Every workspace
+/// member is code (sprint 714): the binaries link all of them.
 #[must_use]
 pub fn is_code(rel: &str) -> bool {
     let p = rel.replace('\\', "/");
-    p.starts_with("keel-cli/") || p.starts_with(".engine/") || p.starts_with(".githooks/") || p.starts_with(".claude/") || p == "Cargo.toml" || p == "Cargo.lock" || p == "keelw"
+    p.starts_with("keel-cli/")
+        || p.starts_with("members/")
+        || p.starts_with("keel-parser/")
+        || p.starts_with(".engine/")
+        || p.starts_with(".githooks/")
+        || p.starts_with(".claude/")
+        || p == "Cargo.toml"
+        || p == "Cargo.lock"
+        || p == "keelw"
 }
 
 /// Is `rel` under the one directory neither key reads?
@@ -124,6 +133,8 @@ mod tests {
         assert!(is_code(".githooks/post-commit"));
         assert!(is_code(".claude/output-styles/keel.md"));
         assert!(is_code("keelw"));
+        assert!(is_code("members/keel-git/src/gitx.rs"));
+        assert!(is_code("keel-parser/src/lexer.rs"));
         assert!(!is_code(".tracking/backlog.sysml"));
         assert!(!is_code(".tracking/delivery/sprint706_x.sysml"));
         assert!(!is_code("fonts/NotoEmoji-var.ttf"));

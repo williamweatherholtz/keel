@@ -28,7 +28,7 @@
 /// static test in this module fails the build on any `Command::new("git")` elsewhere in the crate.
 #[must_use]
 pub fn git() -> Git {
-    crate::perf::add(&crate::perf::GIT_CALLS, 1);
+    keel_perf::perf::add(&keel_perf::perf::GIT_CALLS, 1);
     Git(std::process::Command::new("git"))
 }
 
@@ -38,7 +38,7 @@ pub fn git() -> Git {
 fn clocked<T>(f: impl FnOnce() -> T) -> T {
     let t0 = std::time::Instant::now();
     let out = f();
-    crate::perf::GIT_NANOS.fetch_add(u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX), std::sync::atomic::Ordering::Relaxed);
+    keel_perf::perf::GIT_NANOS.fetch_add(u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX), std::sync::atomic::Ordering::Relaxed);
     out
 }
 
@@ -91,7 +91,7 @@ impl Git {
     /// The argv shape for the `KEEL_PERF=2` tally: the first two tokens after any `-C <dir>` pair, so
     /// `-C <repo> cat-file --batch` tallies as `cat-file --batch` like the rich helpers always did.
     fn note(&self) {
-        if !crate::perf::verbose() {
+        if !keel_perf::perf::verbose() {
             return;
         }
         let all: Vec<String> = self.0.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
@@ -108,7 +108,7 @@ impl Git {
             }
             rest.push(a.as_str());
         }
-        crate::perf::note_git(&rest);
+        keel_perf::perf::note_git(&rest);
     }
 
     /// Run to completion, timed.
@@ -225,9 +225,9 @@ mod tests {
     /// how much.
     #[test]
     fn a_git_run_through_the_constructor_advances_git_nanos() {
-        let before = crate::perf::GIT_NANOS.load(std::sync::atomic::Ordering::Relaxed);
+        let before = keel_perf::perf::GIT_NANOS.load(std::sync::atomic::Ordering::Relaxed);
         let _ = super::git().args(["--version"]).output();
-        let after = crate::perf::GIT_NANOS.load(std::sync::atomic::Ordering::Relaxed);
+        let after = keel_perf::perf::GIT_NANOS.load(std::sync::atomic::Ordering::Relaxed);
         assert!(after > before, "GIT_NANOS did not advance across a spawn");
     }
 
@@ -268,7 +268,16 @@ exit 0
     /// is configured-but-unreachable and fails; an unconfigured CI checkout is not a violation.
     #[test]
     fn a_configured_hooks_path_must_be_reachable() {
-        let root = std::path::Path::new("..");
+        // The repo root is asked of git, not taken as a fixed number of `..` from the crate: this
+        // test keyed on `..` when the module lived in keel-cli and broke the moment it became a
+        // member two levels down (sprint 714).
+        let top = super::git()
+            .args(["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--show-toplevel"])
+            .output()
+            .expect("git rev-parse --show-toplevel");
+        assert!(top.status.success(), "this crate must sit inside a git checkout");
+        let root = std::path::PathBuf::from(String::from_utf8_lossy(&top.stdout).trim());
+        let root = root.as_path();
         let configured = super::git()
             .arg("-C")
             .arg(root)

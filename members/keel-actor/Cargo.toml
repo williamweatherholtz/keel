@@ -1,0 +1,12 @@
+[package]
+name = "keel-actor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Who is acting: actor resolution and enrolment (D0129), and the device-bound gesture receipts (D0201)."
+
+[dependencies]
+serde_json = "1"
+sha2 = "0.10"
+getrandom = "0.3"

@@ -40,7 +40,7 @@ use include_dir::{include_dir, Dir};
 
 /// The engine's own schema, baked in at build time. See the module doc for why this is never the
 /// downstream project's on-disk copy.
-static SCHEMA_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../.engine/schema");
+static SCHEMA_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../.engine/schema");
 
 /// Everything derivable from the schema text.
 pub struct Vocabulary {
@@ -60,6 +60,28 @@ pub struct Vocabulary {
 /// FIRST, before any structural match. `.engine/schema` is unusually comment-dense — the files
 /// explain their own design at length — so a scan that skips this reads sentences about
 /// `metadata def` as declarations of one.
+/// Every `.sysml` under `dir`, recursively, sorted - the schema directory of one root.
+///
+/// The leaf member cannot reach keel-cli's memoised corpus walk (D0479: a leaf depends on nothing
+/// above it), and does not need it: `project_vocab` is itself memoised per root, and the schema
+/// directory is a dozen files. Sorted so the vocabulary's declaration order is the file order.
+fn sysml_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            out.extend(sysml_files(&p));
+        } else if p.extension().and_then(|e| e.to_str()) == Some("sysml") {
+            out.push(p);
+        }
+    }
+    out.sort();
+    out
+}
+
 fn strip_comments(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     let mut rest = src;
@@ -194,7 +216,7 @@ fn project_vocab(root: &std::path::Path) -> std::sync::Arc<Vocabulary> {
         attrs: HashMap::new(),
         supertype: HashMap::new(),
     };
-    for path in crate::collect_sysml(&root.join(".engine").join("schema")) {
+    for path in sysml_files(&root.join(".engine").join("schema")) {
         if let Ok(src) = std::fs::read_to_string(&path) {
             parse(&src, &mut v);
         }
@@ -271,7 +293,7 @@ pub fn enum_members(name: &str) -> Vec<String> {
 pub fn project_enum_members(root: &std::path::Path, name: &str) -> Vec<String> {
     let dir = root.join(".engine").join("schema");
     let mut found: Vec<String> = Vec::new();
-    for path in crate::collect_sysml(&dir) {
+    for path in sysml_files(&dir) {
         let Ok(src) = std::fs::read_to_string(&path) else { continue };
         let body = strip_comments(&src);
         let needle = format!("enum def {name}");

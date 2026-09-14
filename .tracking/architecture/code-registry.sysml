@@ -199,12 +199,26 @@ package ProjectCodeRegistry {
         :>> invariantSafety = InvariantSafety::enforced;
         :>> stpaRole = StpaRole::sensor;
     }
+    // sprint 714 (D0479): actor.rs moved into member keel-actor. The element above is claudeOpus5's,
+    // so the path follows the file by a new element and a #Supersede edge (D0108), not an edit.
+    part ceActorProvenanceMember : CodeElement {
+        :>> id = "fa115af4-cbb1-4f3a-ae98-ce52945131e1";
+        :>> title = "Actor provenance (member keel-actor)";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> kind = "module";
+        :>> filePath = "members/keel-actor/src/actor.rs";
+        :>> riskClass = RiskClass::security;
+        :>> invariantSafety = InvariantSafety::enforced;
+        :>> designPattern = DesignPattern::valueObject;
+        :>> stpaRole = StpaRole::sensor;
+    }
+    #Supersede dependency from ceActorProvenanceMember to ceActorProvenance;
     part ceGitSpawn : CodeElement {
         :>> id = "839ca144-5679-4546-bf31-48a4d065f65a";
         :>> title = "gitx.rs - the single git spawn point";
         :>> createdAt = "2026-08-22"; :>> createdBy = "claudeFable5";
         :>> kind = "module";
-        :>> filePath = "keel-cli/src/gitx.rs";
+        :>> filePath = "members/keel-git/src/gitx.rs";
         :>> riskClass = RiskClass::dataLoss;
         :>> invariantSafety = InvariantSafety::checked;
         :>> stpaRole = StpaRole::actuator;

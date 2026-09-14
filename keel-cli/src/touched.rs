@@ -8,9 +8,12 @@
 //! the whole suite is still `keel suite`, still measured, still gating nothing. This runs the subset a
 //! commit can be expected to have touched, and says when that subset is empty.
 //!
-//! HOW THE SET IS COMPUTED - by text, deliberately. A changed path under `keel-cli/src/` contributes
-//! its MODULE STEM (`sync.rs` -> `sync`, `view/mod.rs` -> `view`); `main.rs` and `lib.rs` name no
-//! module and are reported as unattributed rather than matched against every test that says `main`.
+//! HOW THE SET IS COMPUTED - by text, deliberately. A changed path under `keel-cli/src/` or under a
+//! workspace member's `members/<crate>/src/` (D0479, sprint 714) contributes its MODULE STEM
+//! (`sync.rs` -> `sync`, `view/mod.rs` -> `view`, `members/keel-git/src/gitx.rs` -> `gitx`);
+//! `main.rs` and `lib.rs` name no module and are reported as unattributed rather than matched against
+//! every test that says `main`. The members' own unit tests run with the lib (`member_libs`), until
+//! D0481 computes the set over the workspace graph.
 //! An integration test is touched when its text carries a stem as a whole word (`keel_cli::sync::`,
 //! `keel sync`, `sync.rs` all count; `synced` does not), or when the test file itself changed.
 //! A changed path under `.engine/` contributes the stem `init` (`embedded_stem`): that tree is
@@ -73,14 +76,26 @@ pub const LIB: &str = "lib";
 /// self-reading (D0474).
 const SELF_READING_MARK: &str = "CARGO_MANIFEST_DIR";
 
+/// The path of a Rust source file relative to its crate's `src/`, for the crates whose modules the
+/// set is keyed on: `keel-cli/src/` and every `members/<crate>/src/` (D0479). `None` elsewhere.
+fn source_rel(p: &str) -> Option<&str> {
+    if let Some(rel) = p.strip_prefix("keel-cli/src/") {
+        return Some(rel);
+    }
+    let rest = p.strip_prefix("members/")?;
+    let (crate_dir, rel) = rest.split_once("/src/")?;
+    (!crate_dir.is_empty() && !crate_dir.contains('/')).then_some(rel)
+}
+
 /// The module stem a changed path contributes, or `None` for a path that names no module.
 ///
 /// Pure: `keel-cli/src/sync.rs` -> `sync`; `keel-cli/src/view/mod.rs` -> `view`;
-/// `keel-cli/src/main.rs`, `keel-cli/src/lib.rs`, anything outside `keel-cli/src/` -> `None`.
+/// `members/keel-git/src/gitx.rs` -> `gitx`; `keel-cli/src/main.rs`, any `lib.rs`, anything outside
+/// a keyed crate's `src/` -> `None`.
 #[must_use]
 pub fn module_stem(path: &str) -> Option<String> {
     let p = path.replace('\\', "/");
-    let rel = p.strip_prefix("keel-cli/src/")?;
+    let rel = source_rel(&p)?;
     let file = rel.strip_suffix(".rs")?;
     let mut parts: Vec<&str> = file.split('/').collect();
     let last = parts.pop()?;
@@ -111,7 +126,7 @@ pub fn embedded_stem(path: &str) -> Option<String> {
 #[must_use]
 pub fn is_unattributed_source(path: &str) -> bool {
     let p = path.replace('\\', "/");
-    p.starts_with("keel-cli/src/") && std::path::Path::new(&p).extension().is_some_and(|x| x.eq_ignore_ascii_case("rs")) && module_stem(&p).is_none()
+    source_rel(&p).is_some() && std::path::Path::new(&p).extension().is_some_and(|x| x.eq_ignore_ascii_case("rs")) && module_stem(&p).is_none()
 }
 
 /// The test name an integration-test path contributes (`keel-cli/tests/land_gate.rs` -> `land_gate`).
@@ -297,8 +312,10 @@ pub struct Touched {
     pub stems: Vec<String>,
     pub unattributed: Vec<String>,
     pub tests: Vec<String>,
-    /// The lib's own unit tests (`cargo test --lib`) are in the set whenever ANY `keel-cli/src` path
-    /// changed: a module's `#[cfg(test)]` block names it by construction, and a unit test elsewhere
+    /// The lib's own unit tests (`cargo test --lib`) are in the set whenever ANY `keel-cli/src` or
+    /// `members/*/src` path changed - and `lib` then runs every workspace member's lib tests too
+    /// (`member_libs`), because a moved module's `#[cfg(test)]` block moved with it (sprint 714):
+    /// a module's `#[cfg(test)]` block names it by construction, and a unit test elsewhere
     /// can read the changed module's live facts - `cli_surface_declared_tests` read the suite
     /// synopsis and hardcoded which Decisions it may cite, and CI went red on cab7cac when the
     /// synopsis gained a citation the set never ran (issue438). ~15 s on this host.
@@ -389,13 +406,13 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
         // the verifier ran, so it was in neither list; issue524).
         let from = git_out(repo, &["merge-base", &b, "HEAD"]).unwrap_or_else(|| b.clone());
         let out = git_out(repo, &["diff", "--name-only", &from]).ok_or_else(|| format!("git diff --name-only {from} failed"))?;
-        let untracked = git_out(repo, &["ls-files", "--others", "--exclude-standard", "--", "keel-cli", ".engine"]).unwrap_or_default();
+        let untracked = git_out(repo, &["ls-files", "--others", "--exclude-standard", "--", "keel-cli", "members", ".engine"]).unwrap_or_default();
         let mut paths: Vec<String> = out.lines().chain(untracked.lines()).filter(|l| !l.is_empty()).map(str::to_string).collect();
         paths.sort();
         paths.dedup();
         (b, paths)
     } else {
-        let out = git_out(repo, &["ls-files", "keel-cli/src", "keel-cli/tests"]).ok_or_else(|| "git ls-files failed".to_string())?;
+        let out = git_out(repo, &["ls-files", "keel-cli/src", "keel-cli/tests", "members"]).ok_or_else(|| "git ls-files failed".to_string())?;
         ("(no base: every tracked module)".to_string(), out.lines().map(str::to_string).collect())
     };
     let mut stems: Vec<String> = changed.iter().filter_map(|p| module_stem(p)).collect();
@@ -678,6 +695,38 @@ fn millis_of(seconds: &str) -> u64 {
     whole.saturating_mul(1000).saturating_add(frac.parse().unwrap_or(0))
 }
 
+/// The `[workspace] members` of a root manifest, as written (pure over its text): `keel-parser`,
+/// `members/keel-git`, ... Empty when the text declares none.
+#[must_use]
+pub fn workspace_members(root_manifest: &str) -> Vec<String> {
+    let Some(list) = root_manifest.split("members = [").nth(1).and_then(|s| s.split(']').next()) else { return Vec::new() };
+    list.split(',').map(|m| m.trim().trim_matches('"').to_string()).filter(|m| !m.is_empty()).collect()
+}
+
+/// The package names of every workspace member other than keel-cli (sprint 714).
+///
+/// These are the libs that run with `lib`. Read from the root manifest and each member's own; a
+/// member whose manifest cannot be read is named by its directory's last component.
+#[must_use]
+pub fn member_libs(repo: &Path) -> Vec<String> {
+    let Ok(ws) = std::fs::read_to_string(repo.join("Cargo.toml")) else { return Vec::new() };
+    let mut out = Vec::new();
+    for member in workspace_members(&ws) {
+        let manifest = std::fs::read_to_string(repo.join(&member).join("Cargo.toml")).unwrap_or_default();
+        let name = manifest
+            .lines()
+            .map(str::trim)
+            .find_map(|l| l.strip_prefix("name = ").map(|v| v.trim_matches('"').to_string()))
+            .unwrap_or_else(|| member.rsplit('/').next().unwrap_or(&member).to_string());
+        if name != "keel-cli" {
+            out.push(name);
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// The `[[test]]` targets of a Cargo manifest declared `harness = false` (pure over its text).
 ///
 /// nextest lists a binary with `--list --format terse` before it runs it, and a custom harness -
@@ -782,6 +831,49 @@ fn select_targets(cmd: &mut std::process::Command, set: &[String]) {
     }
 }
 
+/// What one cargo invocation over the member libs reported (sprint 714).
+struct MemberLibs {
+    ok: bool,
+    passed: u64,
+    failed: u64,
+    timings: Vec<TestTiming>,
+    text: String,
+}
+
+/// One invocation from the ROOT manifest with `-p` per member, `--lib` only. Its rows fold into
+/// `lib` (a lib row's id is the package name, which `parse_nextest_row` reads as `lib`), and a red
+/// is `lib`'s red; under the cargo-test fallback the counts come from the summary lines instead.
+fn run_member_libs(repo: &Path, runner: &Runner, members: &[String]) -> Result<MemberLibs, String> {
+    let mut cmd = std::process::Command::new("cargo");
+    let root_manifest = repo.join("Cargo.toml");
+    match runner {
+        Runner::Nextest(_) => {
+            cmd.arg("nextest").arg("run").arg("--release").arg("--manifest-path").arg(&root_manifest).arg("--no-fail-fast");
+            cmd.arg("--no-tests").arg("pass").arg("--color").arg("never").arg("--status-level").arg("all").arg("--final-status-level").arg("none");
+        }
+        Runner::CargoTest => {
+            cmd.arg("test").arg("--release").arg("--manifest-path").arg(&root_manifest).arg("--no-fail-fast");
+        }
+    }
+    cmd.arg("--lib");
+    for m in members {
+        cmd.arg("-p").arg(m);
+    }
+    let c = capture(cmd, repo)?;
+    let (passed, failed, timings) = match runner {
+        Runner::Nextest(_) => {
+            let rows = parse_nextest(&c.text);
+            let count = |want: bool| u64::try_from(rows.iter().filter(|r| r.passed == want).count()).unwrap_or(u64::MAX);
+            (count(true), count(false), rows)
+        }
+        Runner::CargoTest => {
+            let (p, f) = crate::suite::count_results(&c.text);
+            (p, f, Vec::new())
+        }
+    };
+    Ok(MemberLibs { ok: c.ok, passed, failed, timings, text: c.text })
+}
+
 /// Run the set, minus the binaries observed green at this content (D0474), unless `force`.
 ///
 /// The runner is cargo-nextest (D0475): the binaries execute in parallel, every test in its own
@@ -873,6 +965,20 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
         failed += f;
         ok &= c.ok;
         text.push_str(&c.text);
+    }
+    // `lib` in the set means every workspace member's lib tests, not keel-cli's alone (sprint 714):
+    // the leaf members carry the unit tests of the modules that moved into them.
+    let members = member_libs(repo);
+    if to_run.iter().any(|n| n == LIB) && !members.is_empty() {
+        let m = run_member_libs(repo, &runner, &members)?;
+        if crate::suite::never_ran(m.ok, m.passed, m.failed) || m.failed > 0 {
+            failing.push(LIB.to_string());
+        }
+        passed += m.passed;
+        failed += m.failed;
+        ok &= m.ok;
+        timings.extend(m.timings);
+        text.push_str(&m.text);
     }
     failing.sort();
     failing.dedup();
@@ -1031,7 +1137,7 @@ pub fn cmd(repo: &Path, force: bool) -> i32 {
 mod tests {
     use super::{
         compute, embedded_stem, failing_binaries, merge_observed, module_stem, names_stem, parse_observed, render_receipt, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests, Memo, Observed,
-        custom_harness_tests, millis_of, parse_nextest, Phase, Run, Touched, LIB,
+        custom_harness_tests, is_unattributed_source, millis_of, parse_nextest, workspace_members, Phase, Run, Touched, LIB,
     };
     use crate::contentkey::ContentKeys;
 
@@ -1197,6 +1303,17 @@ mod tests {
         assert_eq!(module_stem("keel-cli/src/lib.rs"), None);
         assert_eq!(module_stem("keel-cli/tests/sync.rs"), None);
         assert_eq!(module_stem(".engine/tools/x.rs"), None);
+        // D0479 members (sprint 714): the known positive is the first module that moved; the known
+        // negative is a path under members/ that is not a crate's src.
+        assert_eq!(module_stem("members/keel-git/src/gitx.rs"), Some("gitx".to_string()));
+        assert_eq!(module_stem("members\\keel-json\\src\\color.rs"), Some("color".to_string()));
+        assert_eq!(module_stem("members/keel-git/src/lib.rs"), None);
+        assert!(is_unattributed_source("members/keel-git/src/lib.rs"));
+        assert_eq!(module_stem("members/keel-git/Cargo.toml"), None);
+        assert!(!is_unattributed_source("members/keel-git/Cargo.toml"));
+        assert_eq!(module_stem("members/src/x.rs"), None);
+        assert_eq!(workspace_members("[workspace]\nmembers = [\n    \"keel-parser\",\n    \"members/keel-git\",\n    \"keel-cli\",\n]\nresolver = \"2\"\n"), vec!["keel-parser", "members/keel-git", "keel-cli"]);
+        assert!(workspace_members("[package]\nname = \"x\"\n").is_empty());
         assert_eq!(test_name("keel-cli/tests/land_gate.rs"), Some("land_gate".to_string()));
         assert_eq!(test_name("keel-cli/tests/common/mod.rs"), None);
     }

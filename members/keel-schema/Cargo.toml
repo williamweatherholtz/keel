@@ -1,0 +1,10 @@
+[package]
+name = "keel-schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The engine's baked-in facts: the embedded .engine tree, the schema vocabulary, the authored CLI surface and the control-defect vocabulary."
+
+[dependencies]
+include_dir = "0.7"

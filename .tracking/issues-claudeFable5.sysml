@@ -1445,4 +1445,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcReadyHonoursItemDependencies to issue549;
+
+    part issue550 : Issue {
+        :>> id = "d1302bc3-f494-4977-a7c2-ad81c6f1b2ae";
+        :>> title = "A keel-parser edit contributes no module stem to the touched set";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A keel-parser edit contributes no module stem to the touched set (D0421). touched.rs derives stems from keel-cli/src/ and, since sprint 714, members/<crate>/src/ (source_rel), but keel-parser/src/ is neither, so an edit to the lexer or parser names no test and the set can run empty against it - the parser's own unit tests run only when some other edit puts lib in the set. Found while bridging the members/ prefix in sprint 714; the content key (D0474) now counts keel-parser as code, so at least the receipt stales, but the run it triggers still does not descend into the parser crate. Resolved when the touched set is derived from the workspace members themselves rather than an enumerated prefix list (dcTouchedSetDescendsTheWorkspace, D0481).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcTouchedSetDescendsTheWorkspace to issue550;
+
+    part issue551 : Issue {
+        :>> id = "55b4a7df-c5a1-4527-b6a9-e6bb86757e21";
+        :>> title = "keel record swallows an unknown flag and writes the record without it";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel record decision accepted `--depends-on d0479` and wrote D0484 without any edge: the verb looks each flag up by name (main.rs flag(args, name) at the req closure) and never enumerates the arguments it did not consume, so a flag it does not know is silently nothing. The record landed, the command exited 0, and only a grep for DependsOn in the written file showed the edge missing. Same class as issue179 (keel init took --help as a directory name): a typed flag that the surface does not own must be refused as an unknown flag, not absorbed. The wider gap is that D0303 layers Decisions with #DependsOn and D0352 authors edges with the Decision, yet the API has --derived-from and --supersedes and no --depends-on, so the edge had to be authored by hand in the file. Found in sprint 714 while recording D0484.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcRecordRefusesAnUnknownFlag to issue551;
 }

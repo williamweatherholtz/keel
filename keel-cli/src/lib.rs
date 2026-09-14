@@ -25,10 +25,10 @@ use keel_parser::ast::{ActionDef, Item, Package, Part, Value};
 use keel_parser::{parse, tokenize, Diagnostic, PackageRegistry};
 
 pub mod activation;
-pub mod cli_facts;
-pub mod color;
-pub mod cli_surface;
-pub mod control_defects;
+pub use keel_schema::cli_facts;
+pub use keel_json::color;
+pub use keel_schema::cli_surface;
+pub use keel_schema::control_defects;
 pub mod control_proof;
 /// The declared-vs-binary version skew for the project owning `target`, if any (D0251).
 ///
@@ -56,11 +56,11 @@ pub fn pin_skew(target: &Path) -> Option<(String, String)> {
     (declared != binary).then(|| (declared, binary.to_string()))
 }
 
-pub mod actor;
+pub use keel_actor::actor;
 pub mod algo;
 pub mod arch;
 pub mod verification;
-pub mod schema;
+pub use keel_schema::schema;
 pub mod history;
 pub mod adherence;
 pub mod ci_runs;
@@ -70,7 +70,7 @@ pub mod suite;
 pub mod touched;
 pub mod verify;
 pub mod eol;
-pub mod github;
+pub use keel_github::github;
 pub mod github_ingest;
 pub mod adoption_check;
 pub mod attestation;
@@ -80,12 +80,12 @@ pub mod onboard;
 pub mod proactive;
 pub mod claim;
 pub mod deck;
-pub mod device;
-pub mod embedded;
+pub use keel_actor::device;
+pub use keel_schema::embedded;
 pub mod launcher;
 pub mod library;
 pub mod enroll;
-pub mod gitx;
+pub use keel_git::gitx;
 pub mod corpus;
 pub mod receipt;
 pub mod contentkey;
@@ -97,9 +97,9 @@ pub mod hook_binary;
 pub mod hardening;
 pub mod indexer;
 pub mod migrate;
-mod json;
+use keel_json::json;
 pub mod fingerprint;
-pub mod perf;
+pub use keel_perf::perf;
 pub mod pm;
 pub mod plan_cover;
 pub mod orient;

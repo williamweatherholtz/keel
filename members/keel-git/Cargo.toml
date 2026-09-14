@@ -1,0 +1,10 @@
+[package]
+name = "keel-git"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The single git spawn point (ceGitSpawn): every git the engine runs goes through here."
+
+[dependencies]
+keel-perf = { path = "../keel-perf" }

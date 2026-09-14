@@ -92,11 +92,22 @@ pub fn renderer_command(r: &str) -> Option<(&str, Option<&str>)> {
 mod render_reserved_tests {
     use super::*;
 
+    /// The checkout root: the first ancestor of this crate that holds `.git`. Not a fixed count of
+    /// `..` - the tests keyed on one when the module lived in keel-cli and broke when it became a
+    /// member two levels down (sprint 714).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("this crate sits inside a git checkout")
+            .to_path_buf()
+    }
+
     /// D0449: no declared view may be named a render sub-verb. Read from the SOURCE of the declared
     /// views, so a `.view.toml` added later under a reserved name fails here, not in a user's shell.
     #[test]
     fn no_declared_view_is_named_a_render_reserved_word() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".engine").join("views");
+        let dir = repo_root().join(".engine").join("views");
         let mut declared = Vec::new();
         for e in std::fs::read_dir(&dir).expect(".engine/views is readable").flatten() {
             let name = e.file_name().to_string_lossy().into_owned();

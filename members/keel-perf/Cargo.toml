@@ -1,0 +1,10 @@
+[package]
+name = "keel-perf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Process-wide performance counters (KEEL_PERF) - the one leaf every other member may count into."
+
+[dependencies]
+
