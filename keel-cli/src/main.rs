@@ -2867,6 +2867,26 @@ fn flag(args: &[String], name: &str) -> Option<String> {
     })
 }
 
+/// A PROSE flag: `--<name>-from FILE` read verbatim (trimmed), else `--<name> TEXT`. One reader for
+/// every prose input of `record` (D0224, issue543). The trap this closes: a backtick inside a
+/// double-quoted shell argument is command substitution, so the shell RUNS the command the prose
+/// merely names - it fired into `decision` twice, `issue` once, `task` once, and on 2026-09-14 a
+/// FIFTH time into `result`'s evidence, because the file form had been added verb by verb, each
+/// after its own occurrence. Refuses both flags at once by name (the caller learns which would
+/// have won) and a file it cannot read. `Ok(None)` is neither flag given.
+fn prose_flag(args: &[String], name: &str, verb: &str) -> Result<Option<String>, String> {
+    let from = flag(args, &format!("{name}-from"));
+    let inline = flag(args, name);
+    match (from, inline) {
+        (Some(_), Some(_)) => Err(format!("{verb}: --{name}-from and --{name} were both given; pass one")),
+        (Some(f), None) => match std::fs::read_to_string(&f) {
+            Ok(t) => Ok(Some(t.trim().to_string())),
+            Err(e) => Err(format!("{verb}: cannot read {f}: {e}")),
+        },
+        (None, inline) => Ok(inline),
+    }
+}
+
 /// A provenance DATE, refused rather than defaulted (issue182).
 ///
 /// Five write paths read this as `flag(args, ..).unwrap_or_else(|| "2026-01-01".to_owned())`. CLAUDE.md
@@ -2891,6 +2911,8 @@ fn provenance_date(args: &[String], flag_name: &str, usage: &str) -> Result<Stri
 fn cmd_append_result(args: &[String]) -> i32 {
     let Some(file_str) = flag(args, "file") else {
         eprintln!("usage: keel record result --file FILE --task TASK --sha SHA [--verdict pass|fail] [--judged-by ACTOR] [--judged-at DATE]");
+        eprintln!("       --evidence-from FILE   what ran, read from a file (PREFER THIS for anything quoting a command)");
+        eprintln!("       --evidence TEXT        one-line receipt - a shell EXECUTES backticks in it (D0224)");
         return 2;
     };
     let Some(task) = flag(args, "task") else {
@@ -2914,7 +2936,10 @@ fn cmd_append_result(args: &[String]) -> i32 {
         Err(c) => return c,
     };
 
-    let evidence = flag(args, "evidence");
+    let evidence = match prose_flag(args, "evidence", "record result") {
+        Ok(e) => e,
+        Err(msg) => { eprintln!("error: {msg}"); return 2; }
+    };
     match w::append_result(&file, &task, &sha, &verdict, &judged_at, &judged_by, evidence.as_deref()) {
         Ok(uuid) => { println!("{uuid}"); proposed_note(&file, &uuid); binding_note(&file, &sha, &verdict); 0 }
         Err(e @ w::WriteError::ReceiptOwed(..)) => {
@@ -2966,6 +2991,9 @@ fn binding_note(file: &std::path::Path, sha: &str, verdict: &str) {
 fn cmd_append_gate_result(args: &[String]) -> i32 {
     let Some(file_str) = flag(args, "file") else {
         eprintln!("usage: keel record gate-result --file FILE --gate GATE --sha SHA [--verdict pass|fail] [--judged-by ACTOR] [--judged-at DATE]");
+        eprintln!("       --evidence-from FILE   what ran, read from a file (PREFER THIS for anything quoting a command)");
+        eprintln!("       --evidence TEXT        one-line receipt - a shell EXECUTES backticks in it (D0224)");
+        eprintln!("       --notes-from FILE | --notes TEXT   the same choice for notes");
         return 2;
     };
     let Some(gate) = flag(args, "gate") else {
@@ -2989,8 +3017,10 @@ fn cmd_append_gate_result(args: &[String]) -> i32 {
         Err(c) => return c,
     };
 
-    let notes = flag(args, "notes");
-    let evidence = flag(args, "evidence");
+    let (notes, evidence) = match (prose_flag(args, "notes", "record gate-result"), prose_flag(args, "evidence", "record gate-result")) {
+        (Ok(n), Ok(e)) => (n, e),
+        (Err(msg), _) | (_, Err(msg)) => { eprintln!("error: {msg}"); return 2; }
+    };
     match w::append_gate_result(&file, &gate, &sha, &verdict, &judged_at, &judged_by, notes.as_deref(), evidence.as_deref()) {
         Ok(uuid) => { println!("{uuid}"); proposed_note(&file, &uuid); binding_note(&file, &sha, &verdict); 0 }
         Err(e @ w::WriteError::ReceiptOwed(..)) => {
@@ -3469,16 +3499,12 @@ fn cmd_add_task(args: &[String]) -> i32 {
     // record twice; `record issue` got `--description-from` after a third occurrence. `add-task`
     // was left on the argument path and the trap fired a FOURTH time, eating `keel show <lens>` out
     // of a DoD and leaving the sentence "one  routing to the existing implementations". Fixing two
-    // of three call sites is what let this recur.
-    let dod = flag(args, "dod-from")
-        .and_then(|f| match std::fs::read_to_string(&f) {
-            Ok(t) => Some(t.trim().to_string()),
-            Err(e) => {
-                eprintln!("record task: cannot read {f}: {e}");
-                None
-            }
-        })
-        .or_else(|| flag(args, "dod"));
+    // of three call sites is what let this recur - and it recurred a FIFTH time into `result`'s
+    // evidence (issue543), which is why every prose input now goes through `prose_flag`.
+    let dod = match prose_flag(args, "dod", "record task") {
+        Ok(d) => d,
+        Err(msg) => { eprintln!("error: {msg}"); return 2; }
+    };
     let Some(dod) = dod else {
         eprintln!("error: --dod required");
         return 2;
@@ -4738,15 +4764,10 @@ fn cmd_record_issue(args: &[String]) -> i32 {
     // time on 2026-08-30 — corrupting issue314's own description and running `keel deactivate`
     // against this repository. A trap that recurs after its fix is a fix that was applied to the
     // instance instead of the class (issue315).
-    let description = flag(args, "description-from")
-        .and_then(|f| match std::fs::read_to_string(&f) {
-            Ok(t) => Some(t.trim().to_string()),
-            Err(e) => {
-                eprintln!("record issue: cannot read {f}: {e}");
-                None
-            }
-        })
-        .or_else(|| flag(args, "description"));
+    let description = match prose_flag(args, "description", "record issue") {
+        Ok(d) => d,
+        Err(msg) => { eprintln!("error: {msg}"); return 2; }
+    };
     let (Some(title), Some(description), Some(severity), Some(resolver)) =
         (req("title"), description, req("severity"), req("resolver"))
     else {

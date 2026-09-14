@@ -1401,4 +1401,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcGuardIdentityIsCheckedAtTheGate to issue545;
+
+    part issue546 : Issue {
+        :>> id = "0bb807be-79a7-49bc-9699-28e4f7fffbe4";
+        :>> title = "seven AI-typed prose flags still ride the shell argument path with no file form: override --reason, story --i-want/--implication/--triage-note, issue/accept/reject/judge-set --note";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found by sprint 711's retro scan (2026-09-14), the question its clause asked: which flag-shaped prose inputs remain on the argument path after prose_flag reached result, gate-result, task and issue. grep -on of flag(args, over main.rs: override --reason (main.rs:2496), record story --i-want / --implication (3429-3432) and --triage-note (3456), record issue --note (4876), accept --note (5042), reject --note (5148), judge-set --note (5270). Each is AI-typed prose passed as a double-quoted shell argument, the exact shape D0224 has now caught five times, and none has a file form. accept --words is excluded on purpose: it is the human's short verbatim quote (D0192) and stays a shell argument. Resolver: dcEveryProseFlagReadsAFile - each site reads prose_flag, so the class closes by construction and a later prose flag inherits the file form instead of earning it after its own occurrence.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcEveryProseFlagReadsAFile to issue546;
+
+    part issue547 : Issue {
+        :>> id = "fc296887-36e0-4999-94dd-f8d619ccf33a";
+        :>> title = "a CLI fact owned by another actor cannot be superseded: parse_cli_facts ignores #Supersede, so the only passing edit deletes the item and its id";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Met 2026-09-14 in sprint 711: the invocation of the CLI fact cliRecord (.engine/cli/commands.sysml, owned by claudeOpus5) had to change with the usage line (D0271 holds facts = help = dispatch), and guard ownership refused the edit - correctly, D0108: a non-owner ADDS or SUPERSEDES, never overwrites. But the SUPERSEDE path does not work for a CLI fact: parse_cli_facts (guards.rs:6947) reads every line containing : CliCommand { with no #Supersede filter, so a superseder of the same command name is a second authored fact and cli-surface-declared reports the retired one's invocation as drift against cli_facts.rs. The only passing path is the one 74c1923 took for the github family and this sprint takes for cliRecord: delete the part and re-author it under a new part name and a NEW id, owned by the editor - which discards the item's immutable identity (Invariant 3) to satisfy an ownership rule whose own remedy the reader cannot see. Every CLI fact authored by a retired actor is in this position at its next invocation change. Resolver: dcCliFactSupersessionIsHonoured.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcCliFactSupersessionIsHonoured to issue547;
 }

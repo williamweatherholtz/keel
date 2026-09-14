@@ -84,9 +84,10 @@ Change Request cross-cuts and is itself frozen.
 - Write API only; direct edits for what it doesn't cover. Writes are atomic + serialised on
   `.keel-write-lock`; a lock miss fails loudly (issue184/185).
 - Prose goes through a FILE, never a double-quoted shell arg — the shell executes backticks into the record
-  (D0224, four times). `record decision --from F`, `record issue --description-from F`, `record task --dod-from F`,
+  (D0224, five times). `record decision --from F`, `record issue --description-from F`, `record task --dod-from F`,
   `record sprint N slug --charter dNNNN --points P --fill F` (D0301: writes no result). Nine authoring verbs are `record` sub-verbs (D0451).
-- Results: `record result` / `record gate-result --evidence "<what ran>"`. AI `method=test` with no `// RAN:`
+- Results: `record result` / `record gate-result --evidence-from F` (PREFER for anything quoting a command;
+  `--evidence "<one line>"` for a bare receipt; D0224/issue543). AI `method=test` with no `// RAN:`
   receipt is refused at the write (D0232/D0424). `ci-run id=<id> workflow=<name>` is verified by CI (D0323).
   A demo receipt that IS a command under `[demo] replayable` (`.engine/contracts/reverify.toml`) stays a pass
   and `keel record reverify --demos` re-runs it (D0444). Other AI-examined passes land `proposed` (D0312 B);
