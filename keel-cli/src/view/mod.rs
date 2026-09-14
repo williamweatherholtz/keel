@@ -2421,6 +2421,10 @@ fn proposed_decisions(model: &Model) -> Vec<String> {
 /// Exact, not heuristic: a `#DependsOn` edge to a Decision whose `status` is `proposed`. An accepted
 /// or rejected Decision unblocks the item with no further edit, because nothing here is stored.
 ///
+/// A `#CharteredBy` edge to a proposed Decision blocks the same way (issue552): the charter IS the
+/// authority the item acts under, and an item chartered by a Decision the human has not accepted was
+/// ranked first while the acceptance it needed sat on the queue.
+///
 /// # Errors
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn blocked_on_acceptance(root: &Path) -> Result<HashSet<String>, ViewError> {
@@ -2433,10 +2437,58 @@ fn blocked_by(model: &Model) -> HashSet<String> {
     model
         .edges
         .iter()
-        .filter(|e| e.kind == "dependson" || e.kind == "dependency")
+        .filter(|e| e.kind == "dependson" || e.kind == "dependency" || e.kind == "charteredby")
         .filter(|e| pending.contains(&e.to))
         .map(|e| e.from.clone())
         .collect()
+}
+
+/// Work items waiting on ANOTHER work item that is not done (issue549).
+///
+/// Each row is `(item, waitsOn, why)`. `done` is the frontier's done-set and `is_item` says whether a
+/// name is a tracked work item at all - both are the caller's (orient's) authority, so this reads only
+/// the edges.
+///
+/// Until this existed the ready set honoured `first A then B` successions and Decision edges, and
+/// nineteen item-to-item `#DependsOn` edges declared in the backlog were read by nothing: every member
+/// of the layering chain ranked ready at once, with its predecessor still undone. An edge to a
+/// superseded item is stated as such rather than treated as satisfied - retired work never completes,
+/// so a dependant of it is blocked until a Decision re-points or retires it too.
+///
+/// # Errors
+/// Returns [`ViewError`] if a tracking/instance file fails to parse.
+pub fn blocked_on_items<S: std::hash::BuildHasher>(
+    root: &Path,
+    done: &HashSet<String, S>,
+    is_item: &dyn Fn(&str) -> bool,
+) -> Result<Vec<(String, String, String)>, ViewError> {
+    Ok(blocked_by_items(&*Model::build(root)?, done, is_item))
+}
+
+/// Pure core of [`blocked_on_items`], for self-test.
+fn blocked_by_items<S: std::hash::BuildHasher>(
+    model: &Model,
+    done: &HashSet<String, S>,
+    is_item: &dyn Fn(&str) -> bool,
+) -> Vec<(String, String, String)> {
+    let retired = model.retired();
+    let mut out: Vec<(String, String, String)> = model
+        .edges
+        .iter()
+        .filter(|e| e.kind == "dependson" && is_item(&e.from) && is_item(&e.to))
+        .filter_map(|e| {
+            if retired.contains(&e.to) {
+                Some((e.from.clone(), e.to.clone(), "superseded".to_string()))
+            } else if done.contains(&e.to) {
+                None
+            } else {
+                Some((e.from.clone(), e.to.clone(), "not done".to_string()))
+            }
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// Every `#Resolves` edge as `(resolver, issue, resolver_type)`.
@@ -6264,6 +6316,63 @@ verification storyDoD : Test {{ :>> method = VerificationMethod::test; :>> proce
         let mut accepted = items;
         accepted.insert("dPending".to_string(), with_status("Decision", "DecisionStatus::accepted"));
         assert!(blocked_by(&Model { items: accepted, edges }).is_empty());
+    }
+
+    #[test]
+    fn a_story_chartered_by_a_proposed_decision_is_blocked_until_it_is_accepted() {
+        // issue552: dcWorkspaceLayeringIsGuarded was chartered by a HELD Decision and ranked ready;
+        // the charter is the authority the item acts under, so it blocks exactly as #DependsOn does.
+        let with_status = |status: &str| {
+            let mut a = HashMap::new();
+            a.insert("status".to_string(), status.to_string());
+            ItemInfo { type_name: "Decision".to_string(), attrs: a, marker: None, file: String::new() }
+        };
+        let mut items = HashMap::new();
+        items.insert("dHeld".to_string(), with_status("DecisionStatus::proposed"));
+        items.insert("dStanding".to_string(), with_status("DecisionStatus::accepted"));
+        let edges = vec![
+            Edge { kind: "charteredby".to_string(), from: "storyHeld".to_string(), to: "dHeld".to_string() },
+            Edge { kind: "charteredby".to_string(), from: "storyFree".to_string(), to: "dStanding".to_string() },
+        ];
+        let blocked = blocked_by(&Model { items: items.clone(), edges: edges.clone() });
+        assert!(blocked.contains("storyHeld"), "{blocked:?}");
+        assert!(!blocked.contains("storyFree"), "a charter that STANDS blocks nothing: {blocked:?}");
+        let mut accepted = items;
+        accepted.insert("dHeld".to_string(), with_status("DecisionStatus::accepted"));
+        assert!(blocked_by(&Model { items: accepted, edges }).is_empty(), "acceptance alone unblocks it");
+    }
+
+    #[test]
+    fn an_item_depending_on_an_undone_item_is_blocked_and_says_what_it_waits_on() {
+        // issue549: A #DependsOn B with B undone lists A blocked on B; B done frees A; a superseded B
+        // blocks A and says so; an edge to a Decision is not this filter's business.
+        let plain = |ty: &str| ItemInfo { type_name: ty.to_string(), attrs: HashMap::new(), marker: None, file: String::new() };
+        let mut items = HashMap::new();
+        for (n, t) in [("a", "action"), ("b", "action"), ("c", "action"), ("gone", "action"), ("d1", "Decision")] {
+            items.insert(n.to_string(), plain(t));
+        }
+        let edges = vec![
+            Edge { kind: "dependson".to_string(), from: "a".to_string(), to: "b".to_string() },
+            Edge { kind: "dependson".to_string(), from: "c".to_string(), to: "gone".to_string() },
+            Edge { kind: "supersede".to_string(), from: "d1".to_string(), to: "gone".to_string() },
+            Edge { kind: "dependson".to_string(), from: "b".to_string(), to: "d1".to_string() },
+        ];
+        let model = Model { items, edges };
+        let is_item = |n: &str| n != "d1";
+        let done: HashSet<String> = HashSet::new();
+        let blocked = blocked_by_items(&model, &done, &is_item);
+        assert_eq!(
+            blocked,
+            vec![
+                ("a".to_string(), "b".to_string(), "not done".to_string()),
+                ("c".to_string(), "gone".to_string(), "superseded".to_string()),
+            ],
+            "b's Decision edge is the acceptance filter's, not this one's"
+        );
+        let done: HashSet<String> = std::iter::once("b".to_string()).collect();
+        let blocked = blocked_by_items(&model, &done, &is_item);
+        assert_eq!(blocked.len(), 1, "b done frees a; the superseded edge still blocks c: {blocked:?}");
+        assert_eq!(blocked[0].0, "c");
     }
 
     #[test]

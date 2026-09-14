@@ -33,6 +33,10 @@ pub struct Output {
     pub in_progress_sprints: Vec<SprintCeremony>,
     /// Tasks that are outstanding and whose every dependency is done.
     pub ready: Vec<String>,
+    /// Outstanding tasks held off the frontier by a `#DependsOn` edge to another work item that is not
+    /// done (issue549), each with the item it waits on and why (`not done` / `superseded`). ALWAYS
+    /// emitted, empty included, for the D0138 reason `pending_acceptances` is.
+    pub blocked: Vec<BlockedItem>,
     /// Done tasks whose `DoD` criterion text changed since they were verified.
     pub suspect: Vec<String>,
     /// Done tasks whose `judgedAgainst` SHA cannot be resolved AND whose caller has actually LOOKED
@@ -76,6 +80,14 @@ pub struct Output {
     pub sync: String,
 }
 
+/// One held-off item: `item` waits on `waits_on` because `why`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockedItem {
+    pub item: String,
+    pub waits_on: String,
+    pub why: String,
+}
+
 impl Output {
     /// Render as a JSON string matching the `query.py orient` output format.
     #[must_use]
@@ -96,10 +108,18 @@ impl Output {
             format!("[{}]", sprints.join(", "))
         };
         let burndown = if self.burndown.is_empty() { "{}" } else { self.burndown.as_str() };
+        let blocked: Vec<String> = self.blocked.iter().map(|b| {
+            format!(
+                "{{\"item\": \"{}\", \"waitsOn\": \"{}\", \"why\": \"{}\"}}",
+                json_esc(&b.item), json_esc(&b.waits_on), json_esc(&b.why)
+            )
+        }).collect();
+        let blocked_block = if blocked.is_empty() { "[]".to_owned() } else { format!("[{}]", blocked.join(", ")) };
         format!(
-            "{{\n  \"in_progress_sprints\": {},\n  \"ready\": {},\n  \"suspect\": {},\n  \"invalidEvidence\": {},\n  \"unsynchronizedEvidence\": {},\n  \"open_issues\": {},\n  \"pendingAcceptances\": {},\n  \"sync\": {},\n  \"counts\": {{\"done\": {}, \"outstanding\": {}}},\n  \"burndown\": {},\n  \"inactive_processes\": {},\n  \"answerStatus\": {}\n}}",
+            "{{\n  \"in_progress_sprints\": {},\n  \"ready\": {},\n  \"blocked\": {},\n  \"suspect\": {},\n  \"invalidEvidence\": {},\n  \"unsynchronizedEvidence\": {},\n  \"open_issues\": {},\n  \"pendingAcceptances\": {},\n  \"sync\": {},\n  \"counts\": {{\"done\": {}, \"outstanding\": {}}},\n  \"burndown\": {},\n  \"inactive_processes\": {},\n  \"answerStatus\": {}\n}}",
             in_progress_block,
             str_array(&self.ready),
+            blocked_block,
             str_array(&self.suspect),
             str_array(&self.invalid_evidence),
             str_array(&self.unsynchronized_evidence),
@@ -503,11 +523,13 @@ fn criterion_suspects(
 struct Narrowing {
     superseded: HashSet<String>,
     blocked: HashSet<String>,
+    /// Items waiting on another work ITEM (issue549), in order: what waits, on what, why.
+    blocked_on_items: Vec<BlockedItem>,
     claimed_by_others: HashSet<String>,
     compute_failures: Vec<String>,
 }
 
-fn narrowing_filters(repo: &Path) -> Narrowing {
+fn narrowing_filters(repo: &Path, tasks: &HashMap<String, TaskData>, done_map: &HashMap<String, bool>) -> Narrowing {
     let mut compute_failures: Vec<String> = Vec::new();
     // A SUPERSEDED task is never ready (issue100): a `#Supersede` edge is the authored statement that
     // the work is deliberately retired (§1.4), and the frontier is auto-followed (D0052).
@@ -529,6 +551,22 @@ fn narrowing_filters(repo: &Path) -> Narrowing {
         ));
         HashSet::new()
     });
+    // Nor is an item whose `#DependsOn` names another work item that is not done (issue549). The
+    // succession chain (`first A then B`) was honoured from the start; the typed edge between two
+    // backlog items was read by nothing, so a chain of six layering members ranked ready at once. The
+    // done-set is this frontier's own, so the answer cannot disagree with `counts`. Fail closed like
+    // the two above: this REMOVES work, and an Err would widen the frontier.
+    let done_set: HashSet<String> = done_map.iter().filter(|(_, &v)| v).map(|(k, _)| k.clone()).collect();
+    let is_item = |n: &str| tasks.contains_key(n);
+    let blocked_on_items: Vec<BlockedItem> = match crate::view::blocked_on_items(repo, &done_set, &is_item) {
+        Ok(rows) => rows.into_iter().map(|(item, waits_on, why)| BlockedItem { item, waits_on, why }).collect(),
+        Err(e) => {
+            compute_failures.push(format!(
+                "blocked-on-item set could not be computed ({e}) - work whose predecessor is undone would read as ready"
+            ));
+            Vec::new()
+        }
+    };
     // Nor is an item another contributor holds a LIVE claim on (D0147/srDcWorkClaim). Empty on error
     // AND on an unresolved actor is DELIBERATE here, and is not a compute failure: if this machine has
     // no bound identity nothing is hidden, because a claim must never make work invisible to someone
@@ -539,7 +577,7 @@ fn narrowing_filters(repo: &Path) -> Narrowing {
     } else {
         crate::claim::held_by_others(repo, &me).unwrap_or_default().into_iter().map(|(item, _)| item).collect()
     };
-    Narrowing { superseded, blocked, claimed_by_others, compute_failures }
+    Narrowing { superseded, blocked, blocked_on_items, claimed_by_others, compute_failures }
 }
 
 // ── classification ────────────────────────────────────────────────────────────
@@ -919,6 +957,7 @@ struct Frontier {
     invalid_evidence: Vec<String>,
     unsynchronized_evidence: Vec<String>,
     ready: Vec<String>,
+    blocked: Vec<BlockedItem>,
     compute_failures: Vec<String>,
     sync_state: crate::sync::Divergence,
 }
@@ -1043,12 +1082,20 @@ fn frontier(repo: &Path, idx: ExtractedIndex, fetched: bool, evidence: bool) -> 
     // authored statement that the work is deliberately retired (§1.4), and the frontier is auto-followed
     // (D0052), so leaving it ready schedules work a Decision has forbidden. Conservative on error:
     // failing to read the model must not silently make everything ready again.
-    let Narrowing { superseded, blocked, claimed_by_others, compute_failures } = crate::perf::phase("frontier:narrowing", || narrowing_filters(repo));
+    let Narrowing { superseded, blocked, blocked_on_items, claimed_by_others, compute_failures } =
+        crate::perf::phase("frontier:narrowing", || narrowing_filters(repo, &tasks, &done_map));
+    let waiting_on_item: HashSet<&str> = blocked_on_items.iter().map(|b| b.item.as_str()).collect();
     let mut ready: Vec<String> = Vec::new();
     for (name, data) in &tasks {
         let is_done = done_map.get(name.as_str()).copied().unwrap_or(false);
         let is_invalid = invalid_evidence.contains(name);
-        if !is_done && !is_invalid && !superseded.contains(name) && !blocked.contains(name) && !claimed_by_others.contains(name) {
+        if !is_done
+            && !is_invalid
+            && !superseded.contains(name)
+            && !blocked.contains(name)
+            && !waiting_on_item.contains(name.as_str())
+            && !claimed_by_others.contains(name)
+        {
             let all_deps_done = all_deps_satisfied(name, data, &done_map);
             if all_deps_done {
                 ready.push(name.clone());
@@ -1063,15 +1110,21 @@ fn frontier(repo: &Path, idx: ExtractedIndex, fetched: bool, evidence: bool) -> 
         ready.clear();
     }
 
-    // Rank ready by backlog declaration order (D0052) — priority, not alphabetical.
+    // Rank ready by backlog declaration order (D0052) — priority, not alphabetical. The blocked list
+    // ranks the same way: it is the frontier's shadow, read in the order the work would be picked.
     ready.sort_by_key(|name| tasks.get(name).map_or(u32::MAX, |t| t.order));
+    let mut blocked_items: Vec<BlockedItem> = blocked_on_items
+        .into_iter()
+        .filter(|b| !done_map.get(b.item.as_str()).copied().unwrap_or(false) && !superseded.contains(&b.item))
+        .collect();
+    blocked_items.sort_by_key(|b| (tasks.get(&b.item).map_or(u32::MAX, |t| t.order), b.waits_on.clone()));
     invalid_evidence.sort();
     unsynchronized_evidence.sort();
-    Frontier { tasks, ordering_only, done_map, verified_at, invalid_evidence, unsynchronized_evidence, ready, compute_failures, sync_state }
+    Frontier { tasks, ordering_only, done_map, verified_at, invalid_evidence, unsynchronized_evidence, ready, blocked: blocked_items, compute_failures, sync_state }
 }
 
 fn compute_orient(repo: &Path, idx: ExtractedIndex, fetched: bool) -> Output {
-    let Frontier { tasks, ordering_only, done_map, verified_at, invalid_evidence, unsynchronized_evidence, ready, compute_failures, sync_state } =
+    let Frontier { tasks, ordering_only, done_map, verified_at, invalid_evidence, unsynchronized_evidence, ready, blocked, compute_failures, sync_state } =
         frontier(repo, idx, fetched, true);
 
     // Step 3: compute suspect (criterion text changed since verified). Capture WHY per task.
@@ -1104,6 +1157,7 @@ fn compute_orient(repo: &Path, idx: ExtractedIndex, fetched: bool) -> Output {
     Output {
         in_progress_sprints: in_progress_sprints(repo),
         ready,
+        blocked,
         suspect,
         invalid_evidence,
         unsynchronized_evidence,
@@ -1235,6 +1289,7 @@ mod tests {
         let out = super::Output {
             in_progress_sprints: Vec::new(),
             ready: vec!["shouldNotSurvive".to_string()],
+            blocked: Vec::new(),
             suspect: Vec::new(),
             invalid_evidence: Vec::new(),
             unsynchronized_evidence: Vec::new(),
@@ -1260,6 +1315,7 @@ mod tests {
         let out = super::Output {
             in_progress_sprints: Vec::new(),
             ready: Vec::new(),
+            blocked: Vec::new(),
             suspect: Vec::new(),
             invalid_evidence: Vec::new(),
             unsynchronized_evidence: Vec::new(),

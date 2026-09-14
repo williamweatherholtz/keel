@@ -38,7 +38,7 @@ Every rule below names its Decision; the Decision holds the history. Don't resta
 ## 2. Orient — never from prose
 
 ```
-keel show orient .                 # in-progress + ready/suspect frontier + burndown
+keel show orient .                 # in-progress + ready/blocked/suspect frontier + burndown
 keel show whats-next .             # ready list; declaration order IS priority (D0052)
 keel show priority .          # priority metric + inversions (D0311)
 keel show status .                 # engine pin, drift, model, work, hooks, CI

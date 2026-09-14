@@ -1489,4 +1489,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcBriefExitFactsReadTheReturnCode to issue553;
+
+    part issue554 : Issue {
+        :>> id = "f21bdbe3-1896-40b4-a0d4-ec6b24232886";
+        :>> title = "An edge kind the model stores can have no reader, and nothing says so";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "An edge kind the model stores can have no reader, and nothing says so. issue549 and issue552 are one defect seen from two edge kinds: the backlog authored nineteen item-to-item #DependsOn edges and one #CharteredBy edge to a held Decision, view/mod.rs stored every one of them (edge_kind_from_marker lowercases the marker, so the Model held kinds dependson and charteredby), and the frontier read neither - orient.rs narrowing_filters consumed blocked_on_acceptance, whose predicate (blocked_by, view/mod.rs) filtered e.kind == dependson || dependency to a proposed Decision only. keel show whats-next contradicted the backlog for a day (all thirteen members of the layering chain ready at 130675d) and the DoD of dcWorkspaceLayeringIsGuarded recorded a sentence ('stays blocked on that acceptance') that was false of the computed view when written. Found 2026-09-14 in the sprint 716 retro. The check that established it: grep of e.kind == literals across keel-cli/src against the marker kinds authored under .tracking and .engine - the two kinds above had no reader on the frontier path. Control: a census that lists every edge kind the model stores against the readers that consume it, failing on a kind with none, so an authored edge nothing reads is a violation when it is authored, not a day later when a human reads the frontier.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcEveryEdgeKindHasAReader to issue554;
 }
