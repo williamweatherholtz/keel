@@ -2735,7 +2735,9 @@ fact("cliInForceDecision", _f477 if _d0477 else None, "the Decision's fields as 
 # --- D0477: the reader and the comparison in source, and the shared retired set
 _gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
 _lib = read(os.path.join(REPO, "keel-cli", "src", "lib.rs")) or ""
-_pcf = _fn_body(_gr, "parse_cli_facts") if _gr else ""
+# the reader moved from guards.rs to members/keel-schema/src/cli_facts.rs in sprint 717 (D0479: down into a leaf); the page reads it where it is
+_cf = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or ""
+_pcf = _fn_body(_cf, "parse_cli_facts") if _cf else ""
 _csv = _fn_body(_gr, "cli_surface_violations") if _gr else ""
 _se = _fn_body(_lib, "supersede_edges") if _lib else ""
 _tests_mod = re.search(r"^mod cli_surface_declared_tests \{(.*)", _gr, re.S | re.M)
@@ -2744,7 +2746,7 @@ _test_names = re.findall(r"^\s*fn (\w+)\(\)", _tests_body, re.M)
 _gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gr, re.S)
 _gnames = re.findall(r'"([^"]+)"', _gn.group(2)) if _gn else []
 fact("cliInForceSource", {
-    "authoredFactHasPart": bool(re.search(r"pub struct AuthoredCliFact \{[^}]*pub part: String", _gr, re.S)),
+    "authoredFactHasPart": bool(re.search(r"pub struct AuthoredCliFact \{[^}]*pub part: String", _cf, re.S)),
     "parserCollectsRetired": 'strip_prefix("#Supersede dependency from ")' in _pcf and "retired.contains(&part)" in _pcf,
     "comparisonReadsInvocation": '("invocation", f.invocation.as_str(), m.invocation)' in _csv,
     "duplicateInForceIsAViolation": "is declared by two CliCommand facts in force" in _csv,
@@ -2757,7 +2759,7 @@ fact("cliInForceSource", {
     "guardCount": int(_gn.group(1)) if _gn else None,
     "guardCountMatchesList": bool(_gn) and int(_gn.group(1)) == len(_gnames),
 } if _gr and _lib else None, "the reader, the comparison and the shared retired set in source",
-     "keel-cli/src/guards.rs: `pub struct AuthoredCliFact {` carrying `pub part: String`; the body of `parse_cli_facts` carrying "
+     "members/keel-schema/src/cli_facts.rs (guards.rs until sprint 717): `pub struct AuthoredCliFact {` carrying `pub part: String`; the body of `parse_cli_facts` carrying "
      "`strip_prefix(\"#Supersede dependency from \")` and `retired.contains(&part)`; the body of `cli_surface_violations` carrying "
      "the `(\"invocation\", f.invocation.as_str(), m.invocation)` tuple and the sentence `is declared by two CliCommand facts in "
      "force`; `fn x()` names inside `mod cli_surface_declared_tests`; GUARD_NAMES count and members. keel-cli/src/lib.rs: the body "
@@ -2957,9 +2959,11 @@ fact("charterBlockIssue", {
     "issue552": _i552, "issue549": _i549,
     "blockedByReadsKinds": sorted(set(re.findall(r'e\.kind == "(\w+)"', _bb))),
     "blockedByReadsCharter": "charteredby" in _bb,
-} if _iss else None, "the finding the D0483 tab surfaced, and the filter it names",
+    "resolverDodResults": _dod_results("dcReadyHonoursItemDependencies"),
+} if _iss else None, "the finding the D0483 tab surfaced, the filter it names, and the resolver's DoD result",
      ".tracking/issues-claudeFable5.sysml: `part issue552 : Issue {` and `part issue549`, each with severity, resolver edge and whether the "
-     "resolver's DoD names it; resolverPosition = the resolver's place in EngineBuild, resolverReadyRank = its line in whats-next; "
+     "resolver's DoD names it; resolverPosition = the resolver's place in EngineBuild, resolverReadyRank = its line in whats-next (null once done); "
+     "resolverDodResults = the resolver's `DoDRn : TestResult` outcomes and shas in .tracking/backlog.sysml; "
      "keel-cli/src/view/mod.rs: the edge kinds `e.kind == \"x\"` inside `fn blocked_by`.")
 
 # --- D0484: the Decision, the paragraph it governs against the manifest, the charter it layers on, sprint 714's record
@@ -3028,6 +3032,86 @@ fact("buildSkillSprint", {k: v for k, v in _s714.items() if k != "text"} | ({
      _SPRINT_HOW + " Literal spans D0484 / issue551 / issue550 / `the edge was authored by hand` / `byte-identical`; `N tests over the "
      "non-cli members` and `keel suite --touched: N passed` from the evidence; the two Issues as for the others, with the resolver's "
      "EngineBuild position and whats-next rank.")
+
+# --- D0485: the Decision, the module graph it makes the check, the compositions it moved, sprint 717's record and its finding
+_d0485 = _dec_file("0485-")
+_f485 = _decision_facts(_d0485, "d0485")
+_f485.update({
+    "derivedFromSt126": bool(re.search(r"#DerivedFrom dependency from d0485 to st126;", _d0485)),
+    "namesD0479": "D0479" in (_f485["context"] or ""),
+    "namesModgraph": "scripts/modgraph.py" in (_f485["context"] or ""),
+    "namesReferenceCount": (re.search(r"read (\d+) references across (\w+) back-edges", _f485["context"] or "") or [None, None, None])[1],
+    "saysViewRunsNoGuard": (_f485["decision"] or "").startswith("A view runs no guard"),
+    "namesReadinessSignature": "view::readiness(root, task_suspect, invariant_violations)" in (_f485["decision"] or ""),
+    "namesNoTraitObject": "No trait object hides an edge" in (_f485["decision"] or ""),
+    "namesForbiddenPairsInScript": "five forbidden pairs listed in it" in (_f485["decision"] or ""),
+    "namesD0209": "D0209 clause 2" in (_f485["rationale"] or ""),
+    "namesGuardCountUnchanged": "guard count is the same before and after" in (_f485["rationale"] or ""),
+    "namesNextItem": "dcWorkspaceLayeringIsGuarded" in (_f485["consequences"] or ""),
+    "d0479": _f484["d0479"],
+})
+fact("viewNoGuardDecision", _f485 if _d0485 else None, "the Decision's fields as the guard reads them, and the charter it applies",
+     _DEC_HOW + " derivedFromSt126 = a `#DerivedFrom dependency from d0485 to st126;` line; names by literal search in the field named; "
+     "namesReferenceCount = the integer in `read N references across` in the context; d0479 as for buildSkillDecision.")
+
+# the instrument, run live, and the source shape it reports on
+_mg_p = os.path.join(REPO, "scripts", "modgraph.py")
+_mg = read(_mg_p) or ""
+_mg_pairs = re.findall(r'\("(\w+)",\s*"(\w+)"\)', (re.search(r"FORBIDDEN\s*=\s*\[(.*?)\]", _mg, re.S) or [None, ""])[1])
+_rc_mg, _out_mg = run_rc([sys.executable, _mg_p, "--check"])
+_mg_counts = re.search(r"\((\d+) modules, (\d+) edges\)", _out_mg)
+_src = os.path.join(REPO, "keel-cli", "src")
+_view_mod = read(os.path.join(_src, "view", "mod.rs")) or ""
+_guards_rs = read(os.path.join(_src, "guards.rs")) or ""
+_main_rs = read(os.path.join(_src, "main.rs")) or ""
+_leaves = ["textscan", "ident", "done", "evidence", "suspect", "gitfacts", "binding"]
+_ups = ["reports", "priority"]
+_instr = read(os.path.join(REPO, ".tracking", "architecture", "engine-instruments.sysml")) or ""
+fact("viewNoGuardGraph", {
+    "scriptExists": bool(_mg),
+    "forbiddenPairs": [f"{a} -> {b}" for a, b in _mg_pairs],
+    "checkExit0": _rc_mg == 0,
+    "checkLastLine": (_out_mg.strip().splitlines() or [""])[-1][:200],
+    "modules": int(_mg_counts.group(1)) if _mg_counts else None,
+    "edges": int(_mg_counts.group(2)) if _mg_counts else None,
+    "viewHasReadinessTakingViolations": "pub fn readiness(root: &Path, task_suspect: Vec<String>, invariant_violations: Vec<String>)" in _view_mod,
+    "viewNamesGuards": "crate::guards" in re.sub(r"//[^\n]*", "", _view_mod),
+    "guardsHasComputeReadiness": "pub fn compute_readiness(" in _guards_rs,
+    "guardsHasAssuredReport": "pub fn assured_report(" in _guards_rs,
+    "leafModulesPresent": [m for m in _leaves if os.path.exists(os.path.join(_src, m + ".rs"))],
+    "compositionsPresent": [m for m in _ups if os.path.exists(os.path.join(_src, m + ".rs"))],
+    "dynInNewModules": sum((read(os.path.join(_src, m + ".rs")) or "").count("dyn ") for m in _leaves + _ups if os.path.exists(os.path.join(_src, m + ".rs"))),
+    "mainCallsMovedSymbols": all(s in _main_rs for s in ["keel_cli::priority::priority", "reports::report", "guards::assured_report"]),
+    "sensorDeclared": "snModGraph : Sensor" in _instr and 'mechanism = "scripts/modgraph.py"' in _instr,
+} if _mg else None, "the module graph check run live, and the shape of the source it reports on",
+     "scripts/modgraph.py: FORBIDDEN pairs parsed from its `FORBIDDEN = [...]` list; `--check` run here, exit code and last line kept, "
+     "modules/edges from its `(N modules, M edges)` span; keel-cli/src read for the `readiness` signature in view/mod.rs, `crate::guards` in "
+     "view/mod.rs with // comments removed, `compute_readiness` and `assured_report` in guards.rs, the leaf and composition files on disk, "
+     "`dyn ` counted over them, the three moved call sites in main.rs; .tracking/architecture/engine-instruments.sysml for `snModGraph : Sensor` "
+     "with the script as its mechanism.")
+
+_s717 = _sprint_facts("sprint717_guardsViewOrientCycleIsBroken.sysml", "d0479")
+_i555 = _issue_facts("555", "dcLockedSurfaceEditIsNamedAtWriteTime")
+_i555["resolverPosition"] = (_eb_actions.index("dcLockedSurfaceEditIsNamedAtWriteTime") + 1) if "dcLockedSurfaceEditIsNamedAtWriteTime" in _eb_actions else None
+_i555["resolverReadyRank"] = (_ready_names.index("dcLockedSurfaceEditIsNamedAtWriteTime") + 1) if "dcLockedSurfaceEditIsNamedAtWriteTime" in _ready_names else None
+_hook = re.search(r"fn hook_pre_write\(.*?\n\}\n", _main_rs, re.S)
+_i555["hookAsksIsLockedPath"] = "is_locked_path" in (_hook.group(0) if _hook else "")
+fact("viewNoGuardSprint", {k: v for k, v in _s717.items() if k != "text"} | ({
+    "retroNamesIssue555": "issue555" in _s717["text"],
+    "retroNamesResolver": "dcLockedSurfaceEditIsNamedAtWriteTime" in _s717["text"],
+    "retroSaysScanHeld": "Avoidable-issue scan held" in _s717["text"],
+    "retroDropsDocCommentCandidate": "modgraph DOES strip doc comments" in _s717["text"],
+    "helpByteIdentical": "identical, 14593 bytes" in _s717["text"] or "help-old.txt help-new.txt identical" in _s717["text"],
+    "guardLineUnchanged": "guards: 75 (66 hard-blocking, 9 warning-only)" in _s717["text"],
+    "touchedPassed": (re.search(r"keel suite --touched pass - (\d+) passed", _s717["text"]) or [None, None])[1],
+    "ladderSeconds": (re.search(r"every rung green in (\d+) s", _s717["text"]) or [None, None])[1],
+    "dodResults": _dod_results("dcGuardsViewOrientCycleIsBroken"),
+    "issue555": _i555,
+} if _s717.get("exists") else {}), "sprint 717's record, the item's DoD result and the one finding it carried",
+     _SPRINT_HOW + " Literal spans issue555 / dcLockedSurfaceEditIsNamedAtWriteTime / `Avoidable-issue scan held` / `modgraph DOES strip doc "
+     "comments` / the cmp and guards lines; `keel suite --touched pass - N passed` and `every rung green in N s` from the evidence; the "
+     "Issue as for the others, with the resolver's EngineBuild position and whats-next rank; hookAsksIsLockedPath = `is_locked_path` "
+     "inside `fn hook_pre_write` in keel-cli/src/main.rs (the finding is that it is absent).")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
