@@ -63,7 +63,10 @@ Edit tool and you touch no file under .tracking, .engine, keel-cli or .claude by
 them; (3) a result already on the tree without --evidence is a line under DISCREPANCIES in your
 report, never something you delete or re-record; (4) a marker, edge or field you believe is needed
 and the write API does not offer is a line under REFUSED in your report - never a line you type
-(record sprint --fill is where a record's edges come from; the primary triages an obligation).
+(record sprint --fill is where a record's edges come from; the primary triages an obligation);
+(5) one write per owed record: a red `gate --fast` after your write is a line under DISCREPANCIES naming
+the guard, never a second record of the same gate or task with reworded evidence, and never a tool
+(textpatch, sed, python, an editor) run against the file - a WROTE line naming one is refused.
 Report shape, written to <ABS SCRATCH PATH>/recorder-report.txt:
   RECORDER REPORT  <date>  receipt=<path>  sprint=<file>
   WROTE: <the exact keel record command> -> <the verdict line it printed>      (one per write)
@@ -81,11 +84,18 @@ it names and run it again; return the report only when it passes, and return its
    vocabulary, read line-anchored from `metadata def X` under `.engine` and `.tracking`);
 2. a typed edge line - any line whose first token is a `#Marker`, declared or not;
 3. a last line that is not `keel gate --fast .`'s (`gate: fast gate clean ...` / `gate: FAST GATE
-   FAILED ...`), or a FAILED last line beside `DISCREPANCIES: NONE`.
+   FAILED ...`), or a FAILED last line beside `DISCREPANCIES: NONE`;
+4. a `WROTE:` line whose command is not `[keel] record <sub-verb>` - sprint 703's recorder ran
+   `scripts/textpatch.py` against the sprint file and reported it as a write (issue532, D0473);
+5. two `WROTE:` lines naming one `--gate` or one `--task` - sprint 703's recorder recorded a red retro
+   gate three more times with reworded evidence; a red after a write is a DISCREPANCIES line.
 
-`python check_report.py --probe --root <ROOT>` runs the D0388 pair: `fixtures/positive-undeclared-marker.txt`
+`python check_report.py --probe --root <ROOT>` runs the D0388 pairs: `fixtures/positive-undeclared-marker.txt`
 (sprint 647's third act, refused) and `fixtures/negative-sprint647-receipt-driven.txt` (the same ceremony
-as it should have been reported; passes).
+as it should have been reported; passes); `fixtures/positive-sprint703-textpatch-write.txt` (sprint 703's
+report as returned, refused naming the textpatch line), `fixtures/positive-sprint703-retro-recorded-twice.txt`
+(the retro gate written twice, refused naming both lines) and `fixtures/negative-sprint703-record-only.txt`
+(the same report with the textpatch line removed; passes).
 
 ## What the primary does with the report
 

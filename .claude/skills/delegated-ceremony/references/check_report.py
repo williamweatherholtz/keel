@@ -1,6 +1,7 @@
 """The delegated-ceremony skill's own check over a RECORDER's report (dcDelegatedCeremonyIsASkill).
 
-A recorder returns its report only after this passes. Three refusals, each one of sprint 647's failures:
+A recorder returns its report only after this passes. Five refusals; the first three are sprint 647's
+failures, the last two are sprint 703's (issue532, dcRecorderReportRefusesNonRecordWrites):
 
   1. an undeclared marker - any `#Word` token in the report that no `metadata def Word` under .engine or
      .tracking declares (sprint 647 typed `#Addresses`; the marker-vocabulary guard turned the Stop hook
@@ -9,15 +10,24 @@ A recorder returns its report only after this passes. Three refusals, each one o
      from `record sprint --fill`, never from a line it types;
   3. a summary that outran the gate - the last non-empty line is not the verbatim last line of
      `keel gate --fast .` (`gate: fast gate clean ...` or `gate: FAST GATE FAILED ...`), or that line says
-     FAILED while the report says `DISCREPANCIES: NONE`.
+     FAILED while the report says `DISCREPANCIES: NONE`;
+  4. a write outside the record API - a `WROTE:` line whose command is not `[keel] record <sub-verb>`
+     (sprint 703's recorder ran scripts/textpatch.py against the sprint file and reported it as a write;
+     the D0425 recorder's only write path is the record API, and a report that admits another is refused);
+  5. one record written twice - two `WROTE:` lines naming the same `--gate` or `--task` (sprint 703's
+     recorder found the ceremony guard red after its retro-gate write and recorded the gate three more
+     times with reworded evidence; a red after a write is a DISCREPANCIES line, never a second attempt).
 
     python check_report.py REPORT [--root DIR]     # exit 0 = pass, 1 = refused (each refusal printed), 2 = usage
-    python check_report.py --probe [--root DIR]    # the D0388 pair from fixtures/ beside this file
+    python check_report.py --probe [--root DIR]    # the D0388 pairs from fixtures/ beside this file
 
-The pair is stated before the tree is read: fixtures/positive-undeclared-marker.txt is a report that types
+The pairs are stated before the tree is read. fixtures/positive-undeclared-marker.txt types
 `#Addresses dependency from ...` and is REFUSED; fixtures/negative-sprint647-receipt-driven.txt is the
 sprint 647 ceremony as its recorder should have reported it - write-API calls quoting the receipt, ending
-with the gate line - and PASSES.
+with the gate line - and PASSES. fixtures/positive-sprint703-textpatch-write.txt is sprint 703's report as
+returned (one WROTE: line names textpatch.py) and is REFUSED naming that line;
+fixtures/positive-sprint703-retro-recorded-twice.txt writes the retro gate twice and is REFUSED naming both
+lines; fixtures/negative-sprint703-record-only.txt is the same report with the offending line removed and PASSES.
 """
 import os
 import re
@@ -28,6 +38,10 @@ MARKER_TOKEN = re.compile(r"(?<![\w`'\"])#([A-Z][A-Za-z0-9]*)\b")
 # `metadata def X;` mid-line - the guard's own repair hint inside an obligation - declares nothing.
 METADATA_DEF = re.compile(r"^[ \t]*metadata[ \t]+def[ \t]+([A-Za-z][A-Za-z0-9]*)", re.M)
 GATE_LAST_LINE = re.compile(r"^gate: (fast gate clean\b|FAST GATE FAILED\b)")
+WROTE_LINE = re.compile(r"^WROTE:\s*(.*)$")
+# The binary as a brief names it: `keel`, `KEEL`, `<KEEL>`, `$KEEL`, or a path ending in keel[-suffix][.exe].
+KEEL_BINARY = re.compile(r"^(<KEEL>|\$KEEL|KEEL|(?:.*[\\/])?keel(?:-[\w-]+)?(?:\.exe)?)$", re.I)
+RECORD_KEY = re.compile(r"--(gate|task)\s+(\S+)")
 
 
 def declared_markers(root):
@@ -47,10 +61,25 @@ def declared_markers(root):
     return out
 
 
+def wrote_command(line):
+    """The command a WROTE: line reports, or None when the line is not one."""
+    m = WROTE_LINE.match(line.strip())
+    return m.group(1).strip() if m else None
+
+
+def is_record_write(command):
+    """`record <sub-verb> ...`, with or without the binary in front - the recorder's only write path."""
+    tokens = command.split()
+    if tokens and KEEL_BINARY.match(tokens[0]):
+        tokens = tokens[1:]
+    return len(tokens) >= 2 and tokens[0] == "record" and re.fullmatch(r"[a-z][a-z-]*", tokens[1]) is not None
+
+
 def refusals(report_text, declared):
-    """The refusals for one report text - pure, so the pair can pin it without a tree."""
+    """The refusals for one report text - pure, so the pairs can pin it without a tree."""
     found = []
     lines = report_text.splitlines()
+    seen = {}
     for n, line in enumerate(lines, 1):
         stripped = line.strip()
         first = stripped.split(" ", 1)[0] if stripped else ""
@@ -59,6 +88,17 @@ def refusals(report_text, declared):
         for m in MARKER_TOKEN.finditer(line):
             if m.group(1) not in declared:
                 found.append(f"line {n}: undeclared marker #{m.group(1)} - no metadata def declares it; a marker the vocabulary lacks is a REFUSED line, not a line to type")
+        command = wrote_command(line)
+        if command is None:
+            continue
+        if not is_record_write(command):
+            found.append(f"line {n}: write outside the record API `{command[:60]}` - the recorder's only write path is keel record <sub-verb>; a change the API cannot make is a REFUSED line for the primary")
+            continue
+        for kind, key in RECORD_KEY.findall(command):
+            if (kind, key) in seen:
+                found.append(f"line {n}: --{kind} {key} written again (first at line {seen[(kind, key)]}) - a red after a write is a DISCREPANCIES line, never a second record with reworded evidence")
+            else:
+                seen[(kind, key)] = n
     nonempty = [l for l in lines if l.strip()]
     last = nonempty[-1].strip() if nonempty else ""
     if not GATE_LAST_LINE.match(last):
@@ -74,23 +114,37 @@ def check_file(path, root):
     return refusals(text, declared_markers(root))
 
 
+# (fixture, what the refusal must name; None = must pass)
+PAIRS = [
+    ("positive-undeclared-marker.txt", "undeclared marker #Addresses"),
+    ("negative-sprint647-receipt-driven.txt", None),
+    ("positive-sprint703-textpatch-write.txt", "write outside the record API `python scripts/textpatch.py"),
+    ("positive-sprint703-retro-recorded-twice.txt", "--gate livingDocsNameOnlyDeclaredCliVerbsRetroGate written again"),
+    ("negative-sprint703-record-only.txt", None),
+]
+
+
 def probe(root):
     here = os.path.dirname(os.path.abspath(__file__))
     fx = os.path.join(here, "fixtures")
-    pos = check_file(os.path.join(fx, "positive-undeclared-marker.txt"), root)
-    neg = check_file(os.path.join(fx, "negative-sprint647-receipt-driven.txt"), root)
-    pos_ok = any("undeclared marker #Addresses" in r for r in pos)
-    neg_ok = not neg
-    print(f"probe: known-positive (types #Addresses) -> {'REFUSED' if pos_ok else 'NOT REFUSED'}: {len(pos)} refusal(s)")
-    for r in pos:
-        print(f"  {r}")
-    print(f"probe: known-negative (sprint 647 receipt-driven report) -> {'PASS' if neg_ok else 'REFUSED'}: {len(neg)} refusal(s)")
-    for r in neg:
-        print(f"  {r}")
-    if pos_ok and neg_ok:
-        print("probe: both hold.")
+    declared = declared_markers(root)
+    all_hold = True
+    for name, expect in PAIRS:
+        with open(os.path.join(fx, name), encoding="utf-8") as fh:
+            got = refusals(fh.read(), declared)
+        if expect is None:
+            ok = not got
+            print(f"probe: known-negative {name} -> {'PASS' if ok else 'REFUSED'}: {len(got)} refusal(s)")
+        else:
+            ok = any(expect in r for r in got)
+            print(f"probe: known-positive {name} -> {'REFUSED' if ok else 'NOT REFUSED'} naming `{expect}`: {len(got)} refusal(s)")
+        for r in got:
+            print(f"  {r}")
+        all_hold = all_hold and ok
+    if all_hold:
+        print("probe: every pair holds.")
         return 0
-    print("probe: the pair does NOT hold.")
+    print("probe: a pair does NOT hold.")
     return 1
 
 
@@ -114,7 +168,7 @@ def main(argv):
         for r in found:
             print(f"  {r}")
         return 1
-    print("check_report: pass - no typed or undeclared marker, report ends with the gate's last line")
+    print("check_report: pass - no typed or undeclared marker, every write a keel record sub-verb written once, report ends with the gate's last line")
     return 0
 
 

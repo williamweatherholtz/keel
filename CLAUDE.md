@@ -140,8 +140,10 @@ Change Request cross-cuts and is itself frozen.
   D0438) runs `keel suite --touched` DETACHED, `gate validate`, `gate check-engine`, `gate guard --no-receipt`,
   clippy, the D0388 pair; writes a receipt only. RECORDER (haiku, no Write/Edit tool) writes ceremony through
   `keel record` from that receipt ONLY; a marker/edge the API lacks is a `REFUSED:` report line, never typed; its
-  report ends with the last line of `keel gate --fast .` (`references/check_report.py` refuses otherwise). A
-  recorder that leaves the tree red is ledgered `recorder:tree-red`. Neither reads the other's conclusion as fact.
+  report ends with the last line of `keel gate --fast .`. `references/check_report.py` refuses a report otherwise,
+  and one whose `WROTE:` names a non-`record` command or writes one gate/task twice (D0473): a red after a write is
+  a `DISCREPANCIES:` line. A recorder that leaves the tree red is ledgered `recorder:tree-red`. Neither reads the
+  other's conclusion as fact.
 
 **Git**
 - `main` only, commit directly. Never rebase/squash/force-push (D0129): rewriting history orphans
