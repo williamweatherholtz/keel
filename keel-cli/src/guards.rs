@@ -976,12 +976,14 @@ fn gates_defined(text: &str, order: &[String]) -> HashSet<String> {
     out
 }
 
-/// Gate names (of `order`) with a RECORDED `part <…{G}Gate…R\d+> : TestResult` - `pass` or `proposed`
-/// (reuses `orient::gate_recorded`, D0437). The guard checks SEQUENCE, not done-ness: an AI-judged
+/// Gate names (of `order`) with a WRITTEN `part <…{G}Gate…R\d+> : TestResult` of any verdict
+/// (`orient::gate_has_result`, D0437 / issue544). The guard checks SEQUENCE, not done-ness: an AI-judged
 /// inspect gate lands `VerdictKind::proposed` under D0312 B and was still recorded in its turn; reading
-/// only `pass` here made every AI-run sprint red at its Implement gate (issue470).
+/// only `pass` here made every AI-run sprint red at its Implement gate (issue470), and reading `pass`
+/// and `proposed` made sprint708's honestly FAILED closeOut read as unrecorded and its Retro as out of
+/// turn (issue544) - the red landed on the one record that told the truth (D0098).
 fn gates_recorded(text: &str, order: &[String]) -> HashSet<String> {
-    order.iter().filter(|g| crate::orient::gate_recorded(text, g)).cloned().collect()
+    order.iter().filter(|g| crate::orient::gate_has_result(text, g)).cloned().collect()
 }
 
 /// Ordering violations: a recorded gate while an earlier DEFINED gate is unrecorded.
@@ -3655,8 +3657,8 @@ fn total_guard_count_claim(line: &str) -> Option<String> {
 /// flagged AS incomplete is honest state, not a failure. NOTE: critique INDEPENDENCE stays enforced
 /// (critic-independence — honesty); only critique COVERAGE demoted. The requirement-rootedness hard
 /// guard (D0098 honesty: a chartered capability with no driving Need) joins next (requirementRootednessGuard).
-pub const GUARD_NAMES: [&str; 74] =
-    ["evidence-cited", "gating-workflow-history", "process-applicability", "doc-guard-count", "actors", "acceptance-events", "sprint-coverage", "ceremony", "charter", "process-change", "issues", "viewpoint-renderer", "manifest-coverage", "critic-independence", "process-skill", "requirement-rootedness", "decision-rationale", "attestation-substance", "marker-vocabulary", "duplicate-identity", "decision-requirement-link", "verification-trace", "priority-inversion", "retro-backlog", "confirmation-authenticity", "engine-lint", "doc-sync", "hook-config-integrity", "activation-manifest", "sequence-multiplicity", "parser-coverage", "base-first-justification", "edge-endpoints", "ownership", "attestation-authority", "type-collision", "attribute-vocabulary", "resolver-kind", "stale-gate-prose", "impossible-evidence-date", "identity-present", "identity-well-formed", "tool-reference", "scaffold-placeholder", "claude-surface-drift", "decision-scaffolding", "release-recorded", "enrollment-binding", "control-event-coverage", "question-coverage", "claim-ancestry", "judgment-request-quality", "manifest-key-portability", "control-map-reconciled", "sprint-closure", "untrusted-routing", "control-defect-registry", "cli-surface-declared", "decision-amends-process", "unit-extras-present", "acceptance-binds-to-text", "stpa-currency", "untrusted-taint", "gate-environment-parity", "instruments-declared", "release-checksums-published", "wrapper-pin-checksummed", "plan-covers-step", "id-is-a-uuid", "step-check-resolves", "consent-scope", "working-tree-eol", "direction-cited", "cli-reference"];
+pub const GUARD_NAMES: [&str; 75] =
+    ["evidence-cited", "gating-workflow-history", "process-applicability", "doc-guard-count", "actors", "acceptance-events", "sprint-coverage", "ceremony", "charter", "process-change", "issues", "viewpoint-renderer", "manifest-coverage", "critic-independence", "process-skill", "requirement-rootedness", "decision-rationale", "attestation-substance", "marker-vocabulary", "duplicate-identity", "decision-requirement-link", "verification-trace", "priority-inversion", "retro-backlog", "confirmation-authenticity", "engine-lint", "doc-sync", "hook-config-integrity", "activation-manifest", "sequence-multiplicity", "parser-coverage", "base-first-justification", "edge-endpoints", "ownership", "attestation-authority", "type-collision", "attribute-vocabulary", "resolver-kind", "stale-gate-prose", "impossible-evidence-date", "identity-present", "identity-well-formed", "tool-reference", "scaffold-placeholder", "claude-surface-drift", "decision-scaffolding", "release-recorded", "enrollment-binding", "control-event-coverage", "question-coverage", "claim-ancestry", "judgment-request-quality", "manifest-key-portability", "control-map-reconciled", "sprint-closure", "untrusted-routing", "control-defect-registry", "cli-surface-declared", "decision-amends-process", "unit-extras-present", "acceptance-binds-to-text", "stpa-currency", "untrusted-taint", "gate-environment-parity", "instruments-declared", "release-checksums-published", "wrapper-pin-checksummed", "plan-covers-step", "id-is-a-uuid", "step-check-resolves", "consent-scope", "working-tree-eol", "direction-cited", "cli-reference", "custom-harness-routed"];
 
 
 // ── control-map-reconciled guard (issue304, chartered by D0255) ──────────────────────────────────
@@ -5792,6 +5794,135 @@ pub fn enrollment_binding(root: &Path) -> GuardReport {
 }
 
 
+// ── custom-harness-routed guard (issue542: the CI nextest split mirrored one manifest of two) ─────
+
+/// Guard: every `harness = false` test binary of every workspace member is ROUTED by every workflow
+/// that runs nextest - kept out of `cargo nextest run` and handed to `cargo test` (issue542, D0475).
+///
+/// `cargo nextest run --workspace` asks each test binary for `--list`; a cucumber binary answers
+/// `unexpected argument '--list'` and nextest exits 104 before one test runs. So ci.yml and
+/// release.yml exclude those binaries with `-E 'not (binary(a) | ...)'` and run them under `cargo
+/// test -p <crate> --test <name>`. At 1e2ed25 that split was mirrored by hand from keel-cli's manifest
+/// alone: keel-parser declares four more (`lexer_bdd`, `parser_bdd`, `semantic_bdd`, `spec_compat_bdd`),
+/// nextest listed the first of them, and CI concluded failure while the local touched run - scoped to
+/// `-p keel-cli`, so it never meets them - was green. sprint707's retro had looked at exactly this
+/// drift and dismissed it: "the manifest is read". One of two was.
+///
+/// The expectation is DERIVED from the tree: the `[workspace] members` of the root manifest, each
+/// member's `[[test]]` targets with `harness = false` (the same reader `keel suite --touched` uses,
+/// `touched::custom_harness_tests`). Per gating workflow, a declared binary the nextest line does not
+/// exclude, or that no `cargo test -p <its crate> ... --test <name>` line runs, is a violation; so is
+/// a name a workflow routes that no manifest declares (a renamed or deleted binary the split still
+/// names). A workspace with no custom harness, or a project with no workflows, is never accused.
+///
+/// STATED LIMITATION: text-level, like `gate-environment-parity` - `binary(x)` anywhere on a
+/// `cargo nextest run` line counts as excluded, and the crate is the `-p` on the `cargo test` line.
+/// It catches the class that fired (a crate's cucumber binaries absent from the split) and nothing
+/// finer; a `--test` spelled on a continuation line is not read.
+fn custom_harness_routed(root: &Path) -> GuardReport {
+    let name = "custom-harness-routed";
+    let declared = workspace_custom_harnesses(root);
+    let mut scanned = 0usize;
+    let mut violations = Vec::new();
+    let dir = root.join(".github").join("workflows");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return GuardReport { name, scanned, warnings: Vec::new(), violations };
+    };
+    let mut files: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|x| x.to_str()).is_some_and(|e| e == "yml" || e == "yaml"))
+        .collect();
+    files.sort();
+    for path in &files {
+        let Ok(text) = crate::corpus::read_to_string(path) else { continue };
+        if !text.contains("cargo nextest run") {
+            continue;
+        }
+        scanned += 1;
+        let (missing, stale) = custom_harness_drift(&text, &declared);
+        if !missing.is_empty() {
+            violations.push(format!(
+                "{}: `cargo nextest run` would be handed {} - a harness = false binary answers --list with an error and nextest exits 104 before one test runs (issue542, 1e2ed25). Exclude it with binary(<name>) and run it under `cargo test -p <crate> --test <name>`",
+                relpath(root, path),
+                missing.join(", ")
+            ));
+        }
+        if !stale.is_empty() {
+            violations.push(format!(
+                "{}: routes {} that no workspace manifest declares as a harness = false test - a renamed or deleted binary the split still names",
+                relpath(root, path),
+                stale.join(", ")
+            ));
+        }
+    }
+    GuardReport { name, scanned, warnings: Vec::new(), violations }
+}
+
+/// `(crate, binary)` for every `harness = false` `[[test]]` target of every `[workspace] member`,
+/// sorted by crate then binary so a violation line reads the same whatever order `members` lists.
+fn workspace_custom_harnesses(root: &Path) -> Vec<(String, String)> {
+    let Ok(ws) = std::fs::read_to_string(root.join("Cargo.toml")) else { return Vec::new() };
+    let Some(members) = ws.split("members = [").nth(1).and_then(|s| s.split(']').next()) else { return Vec::new() };
+    let mut out = Vec::new();
+    for member in members.split(',').map(|m| m.trim().trim_matches('"')).filter(|m| !m.is_empty()) {
+        let Ok(manifest) = std::fs::read_to_string(root.join(member).join("Cargo.toml")) else { continue };
+        let crate_name = manifest
+            .lines()
+            .map(str::trim)
+            .find_map(|l| l.strip_prefix("name = ").map(|v| v.trim_matches('"').to_string()))
+            .unwrap_or_else(|| member.to_string());
+        for test in crate::touched::custom_harness_tests(&manifest) {
+            out.push((crate_name.clone(), test));
+        }
+    }
+    out.sort();
+    out
+}
+
+/// What a workflow text keeps away from nextest and hands to `cargo test`, read line by line.
+fn custom_harness_split(workflow: &str) -> (Vec<String>, Vec<(String, String)>) {
+    let mut excluded = Vec::new();
+    let mut cargo_test = Vec::new();
+    for line in workflow.lines().map(str::trim) {
+        if line.starts_with("cargo nextest run") {
+            for piece in line.split("binary(").skip(1) {
+                if let Some(n) = piece.split(')').next() {
+                    excluded.push(n.trim().to_string());
+                }
+            }
+        }
+        if line.starts_with("cargo test") {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            let pairs = || words.iter().zip(words.iter().skip(1));
+            if let Some(crate_name) = pairs().find(|(flag, _)| **flag == "-p").map(|(_, v)| (*v).to_string()) {
+                for (_, v) in pairs().filter(|(flag, _)| **flag == "--test") {
+                    cargo_test.push((crate_name.clone(), (*v).to_string()));
+                }
+            }
+        }
+    }
+    (excluded, cargo_test)
+}
+
+/// The declared binaries a workflow text does not route (`crate::binary`), and the names it routes
+/// that nothing declares - empty on both counts is the only pass.
+fn custom_harness_drift(workflow: &str, declared: &[(String, String)]) -> (Vec<String>, Vec<String>) {
+    let (excluded, cargo_test) = custom_harness_split(workflow);
+    let missing: Vec<String> = declared
+        .iter()
+        .filter(|(c, t)| !excluded.contains(t) || !cargo_test.iter().any(|(rc, rt)| rc == c && rt == t))
+        .map(|(c, t)| format!("{c}::{t}"))
+        .collect();
+    let mut stale: Vec<String> = cargo_test
+        .iter()
+        .filter(|(c, t)| !declared.iter().any(|(dc, dt)| dc == c && dt == t))
+        .map(|(c, t)| format!("{c}::{t}"))
+        .collect();
+    stale.extend(excluded.iter().filter(|t| !declared.iter().any(|(_, dt)| dt == *t)).map(|t| format!("?::{t}")));
+    (missing, stale)
+}
+
 // ── judgment-request-quality guard (a fork must earn the ask, D0207 clause 3) ────────────────────
 
 /// Guard: a PROPOSED fork Decision carries everything a human needs to judge it.
@@ -6267,6 +6398,7 @@ pub fn run_one(name: &str, root: &Path) -> Option<GuardReport> {
         "control-map-reconciled" => Some(control_map_reconciled(root)), // issue304/D0255 — a firing control absent from the map
         "direction-cited" => Some(direction_cited(root)), // hard (D0463/issue428) - the human's quoted direction links the Statement holding it
         "cli-reference" => Some(cli_reference(root)), // hard (D0471/issue528) - a living doc names only verbs this binary dispatches
+        "custom-harness-routed" => Some(custom_harness_routed(root)), // hard (issue542/D0475) - every cucumber binary of every member is kept from nextest and run under cargo test
 
         "critique" => Some(critique(root)),
         "assured" => Some(assured(root)),
@@ -7847,6 +7979,39 @@ mod tests {
         assert!(retro_scan_missing(without, &retro));
     }
 
+    /// issue544 (D0437's clause completed): a `CloseOut` recorded FAIL followed by a `Retro` recorded pass is
+    /// in sequence - known positive, no violation, and `gate_passed` still reads that `CloseOut` as not
+    /// passed; a `CloseOut` with NO result followed by a `Retro` is still a violation - known negative. This
+    /// is sprint708 at 593147c, whose closeOut clause (CI success) could not hold on issue542 and was
+    /// recorded as the fail it was; the guard then called its Retro out of turn.
+    #[test]
+    fn ceremony_order_counts_a_failed_gate_as_recorded() {
+        let order = strs(&["Refine", "Standup", "Implement", "Review", "CloseOut", "Retro"]);
+        let failed_then_pass = "verification xCloseOutGate : Test { }\n\
+            part xCloseOutGateR1 : TestResult { :>> outcome = VerdictKind::fail; }\n\
+            verification xRetroGate : Test { :>> procedureText = \"Avoidable issues scanned\"; }\n\
+            part xRetroGateR1 : TestResult { :>> outcome = VerdictKind::pass; }\n";
+        let recorded = gates_recorded(failed_then_pass, &order);
+        assert_eq!(recorded.len(), 2, "{recorded:?}");
+        let mut defined = gates_defined(failed_then_pass, &order);
+        defined.extend(recorded.iter().cloned());
+        assert!(ordering_violations(&order, &defined, &recorded).is_empty(), "a failed gate was recorded in its turn");
+        assert!(!crate::orient::gate_passed(failed_then_pass, "CloseOut"), "but it is still not PASSED");
+        assert!(!crate::orient::gate_recorded(failed_then_pass, "CloseOut"), "and the flow view's finish reader still refuses it");
+
+        let missing_then_pass = "verification xCloseOutGate : Test { }\n\
+            verification xRetroGate : Test { :>> procedureText = \"Avoidable issues scanned\"; }\n\
+            part xRetroGateR1 : TestResult { :>> outcome = VerdictKind::pass; }\n";
+        let recorded = gates_recorded(missing_then_pass, &order);
+        let mut defined = gates_defined(missing_then_pass, &order);
+        defined.extend(recorded.iter().cloned());
+        assert_eq!(
+            ordering_violations(&order, &defined, &recorded),
+            vec![("Retro".to_owned(), "CloseOut".to_owned())],
+            "a gate with NO result is unrecorded"
+        );
+    }
+
     /// The live tree's order is the delivery chain, and the guard's per-file helpers read it (D0435).
     #[test]
     fn ceremony_reads_the_order_from_the_tree() {
@@ -9129,5 +9294,56 @@ mod change_read_tests {
         assert_eq!(ChangeRead::Index.label(), "index");
         assert_eq!(ChangeRead::WorkingTree.label(), "working tree");
         assert_ne!(read_line(ChangeRead::Index), read_line(ChangeRead::WorkingTree));
+    }
+}
+
+
+#[cfg(test)]
+mod custom_harness_routed_tests {
+    use super::{custom_harness_drift, custom_harness_routed, workspace_custom_harnesses};
+
+    fn declared() -> Vec<(String, String)> {
+        [("keel-cli", "cli_bdd"), ("keel-cli", "orient_bdd"), ("keel-cli", "write_bdd"), ("keel-parser", "lexer_bdd"), ("keel-parser", "parser_bdd"), ("keel-parser", "semantic_bdd"), ("keel-parser", "spec_compat_bdd")]
+            .iter()
+            .map(|(c, t)| ((*c).to_string(), (*t).to_string()))
+            .collect()
+    }
+
+    /// D0388 known-positive: the split as committed at 1e2ed25 - keel-cli's trio alone - against the
+    /// seven the workspace declares names keel-parser's four as missing. This is the CI failure of
+    /// 2026-09-14 (`gh run view 34825100902`, nextest exit 104), constructed rather than described.
+    #[test]
+    fn the_split_of_1e2ed25_names_keel_parsers_four_cucumber_binaries_as_missing() {
+        let as_committed = "run: |\n          cargo nextest run --workspace --release --no-fail-fast -E 'not (binary(cli_bdd) | binary(orient_bdd) | binary(write_bdd))'\n          cargo test --release -p keel-cli --no-fail-fast --test cli_bdd --test orient_bdd --test write_bdd\n";
+        let (missing, stale) = custom_harness_drift(as_committed, &declared());
+        assert_eq!(missing, vec!["keel-parser::lexer_bdd", "keel-parser::parser_bdd", "keel-parser::semantic_bdd", "keel-parser::spec_compat_bdd"]);
+        assert!(stale.is_empty(), "the trio it does name is declared: {stale:?}");
+    }
+
+    /// D0388 known-negative: a split naming all seven, each excluded and each run under its crate,
+    /// drifts on neither count; and an exclusion with no `cargo test` line is a hole, not a route.
+    #[test]
+    fn a_split_naming_every_declared_binary_under_its_crate_is_clean() {
+        let full = "cargo nextest run --workspace --release --no-fail-fast -E 'not (binary(cli_bdd) | binary(orient_bdd) | binary(write_bdd) | binary(lexer_bdd) | binary(parser_bdd) | binary(semantic_bdd) | binary(spec_compat_bdd))'\ncargo test --release -p keel-cli --no-fail-fast --test cli_bdd --test orient_bdd --test write_bdd\ncargo test --release -p keel-parser --no-fail-fast --test lexer_bdd --test parser_bdd --test semantic_bdd --test spec_compat_bdd\n";
+        assert_eq!(custom_harness_drift(full, &declared()), (Vec::<String>::new(), Vec::<String>::new()));
+        let hole = "cargo nextest run --workspace -E 'not (binary(cli_bdd))'\n";
+        let one = vec![("keel-cli".to_string(), "cli_bdd".to_string())];
+        assert_eq!(custom_harness_drift(hole, &one).0, vec!["keel-cli::cli_bdd"]);
+        // a name the manifests no longer declare is stale, under the crate it was routed for
+        let renamed = "cargo nextest run --workspace -E 'not (binary(cli_bdd) | binary(old_bdd))'\ncargo test -p keel-cli --test cli_bdd --test old_bdd\n";
+        let (missing, stale) = custom_harness_drift(renamed, &one);
+        assert!(missing.is_empty());
+        assert_eq!(stale, vec!["keel-cli::old_bdd", "?::old_bdd"]);
+    }
+
+    /// The real tree: both members' manifests declare the seven, and the workflows as committed route
+    /// every one of them - the guard's own answer over this repository is a pass with two scanned.
+    #[test]
+    fn this_workspace_declares_seven_and_both_workflows_route_them() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        assert_eq!(workspace_custom_harnesses(root), declared());
+        let report = custom_harness_routed(root);
+        assert_eq!(report.scanned, 2, "ci.yml and release.yml run nextest");
+        assert!(report.violations.is_empty(), "{:?}", report.violations);
     }
 }

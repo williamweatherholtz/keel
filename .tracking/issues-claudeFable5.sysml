@@ -1379,4 +1379,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcEvidenceGoesThroughAFile to issue543;
+
+    part issue544 : Issue {
+        :>> id = "6ea38d6a-eaef-41ff-9b73-015e25f36e43";
+        :>> title = "ceremony guard's order reader counts pass and proposed only: sprint 708's honestly FAILED closeOut read as unrecorded and its Retro as out of turn";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Met 2026-09-14 recording sprint 708's closure: its closeOut clause (CI success) could not hold because CI was red on issue542, so the closeOut was recorded as an honest FAIL at 593147c and the retro as a pass. keel gate guard then reported ceremony FAIL: sprint708_verifyLadderStopsAtTheFirstRed: Retro recorded but CloseOut (earlier) unrecorded. Mechanism: guards.rs gates_recorded reads orient::gate_recorded (orient.rs:755), which counts VerdictKind::pass and VerdictKind::proposed only - D0437 widened it from pass alone for issue470 and stopped there - so a gate whose result is fail is treated, for ORDER, as if nothing had been written. That contradicts the guard's own statement that it checks sequence, not done-ness (guards.rs:981), and it punishes exactly the honest record: the only way to turn the red off without the fix is to not record the failure, or to rewrite the criterion until it passes (D0098: honest-state gates never block true state). Same class as issue470. Fix: a sequence-only reader that counts any written verdict, used by gates_recorded alone; gate_passed and the flow view's retro reader unchanged.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcCeremonyOrderCountsAFailedGateAsRecorded to issue544;
 }

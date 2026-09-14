@@ -756,6 +756,20 @@ pub(crate) fn gate_recorded(text: &str, gate: &str) -> bool {
     gate_outcome_in(text, gate, &["VerdictKind::pass", "VerdictKind::proposed"])
 }
 
+/// True if `<gate>Gate` has ANY written `TestResult` - every `VerdictKind` member, `fail` included
+/// (issue544, completing D0437's clause). This is the ceremony guard's ORDER reader: sequence asks
+/// whether the record was written in its turn, not what it says, and a gate honestly recorded `fail`
+/// (sprint708's closeOut, CI red on issue542) was written in its turn. [`gate_recorded`] stays the
+/// flow view's finish reader, which refuses `fail` on purpose; done-ness stays [`gate_passed`]'s.
+/// The five members are listed, not `pass` negated, so a sixth verdict is a visible edit here.
+pub(crate) fn gate_has_result(text: &str, gate: &str) -> bool {
+    gate_outcome_in(
+        text,
+        gate,
+        &["VerdictKind::pass", "VerdictKind::proposed", "VerdictKind::fail", "VerdictKind::inconclusive", "VerdictKind::error"],
+    )
+}
+
 /// A `part ...<gate>Gate...R<n> : TestResult { ... outcome = <one of `outcomes`> }` declaration exists.
 fn gate_outcome_in(text: &str, gate: &str, outcomes: &[&str]) -> bool {
     let needle = format!("{gate}Gate");

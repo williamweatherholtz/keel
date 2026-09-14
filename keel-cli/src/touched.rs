@@ -39,7 +39,7 @@
 //! set of 2026-09-14: `cargo test` 1246 s wall (per-binary sum 913 s); nextest 723 s at 20 test
 //! threads, 653 s at 8, 701 s at 4 - bounded below by ONE test, `view::tests::
 //! report_produces_cards_and_rejects_unknown`, 347-690 s under contention against a whole lib
-//! binary of 145 s serially (issue540). The three `harness = false` cucumber binaries cannot answer
+//! binary of 145 s serially (issue540). keel-cli's three `harness = false` cucumber binaries cannot answer
 //! nextest's `--list` and run under `cargo test` in a second invocation; a host with no nextest
 //! runs everything that way and the receipt's `runner` says so. `KEEL_PERF` is scrubbed from both
 //! children (issue539): the operator's timing lines would land after the JSON the tests parse.
@@ -1304,7 +1304,7 @@ mod tests {
         assert_eq!(millis_of("junk"), 0);
     }
 
-    /// D0475: the `harness = false` targets are read from the manifest. Known-positive: the three
+    /// D0475: the `harness = false` targets are read from the manifest. Known-positive: keel-cli's three
     /// cucumber binaries, declared in any field order, with the flag anywhere in their block.
     /// Known-negative: a libtest `[[test]]`, a `[[bin]]` with `harness = false`, and the package
     /// table are not in the list.
@@ -1313,7 +1313,7 @@ mod tests {
         let manifest = "[package]\nname = \"keel-cli\"\n\n[[bin]]\nname = \"keel\"\nharness = false\n\n[[test]]\nname = \"cli_bdd\"\nharness = false\n\n[[test]]\nharness = false\nname = \"orient_bdd\"\n\n[[test]]\nname = \"plain\"\n\n[[test]]\nname = \"write_bdd\"\nharness = false  # cucumber\n";
         assert_eq!(custom_harness_tests(manifest), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
         assert!(custom_harness_tests("[package]\nname = \"x\"\n").is_empty());
-        // The real manifest declares exactly the three cucumber binaries.
+        // keel-cli's manifest declares exactly these three; keel-parser's four are CI's to route (guard custom-harness-routed, issue542).
         let real = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")).unwrap();
         assert_eq!(custom_harness_tests(&real), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
     }

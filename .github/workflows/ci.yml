@@ -29,11 +29,13 @@ jobs:
         run: curl -LsSf https://get.nexte.st/0.9.144/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
       - name: test
         # D0475: the same runner as the developer's pre-push set - binaries in parallel, one process per
-        # test. The three harness = false cucumber binaries cannot be listed by nextest and run under
-        # cargo test, exactly as touched.rs does it.
+        # test. The workspace's seven harness = false cucumber binaries (keel-cli three, keel-parser four)
+        # cannot be listed by nextest and run under cargo test; guard custom-harness-routed derives this
+        # split from every member's manifest (issue542 - the first split named keel-cli's alone).
         run: |
-          cargo nextest run --workspace --release --no-fail-fast -E 'not (binary(cli_bdd) | binary(orient_bdd) | binary(write_bdd))'
+          cargo nextest run --workspace --release --no-fail-fast -E 'not (binary(cli_bdd) | binary(orient_bdd) | binary(write_bdd) | binary(lexer_bdd) | binary(parser_bdd) | binary(semantic_bdd) | binary(spec_compat_bdd))'
           cargo test --release -p keel-cli --no-fail-fast --test cli_bdd --test orient_bdd --test write_bdd
+          cargo test --release -p keel-parser --no-fail-fast --test lexer_bdd --test parser_bdd --test semantic_bdd --test spec_compat_bdd
         env:
           # The federation suite's LIVE claim (F6) exercises the real GitHub contract, and pf44
           # ruled that skipping it silently while reporting green proves nothing. `gh` on a runner
