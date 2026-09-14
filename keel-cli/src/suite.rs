@@ -224,6 +224,9 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         println!("  {}: the base, stems, set and cost - an empty set is recorded too (D0421).", crate::touched::RECEIPT);
         println!("  A binary of the set observed green at the current content (the code, and the tree too when the");
         println!("  test reads this repository) is SKIPPED; --no-receipt or KEEL_NO_RECEIPT=1 runs every one (D0474).");
+        println!("  The set runs under cargo-nextest, binaries in parallel, and the receipt carries every test's");
+        println!("  duration ([[timing]], slowest first); the harness = false cucumber binaries run under cargo test");
+        println!("  in a second invocation. Without nextest the whole set runs that way and `runner` says so (D0475).");
         return 0;
     }
     if args.iter().take_while(|a| *a != "--").any(|a| a == "--touched") {

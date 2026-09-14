@@ -4801,7 +4801,8 @@ fn gating_workflow_history(root: &Path) -> GuardReport {
         let Ok(text) = crate::corpus::read_to_string(path) else { continue };
         // "Runs the gate" is judged by what the workflow actually invokes, not by its name.
         // D0452: the gating verbs are sub-verbs of `gate` and `audit`; a needle reads the routed spelling.
-        let gates = ["cargo test", "keel gate guard", "keel gate validate", "audit history", "audit adherence"]
+        // D0475: the suite runs under nextest, so that spelling is a test step too.
+        let gates = ["cargo test", "cargo nextest", "keel gate guard", "keel gate validate", "audit history", "audit adherence"]
             .iter()
             .any(|needle| text.contains(needle));
         if !gates || !text.contains("actions/checkout") {
@@ -5070,11 +5071,11 @@ fn gate_environment_parity(root: &Path) -> GuardReport {
         .collect();
     files.sort();
 
-    // the gating surfaces: those that actually run the test suite
+    // the gating surfaces: those that actually run the test suite - under cargo test or nextest (D0475)
     let mut gating: Vec<(std::path::PathBuf, String)> = Vec::new();
     for path in &files {
         let Ok(text) = crate::corpus::read_to_string(path) else { continue };
-        if text.contains("cargo test") {
+        if text.contains("cargo test") || text.contains("cargo nextest") {
             gating.push((path.clone(), text));
         }
     }

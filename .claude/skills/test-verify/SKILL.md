@@ -118,7 +118,7 @@ rather than `pass`; never report a clippy you did not see finish.
 ### 5. Read the touched receipt — ONLY after the process exits
 
 Wait until the process is gone (`tasklist | grep -i cargo` / `pgrep cargo` is empty and
-`verify-touched.out` ends with a `test result:` / `touched:` line). Then read
+`verify-touched.out` ends with a `Summary [` / `test result:` / `touched:` line). Then read
 `.keel/metrics/touched-receipt.toml` and check, in this order, each as its own receipt line:
 
 | Check | Honest when | Why (issue468 / D0387) |
@@ -130,6 +130,8 @@ Wait until the process is gone (`tasklist | grep -i cargo` / `pgrep cargo` is em
 | `passed` / `failed` / `failing` | copied verbatim | the recorder's `--evidence` quotes these |
 | `ran` / `skipped` | together they are the set; `skipped` names only binaries with an `[[observed]]` row at `code_key` (and `tree_key` when in `self_reading`) | a skipped binary was observed green at this content by an earlier run (D0474) - report it as skipped, never as passed by this run |
 | `head` | == `git rev-parse --short HEAD` | |
+| `runner` | `cargo-nextest <version>` - or `cargo-test (nextest not installed)`, which is reported as such | D0475: the set runs under nextest, binaries in parallel; the fallback is serial and carries no timings |
+| `[[timing]]` | one row per test nextest ran, slowest first (`binary`, `test`, `millis`, `verdict`) | the first row is the run's critical path (issue536); quote it in the receipt so a slow set names its long pole |
 
 An empty `stems` with no `keel-cli/src` change is a receipt too: report it as such and run
 nothing more.

@@ -152,7 +152,10 @@ Change Request cross-cuts and is itself frozen.
   (D0420). CI runs `audit adherence`, `audit ci-runs`, `audit history`.
 - `land` runs the touched test set before the first push (D0421) inside the post-commit hook from a copy
   `target/release/keel-land.exe` (D0422). A binary observed green at the current content is skipped (D0474: keyed
-  on the code, plus the tree for a test that reads this repo; `--no-receipt` runs all). A full set takes 7–15 min: run `git commit` DETACHED, then read
+  on the code, plus the tree for a test that reads this repo; `--no-receipt` runs all). The set runs under cargo-nextest
+  (D0475; pin `https://get.nexte.st/0.9.144/<platform>`, the one CI installs), the three cucumber `harness = false` binaries
+  under `cargo test`; no nextest = the whole set serial, and the receipt's `runner` says so. `[[timing]]` rows name the
+  long pole (issue536). A full set takes 7–15 min: run `git commit` DETACHED, then read
   `git status -sb` and the CI conclusion (issue453). Receipts (`.keel/metrics/*-receipt.toml`) say `running`
   while cargo runs; read `at`/`stems`/`head` after exit (D0387).
 - `keel suite` gates nothing; it writes a receipt (D0356).

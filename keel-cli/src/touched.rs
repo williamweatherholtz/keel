@@ -33,6 +33,17 @@
 //! is a memo of a run, never a substitute for one: a red drops the entry, `--no-receipt` or
 //! `KEEL_NO_RECEIPT=1` runs everything, and a tree that moved during the run records nothing.
 //!
+//! HOW IT RUNS (D0475, issue536). `cargo nextest run --release` over the same `--test` selection:
+//! the binaries execute in parallel and every test is its own process, and nextest's per-test
+//! lines are read into the receipt as `[[timing]]` rows, slowest first. Measured on the 63-binary
+//! set of 2026-09-14: `cargo test` 1246 s wall (per-binary sum 913 s); nextest 723 s at 20 test
+//! threads, 653 s at 8, 701 s at 4 - bounded below by ONE test, `view::tests::
+//! report_produces_cards_and_rejects_unknown`, 347-690 s under contention against a whole lib
+//! binary of 145 s serially (issue540). The three `harness = false` cucumber binaries cannot answer
+//! nextest's `--list` and run under `cargo test` in a second invocation; a host with no nextest
+//! runs everything that way and the receipt's `runner` says so. `KEEL_PERF` is scrubbed from both
+//! children (issue539): the operator's timing lines would land after the JSON the tests parse.
+//!
 //! THE BASE is `origin/<branch>` when it resolves (what the push will land on), else the head the
 //! last suite receipt recorded, else `HEAD~1`; a tree with none of those reads every tracked module
 //! as changed and says so. THE CHANGED SET is measured from the merge-base to the WORKING TREE -
@@ -460,6 +471,10 @@ pub struct Run {
     pub ran: Vec<String>,
     /// The binaries observed green at this content by an earlier run, and not executed (D0474).
     pub skipped: Vec<String>,
+    /// What executed the set: `cargo-nextest <version>`, or `cargo-test (nextest not installed)` (D0475).
+    pub runner: String,
+    /// Every test nextest ran, with its verdict and duration (D0475) - empty under the cargo-test fallback.
+    pub timings: Vec<TestTiming>,
 }
 
 impl Run {
@@ -481,7 +496,16 @@ impl Run {
         if !self.skipped.is_empty() {
             let _ = write!(s, "; {} skipped, observed green at this content [{}]", self.skipped.len(), self.skipped.join(", "));
         }
+        if let Some(t) = self.slowest() {
+            let _ = write!(s, "; slowest {} {} {}.{}s", t.binary, t.test, t.millis / 1000, (t.millis % 1000) / 100);
+        }
         s
+    }
+
+    /// The longest test of the run (D0475, issue536): the critical path a parallel run is bounded by.
+    #[must_use]
+    pub fn slowest(&self) -> Option<&TestTiming> {
+        self.timings.iter().max_by_key(|t| t.millis)
     }
 }
 
@@ -552,7 +576,7 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
             let outcome = if r.green() { "pass" } else { "fail" };
             let _ = write!(
                 s,
-                "outcome = \"{}\"\npassed = {}\nfailed = {}\nfailing = [{}]\nran = [{}]\nskipped = [{}]\nseconds = {}\nlog = \"{}\"\n",
+                "outcome = \"{}\"\npassed = {}\nfailed = {}\nfailing = [{}]\nran = [{}]\nskipped = [{}]\nseconds = {}\nrunner = \"{}\"\nlog = \"{}\"\n",
                 outcome,
                 r.passed,
                 r.failed,
@@ -560,6 +584,7 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
                 list(&r.ran),
                 list(&r.skipped),
                 r.seconds,
+                r.runner,
                 r.log.to_string_lossy().replace('\\', "/")
             );
         }
@@ -570,6 +595,22 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
     }
     for o in &memo.observed {
         let _ = write!(s, "\n[[observed]]\nbinary = \"{}\"\ncode = \"{}\"\ntree = \"{}\"\nat = {}\n", o.binary, o.code, o.tree, o.at);
+    }
+    // D0475: one row per test nextest ran, slowest first - the answer to "which test is the critical
+    // path" (issue536) is the first row, and the whole population is here for the next question.
+    if let Phase::Done(r) = phase {
+        let mut rows: Vec<&TestTiming> = r.timings.iter().collect();
+        rows.sort_by(|a, b| b.millis.cmp(&a.millis).then_with(|| a.binary.cmp(&b.binary)).then_with(|| a.test.cmp(&b.test)));
+        for t in rows {
+            let _ = write!(
+                s,
+                "\n[[timing]]\nbinary = \"{}\"\ntest = \"{}\"\nmillis = {}\nverdict = \"{}\"\n",
+                t.binary,
+                t.test,
+                t.millis,
+                if t.passed { "pass" } else { "fail" }
+            );
+        }
     }
     s
 }
@@ -589,15 +630,171 @@ fn carry(repo: &Path) -> Memo {
     Memo { keys: None, observed: read_observed(repo) }
 }
 
+/// One test's verdict and duration as nextest reported it (D0475).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestTiming {
+    pub binary: String,
+    pub test: String,
+    pub millis: u64,
+    pub passed: bool,
+}
+
+/// The per-test rows of a nextest run (pure, over the captured output).
+///
+/// A row is `PASS [   0.075s] (  1/797) keel-cli activation::tests::x` - the verdict, the duration,
+/// a `(n/N)` counter, the binary id, the test. The lib's id is the package name alone (`keel-cli`);
+/// an integration binary's is `keel-cli::<name>`. Only lines carrying the counter are rows: a
+/// `SLOW [>120.000s] (───────)` notice has none, and the failures nextest re-lists after `Summary`
+/// have none either, so a red is counted once. `LEAK` is a pass that left a child alive; a retry
+/// verdict (`TRY 2 PASS`) is judged by its last word.
+#[must_use]
+pub fn parse_nextest(output: &str) -> Vec<TestTiming> {
+    output.lines().filter_map(parse_nextest_row).collect()
+}
+
+/// One row of [`parse_nextest`], or `None` for any other line.
+fn parse_nextest_row(line: &str) -> Option<TestTiming> {
+    let (status, rest) = line.split_once('[')?;
+    let (duration, rest) = rest.split_once(']')?;
+    let (_, rest) = rest.split_once('(')?;
+    let (counter, rest) = rest.split_once(')')?;
+    if !counter.contains('/') || !counter.chars().any(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let mut words = rest.split_whitespace();
+    let (id, test) = (words.next()?, words.next()?);
+    let binary = id.split_once("::").map_or(LIB, |(_, name)| name).to_string();
+    let status = status.trim();
+    let passed = status.split_whitespace().last() == Some("PASS") || status == "LEAK";
+    Some(TestTiming { binary, test: test.to_string(), millis: millis_of(duration.trim().trim_end_matches('s')), passed })
+}
+
+/// `12.345` -> 12345, integer arithmetic only; an unreadable duration is 0, which the receipt shows
+/// as a row without a time rather than no row.
+fn millis_of(seconds: &str) -> u64 {
+    let (whole, frac) = seconds.split_once('.').unwrap_or((seconds, ""));
+    let whole: u64 = whole.trim().parse().unwrap_or(0);
+    let frac: String = frac.chars().chain(std::iter::repeat('0')).take(3).collect();
+    whole.saturating_mul(1000).saturating_add(frac.parse().unwrap_or(0))
+}
+
+/// The `[[test]]` targets of a Cargo manifest declared `harness = false` (pure over its text).
+///
+/// nextest lists a binary with `--list --format terse` before it runs it, and a custom harness -
+/// the three cucumber binaries here - does not answer that flag (`unexpected argument '--list'`,
+/// exit 104 before a single test ran, 2026-09-14). Those binaries run under `cargo test` in a second
+/// invocation; everything else runs under nextest.
+#[must_use]
+pub fn custom_harness_tests(manifest: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut in_test = false;
+    let mut name: Option<String> = None;
+    let mut custom = false;
+    for raw in manifest.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') {
+            if custom {
+                out.extend(name.take());
+            }
+            name = None;
+            custom = false;
+            in_test = line == "[[test]]";
+            continue;
+        }
+        if !in_test {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            match k.trim() {
+                "name" => name = Some(v.trim().trim_matches('"').to_string()),
+                "harness" => custom = v.trim().starts_with("false"),
+                _ => {}
+            }
+        }
+    }
+    if custom {
+        out.extend(name.take());
+    }
+    out.sort();
+    out
+}
+
+/// Which runner executes the set, and what the receipt says it was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Runner {
+    /// `cargo nextest run` at this version string (D0475).
+    Nextest(String),
+    /// `cargo test`, because nextest is not installed on this host: the run is serial and carries no
+    /// per-test timing, and the receipt says so. Not a refusal - a missing tool is not a red tree.
+    CargoTest,
+}
+
+impl Runner {
+    fn label(&self) -> String {
+        match self {
+            Self::Nextest(v) => format!("cargo-nextest {v}"),
+            Self::CargoTest => "cargo-test (nextest not installed)".to_string(),
+        }
+    }
+}
+
+/// The line printed when nextest is absent - the pinned build CI installs, so the two agree.
+pub const NEXTEST_INSTALL: &str = "touched: cargo nextest is not installed - the set runs serially under cargo test with no per-test timing. Install the pin CI uses: https://get.nexte.st/0.9.144/<platform> (D0475).";
+
+/// `cargo nextest --version` once per run; `None` when the subcommand is missing.
+fn nextest_version(repo: &Path) -> Option<String> {
+    let out = std::process::Command::new("cargo").arg("nextest").arg("--version").current_dir(repo).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    // `cargo-nextest 0.9.144` (then a `cargo-nextest-` build line): the version is the second word.
+    String::from_utf8_lossy(&out.stdout).lines().next()?.split_whitespace().nth(1).map(str::to_string)
+}
+
+/// What one cargo invocation left behind: whether it exited 0, and both streams in order.
+struct Captured {
+    ok: bool,
+    text: String,
+}
+
+/// The operator's profiling request is for the suite process, never for the code under test
+/// (issue539): `KEEL_PERF` in the environment reaches every keel the tests spawn, whose report -
+/// on stderr, which the tests read together with stdout - then trails the JSON they parse. Three
+/// binaries went red for that reason alone on 2026-09-14.
+fn scrub_perf(cmd: &mut std::process::Command) {
+    cmd.env_remove("KEEL_PERF");
+}
+
+/// Start cargo in `repo` with the profiling variable scrubbed, and capture both streams in order.
+fn capture(mut cmd: std::process::Command, repo: &Path) -> Result<Captured, String> {
+    scrub_perf(&mut cmd);
+    let out = cmd.current_dir(repo).output().map_err(|e| format!("cargo could not be run: {e}"))?;
+    Ok(Captured { ok: out.status.success(), text: format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)) })
+}
+
+/// `--test <name>` per integration binary, `--lib` when the lib is in - the selection both runners share.
+fn select_targets(cmd: &mut std::process::Command, set: &[String]) {
+    for name in set.iter().filter(|n| *n != LIB) {
+        cmd.arg("--test").arg(name);
+    }
+    if set.iter().any(|n| n == LIB) {
+        cmd.arg("--lib");
+    }
+}
+
 /// Run the set, minus the binaries observed green at this content (D0474), unless `force`.
 ///
-/// One cargo invocation (`--release`, so the binaries CI links are the ones exercised;
-/// `--no-fail-fast`, so every named test reports). Writes the log and the receipt.
+/// The runner is cargo-nextest (D0475): the binaries execute in parallel, every test in its own
+/// process, and each test's duration is read from nextest's output into the receipt. The
+/// `harness = false` binaries of keel-cli/Cargo.toml cannot be listed by nextest and run under
+/// `cargo test` in a second invocation; on a host without nextest the whole set does, and the
+/// receipt's `runner` says so. Both invocations are `--release` (the binaries CI links are the ones
+/// exercised) and `--no-fail-fast` (every named test reports). Writes the log and the receipt.
 ///
 /// # Errors
 /// When the metrics directory cannot be created or cargo cannot be started at all.
 pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
-    let none = || Run { passed: 0, failed: 0, failing: vec![], seconds: 0, cargo_ok: true, log: PathBuf::new(), ran: vec![], skipped: vec![] };
+    let none = || Run { passed: 0, failed: 0, failing: vec![], seconds: 0, cargo_ok: true, log: PathBuf::new(), ran: vec![], skipped: vec![], runner: String::new(), timings: vec![] };
     if t.nothing_to_run() {
         write_receipt(repo, t, Phase::NotRun, &carry(repo));
         return Ok(none());
@@ -621,26 +818,70 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
     let started = now_secs();
     let log = metrics.join(format!("touched-{started}.log"));
     write_receipt(repo, t, Phase::Running { started, log: &log, skipped: &skipped }, &Memo { keys: keys.clone(), observed: prior.clone() });
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.arg("test").arg("--release").arg("--manifest-path").arg(repo.join("keel-cli").join("Cargo.toml")).arg("--no-fail-fast");
-    for name in to_run.iter().filter(|n| *n != LIB) {
-        cmd.arg("--test").arg(name);
+    let manifest = repo.join("keel-cli").join("Cargo.toml");
+    let runner = nextest_version(repo).map_or_else(
+        || {
+            eprintln!("{NEXTEST_INSTALL}");
+            Runner::CargoTest
+        },
+        Runner::Nextest,
+    );
+    let custom = custom_harness_tests(&std::fs::read_to_string(&manifest).unwrap_or_default());
+    // Under nextest the custom harnesses go to cargo test; under the fallback everything does.
+    let (under_nextest, under_cargo_test): (Vec<String>, Vec<String>) = match runner {
+        Runner::Nextest(_) => to_run.iter().cloned().partition(|n| !custom.contains(n)),
+        Runner::CargoTest => (Vec::new(), to_run.clone()),
+    };
+    let (mut text, mut ok, mut passed, mut failed, mut failing, mut timings) = (String::new(), true, 0u64, 0u64, Vec::new(), Vec::new());
+    if !under_nextest.is_empty() {
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.arg("nextest").arg("run").arg("--release").arg("--manifest-path").arg(&manifest).arg("--no-fail-fast");
+        // A selected binary with no tests (a lib whose tests all live in integration files) is not a
+        // red: nextest alone exits `error: no tests to run`, and every named binary would be reported failing.
+        cmd.arg("--no-tests").arg("pass");
+        cmd.arg("--color").arg("never").arg("--status-level").arg("all").arg("--final-status-level").arg("none");
+        select_targets(&mut cmd, &under_nextest);
+        let c = capture(cmd, repo)?;
+        let rows = parse_nextest(&c.text);
+        let count = |want: bool| u64::try_from(rows.iter().filter(|r| r.passed == want).count()).unwrap_or(u64::MAX);
+        let (p, f) = (count(true), count(false));
+        // A list or build failure is not a verdict about the tests - but it IS a reason not to push:
+        // the binaries CI will link do not link here either. Every named test is reported as not run.
+        if crate::suite::never_ran(c.ok, p, f) {
+            failing.extend(under_nextest.iter().cloned());
+        } else {
+            failing.extend(rows.iter().filter(|r| !r.passed).map(|r| r.binary.clone()));
+        }
+        passed += p;
+        failed += f;
+        timings = rows;
+        ok &= c.ok;
+        text.push_str(&c.text);
     }
-    if to_run.iter().any(|n| n == LIB) {
-        cmd.arg("--lib");
+    if !under_cargo_test.is_empty() {
+        let mut cmd = std::process::Command::new("cargo");
+        cmd.arg("test").arg("--release").arg("--manifest-path").arg(&manifest).arg("--no-fail-fast");
+        select_targets(&mut cmd, &under_cargo_test);
+        let c = capture(cmd, repo)?;
+        let (p, f) = crate::suite::count_results(&c.text);
+        if crate::suite::never_ran(c.ok, p, f) {
+            failing.extend(under_cargo_test.iter().cloned());
+        } else {
+            failing.extend(failing_binaries(&c.text));
+        }
+        passed += p;
+        failed += f;
+        ok &= c.ok;
+        text.push_str(&c.text);
     }
-    let out = cmd.current_dir(repo).output().map_err(|e| format!("cargo could not be run: {e}"))?;
-    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    failing.sort();
+    failing.dedup();
     let _ = std::fs::write(&log, &text);
-    let (passed, failed) = crate::suite::count_results(&text);
-    // A build failure is not a verdict about the tests - but it IS a reason not to push: the
-    // binaries CI will link do not link here either. Every named test is reported as not run.
-    let failing = if crate::suite::never_ran(out.status.success(), passed, failed) { to_run.clone() } else { failing_binaries(&text) };
     let at = now_secs();
     // The keys again: a tree that moved while cargo ran is not one tree, and its greens are nobody's.
     let held = keys.as_ref().filter(|k| crate::contentkey::compute(repo).as_ref() == Some(*k));
-    let observed = merge_observed(&prior, &to_run, &failing, out.status.success(), held, at);
-    let r = Run { passed, failed, failing, seconds: at.saturating_sub(started), cargo_ok: out.status.success(), log, ran: to_run, skipped };
+    let observed = merge_observed(&prior, &to_run, &failing, ok, held, at);
+    let r = Run { passed, failed, failing, seconds: at.saturating_sub(started), cargo_ok: ok, log, ran: to_run, skipped, runner: runner.label(), timings };
     write_receipt(repo, t, Phase::Done(&r), &Memo { keys, observed });
     Ok(r)
 }
@@ -790,7 +1031,7 @@ pub fn cmd(repo: &Path, force: bool) -> i32 {
 mod tests {
     use super::{
         compute, embedded_stem, failing_binaries, merge_observed, module_stem, names_stem, parse_observed, render_receipt, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests, Memo, Observed,
-        Phase, Run, Touched, LIB,
+        custom_harness_tests, millis_of, parse_nextest, Phase, Run, Touched, LIB,
     };
     use crate::contentkey::ContentKeys;
 
@@ -815,7 +1056,7 @@ mod tests {
 
     fn run_of(passed: u64, failed: u64, failing: &[&str], cargo_ok: bool, ran: &[&str], skipped: &[&str]) -> Run {
         let v = |xs: &[&str]| xs.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        Run { passed, failed, failing: v(failing), seconds: 9, cargo_ok, log: std::path::PathBuf::from("x.log"), ran: v(ran), skipped: v(skipped) }
+        Run { passed, failed, failing: v(failing), seconds: 9, cargo_ok, log: std::path::PathBuf::from("x.log"), ran: v(ran), skipped: v(skipped), runner: "cargo-nextest 0.9.144".into(), timings: vec![] }
     }
 
     /// issue478 known-positive: a set whose tree holds a CRLF `eol=lf` path renders `eol-mismatch` with
@@ -1008,6 +1249,73 @@ mod tests {
         let failed = "package D {\n    part d0421AcceptR1 : TestResult { :>> outcome = VerdictKind::fail; }\n}\n";
         assert!(!text_carries_acceptance(failed, "d0421"));
         assert!(!text_carries_acceptance("package D { }", "d0421"));
+    }
+
+    /// issue539 probe pair, chosen before the fix was written. Known-positive: the command the run
+    /// builds carries an explicit removal of `KEEL_PERF`, so the child cannot inherit it whatever the
+    /// parent's environment. Known-negative: a command nobody scrubbed carries no such entry - the
+    /// inherited environment, which is exactly the shape that went red.
+    #[test]
+    fn the_cargo_child_never_inherits_the_operators_perf_variable() {
+        let mut scrubbed = std::process::Command::new("cargo");
+        super::scrub_perf(&mut scrubbed);
+        let removed: Vec<&std::ffi::OsStr> = scrubbed.get_envs().filter(|(_, v)| v.is_none()).map(|(k, _)| k).collect();
+        assert_eq!(removed, vec![std::ffi::OsStr::new("KEEL_PERF")], "the scrub is an explicit removal on the child");
+        let inherited = std::process::Command::new("cargo");
+        assert_eq!(inherited.get_envs().count(), 0, "an unscrubbed command inherits everything, KEEL_PERF included");
+    }
+
+    /// D0475 probe pair for the nextest parser. Known-positive: a run's rows - the lib (id is the
+    /// package alone), an integration binary, a LEAK, a FAIL, a retry - are read with their
+    /// durations. Known-negative: the SLOW notice, the final re-listing after `Summary` (no
+    /// counter) and cargo's own lines are not rows, so a red is counted exactly once.
+    #[test]
+    fn nextest_rows_are_read_once_each_with_their_durations() {
+        let out = "    Finished `release` profile [optimized] target(s) in 0.48s\n\
+                   ────────────\n\
+                    Nextest run ID ec1d with nextest profile: default\n\
+                       Starting 797 tests across 62 binaries\n\
+                           PASS [   0.075s] (  1/797) keel-cli activation::tests::a_typo_fails_loud\n\
+                           LEAK [   2.500s] (  2/797) keel-cli::hooks a_child_outlives_the_test\n\
+                           SLOW [>120.000s] (───────) keel-cli::touched_tests_run_before_land a_binary_observed_green\n\
+                           FAIL [  12.100s] (  3/797) keel-cli::orient_x a_ready_item_is_listed\n\
+                      TRY 2 PASS [   0.900s] (  4/797) keel-cli::flaky_bin second_time_lucky\n\
+                           PASS [ 690.475s] (797/797) keel-cli view::tests::report_produces_cards_and_rejects_unknown\n\
+                   ────────────\n\
+                        Summary [ 722.834s] 797 tests run: 796 passed, 1 failed, 0 skipped\n\
+                           FAIL [  12.100s] keel-cli::orient_x a_ready_item_is_listed\n";
+        let rows = parse_nextest(out);
+        let names: Vec<(&str, &str, u64, bool)> = rows.iter().map(|r| (r.binary.as_str(), r.test.as_str(), r.millis, r.passed)).collect();
+        assert_eq!(
+            names,
+            vec![
+                ("lib", "activation::tests::a_typo_fails_loud", 75, true),
+                ("hooks", "a_child_outlives_the_test", 2500, true),
+                ("orient_x", "a_ready_item_is_listed", 12100, false),
+                ("flaky_bin", "second_time_lucky", 900, true),
+                ("lib", "view::tests::report_produces_cards_and_rejects_unknown", 690_475, true),
+            ]
+        );
+        assert_eq!(rows.iter().filter(|r| !r.passed).count(), 1, "the re-listed failure after Summary is not a second red");
+        assert!(parse_nextest("error: creating test list failed\nexit=104\n").is_empty(), "a list failure has no rows");
+        assert_eq!(millis_of("0.0"), 0);
+        assert_eq!(millis_of("7"), 7000);
+        assert_eq!(millis_of("1.5"), 1500);
+        assert_eq!(millis_of("junk"), 0);
+    }
+
+    /// D0475: the `harness = false` targets are read from the manifest. Known-positive: the three
+    /// cucumber binaries, declared in any field order, with the flag anywhere in their block.
+    /// Known-negative: a libtest `[[test]]`, a `[[bin]]` with `harness = false`, and the package
+    /// table are not in the list.
+    #[test]
+    fn custom_harness_targets_are_read_from_the_manifest() {
+        let manifest = "[package]\nname = \"keel-cli\"\n\n[[bin]]\nname = \"keel\"\nharness = false\n\n[[test]]\nname = \"cli_bdd\"\nharness = false\n\n[[test]]\nharness = false\nname = \"orient_bdd\"\n\n[[test]]\nname = \"plain\"\n\n[[test]]\nname = \"write_bdd\"\nharness = false  # cucumber\n";
+        assert_eq!(custom_harness_tests(manifest), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
+        assert!(custom_harness_tests("[package]\nname = \"x\"\n").is_empty());
+        // The real manifest declares exactly the three cucumber binaries.
+        let real = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")).unwrap();
+        assert_eq!(custom_harness_tests(&real), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
     }
 
     /// Known-positive: a capture in cargo's real order - every stdout result first, then stderr with

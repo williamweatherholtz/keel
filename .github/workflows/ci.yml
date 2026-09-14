@@ -25,8 +25,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: install cargo-nextest (the pin keel suite --touched and keel land run under, D0475)
+        run: curl -LsSf https://get.nexte.st/0.9.144/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
       - name: test
-        run: cargo test --workspace --release
+        # D0475: the same runner as the developer's pre-push set - binaries in parallel, one process per
+        # test. The three harness = false cucumber binaries cannot be listed by nextest and run under
+        # cargo test, exactly as touched.rs does it.
+        run: |
+          cargo nextest run --workspace --release --no-fail-fast -E 'not (binary(cli_bdd) | binary(orient_bdd) | binary(write_bdd))'
+          cargo test --release -p keel-cli --no-fail-fast --test cli_bdd --test orient_bdd --test write_bdd
         env:
           # The federation suite's LIVE claim (F6) exercises the real GitHub contract, and pf44
           # ruled that skipping it silently while reporting green proves nothing. `gh` on a runner

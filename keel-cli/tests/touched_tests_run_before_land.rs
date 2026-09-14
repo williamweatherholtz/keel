@@ -186,6 +186,8 @@ fn a_binary_observed_green_at_this_content_is_skipped_and_a_moved_key_reruns_it(
     let r = receipt();
     assert!(r.contains("outcome = \"pass\"") && r.contains("ran = [\"lib\", \"widget_check\"]") && r.contains("skipped = []"), "the first run executes the whole set: {r}");
     assert!(r.contains("binary = \"widget_check\"") && r.contains("binary = \"lib\"") && r.contains("code_key = \"") && r.contains("self_reading = [\"lib\"]"), "and observes both: {r}");
+    // D0475: the receipt names the runner and carries the one test nextest ran, with a duration.
+    assert!(r.contains("runner = \"cargo-nextest ") && r.contains("[[timing]]") && r.contains("test = \"widget_answers\"") && r.contains("verdict = \"pass\""), "the runner and the per-test row: {r}");
 
     // Known-positive: the same tree again executes nothing.
     let (ok, out) = run(&root, &["suite", "--touched", "."]);
@@ -224,7 +226,10 @@ fn a_binary_observed_green_at_this_content_is_skipped_and_a_moved_key_reruns_it(
     let (ok, out) = run(&root, &["suite", "--touched", "."]);
     assert!(!ok && out.contains("failing [widget_check]"), "the stale test fails: {out}");
     let r = receipt();
-    assert!(r.contains("outcome = \"fail\"") && !r.contains("binary = \"widget_check\"") && r.contains("binary = \"lib\""), "the red loses its row, the green keeps it: {r}");
+    // The observation table is what is judged; the `[[timing]]` rows after it name the red test too (D0475).
+    let observed = r.split("[[timing]]").next().unwrap_or_default();
+    assert!(r.contains("outcome = \"fail\"") && !observed.contains("binary = \"widget_check\"") && observed.contains("binary = \"lib\""), "the red loses its row, the green keeps it: {r}");
+    assert!(r.contains("test = \"widget_answers\"") && r.contains("verdict = \"fail\""), "and the timing row carries the red verdict: {r}");
     let (ok, out) = run(&root, &["suite", "--touched", "."]);
     assert!(!ok && out.contains("over [widget_check]") && out.contains("1 skipped, observed green at this content [lib]"), "the red reruns; the green at this content does not: {out}");
     let _ = std::fs::remove_dir_all(root.parent().expect("base"));
