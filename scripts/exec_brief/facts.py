@@ -3228,6 +3228,141 @@ fact("modularMembersNeeds", {
      "Business gate and `hasResult` is whether any TestResult in the file names it. .tracking/intake/intake-2026-09-14.sysml: "
      "every UserStory with a `#DerivedFrom ... to st126;` edge, and st126's own fields, quoted.")
 
+# --- the thirtieth queue: the process-hook chain (D0488 -> D0489 -> D0490), the keel-issues Decision-scope fork (D0487),
+# the starved-cat deny (D0491), and the Architecture read-back they were recorded beside (sprint 721)
+_req = read(os.path.join(REPO, ".tracking", "requirements", "modular-members-requirements.sysml")) or ""
+
+
+def _chain_link(prefix, dname):
+    _t = _dec_file(prefix)
+    _f = _decision_facts(_t, dname)
+    _f.update({
+        "derivedFromSt126": bool(re.search(r"#DerivedFrom dependency from %s to st126;" % dname, _t)),
+        "dependsOn": re.findall(r"#DependsOn dependency from %s to (\w+);" % dname, _t),
+        "requirementsDerived": sorted(set(re.findall(r"#DerivedFrom dependency from (\w+) to %s;" % dname, _req))),
+        "measuredMs": [int(x) for x in re.findall(r"cost (\d+)-(\d+) ms", _f["rationale"] or "")[0]] if re.search(r"cost (\d+)-(\d+) ms", _f["rationale"] or "") else None,
+    })
+    return _f if _t else None
+
+
+_chain = {"d0488": _chain_link("0488-", "d0488"), "d0489": _chain_link("0489-", "d0489"), "d0490": _chain_link("0490-", "d0490")}
+fact("processHookChain", _chain if all(_chain.values()) else None,
+     "the three one-clause process-change Decisions, each held, and what depends on what",
+     _DEC_HOW + " dependsOn = the `#DependsOn dependency from dNNNN to dMMMM;` lines in the Decision's own file; requirementsDerived = "
+     "the SystemRequirements / SubsystemRequirements in .tracking/requirements/modular-members-requirements.sysml carrying a "
+     "`#DerivedFrom ... to dNNNN;` edge; measuredMs = the `cost A-B ms` range in the MEASURED: sentence of the rationale.")
+
+# what the chain is about: where step order is enforced today
+_cursor = read(_module_home("cursor") or "") or ""
+_guards_src = read(_module_home("guards") or "") or ""
+_precommit = read(os.path.join(REPO, ".githooks", "pre-commit")) or ""
+_ci = read(os.path.join(REPO, ".github", "workflows", "ci.yml")) or ""
+_act = read(os.path.join(REPO, ".engine", "contracts", "activation.toml")) or ""
+_act_active = re.findall(r'"([\w-]+)"', (re.search(r"\[processes\].*?active\s*=\s*\[(.*?)\]", _act, re.S) or [None, ""])[1])
+_proc_dir = os.path.join(REPO, ".engine", "processes")
+_proc_files = sorted(f for f in os.listdir(_proc_dir) if f.endswith(".sysml")) if os.path.isdir(_proc_dir) else []
+_bound = {f[:-6]: len(re.findall(r"checkedBy\s*=", read(os.path.join(_proc_dir, f)) or "")) for f in _proc_files}
+_bound = {k: v for k, v in _bound.items() if v}
+_check_kinds = sorted(set(re.findall(r'checkedBy\s*=\s*"([^"]+)"', "".join(read(os.path.join(_proc_dir, f)) or "" for f in _proc_files))))
+fact("processCursorCensus", {
+    "processFiles": len(_proc_files), "adopted": _act_active, "adoptedCount": len(_act_active),
+    "processesWithBoundSteps": _bound, "boundStepKinds": _check_kinds,
+    "gatePrefixedBindings": len([k for k in _check_kinds if k.startswith("gate:")]),
+    "projectProcessDirExists": os.path.isdir(os.path.join(REPO, ".tracking", "processes")),
+    "resolverProcessDirs": sorted(set(re.findall(r'root\.join\("(\.\w+)"\)\.join\("processes"\)', _cursor))),
+    "cursorStoredNowhere": "never stored" in _cursor.split("\nuse ")[0],
+    "guardsReadingCursor": len(re.findall(r"\bcursor\b", _guards_src)),
+    "preCommitRunsAdvance": "advance" in _precommit, "ciRunsAdvance": "advance" in _ci,
+    "preCommitGateCalls": len(re.findall(r"gate (validate|guard)", _precommit)), "ciGateCalls": len(re.findall(r"gate validate", _ci)),
+} if _proc_files and _cursor else None, "where a process's step order is enforced today, and where it is not",
+     ".engine/processes/*.sysml counted; activation.toml `[processes] active` quoted; processesWithBoundSteps = files with at least one "
+     "`checkedBy =` and how many; boundStepKinds = the distinct checkedBy strings; resolverWalksEngineOnly = keel-cli/src/cursor.rs "
+     "names .engine and never a tracking path; cursorStoredNowhere = its head comment says computed / never stored; guardsReadingCursor = "
+     "whole-word `cursor` in guards.rs; preCommitRunsAdvance / ciRunsAdvance = the word `advance` in .githooks/pre-commit / ci.yml; "
+     "the gate-call counts = `gate validate|guard` occurrences in those two files; resolverProcessDirs = the `root.join(\"<dir>\")"
+     ".join(\"processes\")` walks in cursor.rs; cursorStoredNowhere = `never stored` in its module comment.")
+
+# D0487: the fork on where a project's own Decision lives when it runs keel-issues alone
+_d0487 = _dec_file("0487-")
+_f487 = _decision_facts(_d0487, "d0487")
+_dec_text = _f487["decision"] or ""
+_opts = re.split(r"OPTION ([A-C])\b", _dec_text)
+_options = []
+for _k in range(1, len(_opts) - 1, 2):
+    _body = _opts[_k + 1]
+    _options.append({"letter": _opts[_k], "recommended": "recommended" in _body[:200].lower(), "hasCost": "COST:" in _body,
+                     "text": _body.strip()[:700]})
+_d0480 = _dec_file("0480-")
+fact("decisionScopeFork", {
+    **_f487,
+    "options": _options, "optionCount": len(_options), "costsStated": sum(1 for o in _options if o["hasCost"]),
+    "dependsOn": re.findall(r"#DependsOn dependency from d0487 to (\w+);", _d0487),
+    "derivedFromSt126": bool(re.search(r"#DerivedFrom dependency from d0487 to st126;", _d0487)),
+    "requirementsDerived": sorted(set(re.findall(r"#DerivedFrom dependency from (\w+) to d0487;", _req))),
+    "d0480Title": _guard_field(_d0480, "d0480", "title"), "d0480Status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0480) or [None, None])[1],
+    "resolverKindAllowsDecision": bool(re.search(r"Decision", read(os.path.join(REPO, ".engine", "schema", "core", "relationships.sysml")) or "")),
+} if _d0487 and _options else None, "the fork's options as written, with their costs, and the Decision it narrows",
+     _DEC_HOW + " options = the decision field split at `OPTION A|B|C`, each with `recommended` in its first 200 characters and a "
+     "`COST:` sentence or not; d0480 fields from its file; resolverKindAllowsDecision = the word Decision in the core relationships schema.")
+
+# D0491 and issue564: the starved-cat deny, the control that was missing, and the probe rows the hook ledgered
+_d0491 = _dec_file("0491-")
+_f491 = _decision_facts(_d0491, "d0491")
+_sc = read(_module_home("shellcheck") or "") or ""
+_pb = _fn_body(_main_rs, "hook_pre_bash")
+_cm = read(os.path.join(REPO, ".tracking", "architecture", "control-map.sysml")) or ""
+_ledger = read(os.path.join(REPO, ".keel", "metrics", "hooks.jsonl")) or ""
+_starved_rows = [l for l in _ledger.splitlines() if '"control":"stdin-starved-write"' in l]
+_iss_f = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_i564 = re.search(r"part issue564 : Issue\s*\{(.*?)\n\s*\}", _iss_f, re.S)
+_st127 = read(os.path.join(REPO, ".tracking", "intake", "intake-2026-09-15.sysml")) or ""
+_st127_m = re.search(r"part st127\s*:\s*Statement\s*\{(.*?)\n\s*\}", _st127, re.S)
+fact("starvedCatControl", {
+    **_f491,
+    "derivedFromSt127": bool(re.search(r"#DerivedFrom dependency from d0491 to st127;", _d0491)),
+    "statement": _fields(_st127_m.group(1)) if _st127_m else None,
+    "issue564": {"exists": bool(_i564), "resolver": (re.search(r"#Resolves dependency from (\w+) to issue564;", _iss_f) or [None, None])[1],
+                 "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _i564.group(1)) or [None, None])[1] if _i564 else None},
+    "detectorPresent": "pub fn stdin_starved_write" in _sc, "detectorTest": "a_cat_with_nothing_feeding_it_is_named_and_fed_shapes_are_not" in _sc,
+    "preBashDenies": len(re.findall(r'"permissionDecision": "deny"', _pb)) - (1 if "strict-bash-verdict" in _pb else 0),
+    "preBashDenyControls": re.findall(r'hook_refuse\(\s*"([\w-]+)"', _pb),
+    "backslashDenyNamesEditTool": "Edit tool" in _pb,
+    "controlMapRow": "ctlStdinStarvedWrite" in _cm and "dependency from ctlStdinStarvedWrite to ehz4;" in _cm,
+    "ledgerRows": {"deny": sum(1 for l in _starved_rows if '"decision":"deny"' in l), "total": len(_starved_rows)},
+} if _d0491 and _sc else None, "the second pre-bash deny: its Decision, Issue, detector, control-map row and first ledger rows",
+     _DEC_HOW + " statement = st127's fields from .tracking/intake/intake-2026-09-15.sysml; issue564 from .tracking/issues-claudeFable5.sysml "
+     "with its #Resolves edge; detectorPresent/Test by literal search in keel-cli/src/shellcheck.rs; preBashDenies = `permissionDecision: deny` "
+     "emissions in main.rs hook_pre_bash less the strict-profile one; preBashDenyControls = the hook_refuse control names in that body in "
+     "order; controlMapRow = the part and its EHZ4 edge in control-map.sysml; ledgerRows = .keel/metrics/hooks.jsonl lines with "
+     "control=stdin-starved-write and how many are denies (machine-local).")
+
+# the Architecture read-back the four Decisions were recorded beside: the three tiers, the eight SRs, the honest allocation gap
+ok, out = run([KEEL, "show", "tier-satisfaction", "."], timeout=120)
+_ts = as_json(out) if ok else None
+_mm_sr = re.findall(r"part\s+(sr\w+)\s*:\s*SystemRequirement", _req)
+_mm_ssr = re.findall(r"requirement\s+(ssr\w+)\s*:\s*SubsystemRequirement", _req)
+_mm_need_names = [n["name"] for n in _mm_needs]
+_alloc = read(os.path.join(REPO, ".tracking", "architecture", "allocations.sysml")) or ""
+_alloc_new = [s for s in _mm_sr if re.search(r"allocate %s to \w+;" % s, _alloc)]
+_arch_gate = re.search(r"verification\s+modularMembersArchitectureGate\s*:\s*Test", _req)
+if _ts:
+    _tiers = {t["tier"]: t for t in _ts["tiers"]}
+    fact("architectureReadBack", {
+        "tiers": {k: {"total": t["total"], "satisfied": t["satisfied"], "gaps": len(t["gaps"])} for k, t in _tiers.items()},
+        "needsInGaps": [n for n in _mm_need_names if any(n in t["gaps"] for t in _ts["tiers"])],
+        "systemRequirements": _mm_sr, "subsystemRequirements": _mm_ssr,
+        "srInVerifyGaps": [s for s in _mm_sr if s in next(t["gaps"] for t in _ts["tiers"] if t["tier"] == "SystemRequirement" and "alloc" not in t["relation"])],
+        "srAllocated": _alloc_new,
+        "satisfyEdges": len(re.findall(r"\bsatisfy\s+n\w+\s+by\s+sr\w+;", _req)),
+        "gateDeclared": bool(_arch_gate),
+    }, "the tiers as the lens reads them, and the eight requirements' place in each",
+         "`keel show tier-satisfaction .` JSON: per tier total / satisfied / gaps; needsInGaps = the modular-members Needs among any tier's "
+         "gaps; the SR and SSR names from modular-members-requirements.sysml by declaration; srInVerifyGaps = those in the SystemRequirement "
+         "verified-by tier's gaps; srAllocated = those with an `allocate srX to ...;` line in allocations.sysml; satisfyEdges = "
+         "`satisfy nX by srY;` lines in the requirements file.")
+else:
+    fact("architectureReadBack", None, "the tiers as the lens reads them", "tier-satisfaction lens failed: " + out)
+
 # --- the authority-queue lens: which obligation kinds it enumerates; a confirmation gate awaiting a human is not among them
 ok, out = run([KEEL, "show", "authority-queue", "."], timeout=120)
 _aq_kinds = sorted(set(re.findall(r'"kind":\s*"([A-Za-z]+)"', out))) if ok else None

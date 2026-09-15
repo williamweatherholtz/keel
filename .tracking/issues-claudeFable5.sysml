@@ -1610,4 +1610,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from d0491 to issue564;
+
+    part issue565 : Issue {
+        :>> id = "2544a1f4-b6f3-48aa-983e-cf0984a0d637";
+        :>> title = "verify-receipt.toml holds the previous run's verdict during a ladder run, so the sprint 721 verifier read a stale fail as its own and stopped";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "OBSERVED 2026-09-15, sprint 721 ceremony under the D0425 split. The VERIFIER launched `keel verify . --probe ...` detached and read `.keel/metrics/verify-receipt.toml` while its own ladder was still in the touched rung (two keel-serve.exe alive). The file held the PREVIOUS run's receipt - `at = 1789476754, outcome = fail, stopped_at = probe` from a run 1601 s before its launch that had failed on a facts.py anchor since fixed - and the verifier reported it as this run's result with a DISCREPANCIES line naming the staleness, then STOPPED; its own ladder finished 12 minutes later `outcome = pass, 773 s, touched 835 passed / 0 failed` (at 1789479137) with no reader, and the primary resumed the verifier by hand to rewrite the receipt. No false record landed: the recorder had not run. CHECK that established this: `.keel/metrics/verify-receipt.toml` read before and after the keel-serve.exe processes exited (at 1789476754 then 1789479137, both head 9703282), `touched-receipt.toml` at 1789478385 = launch + 30 s, `tasklist` showing two keel-serve.exe until 1789479137. ROOT CAUSE: verify::run writes its receipt only when the ladder ends (keel-cli/src/verify.rs:307) - during a run the file holds the previous run's verdict. This is the D0387 class a third time: the suite receipt gained a running stub for issue399, the touched receipt for issue468, and the verify receipt beside them (D0476, newer than both fixes) did not - the control was applied per file again and the file left unfixed is the one that fired (the issue322 pattern), so the resolver names a census test over every receipt writer, not a third one-file patch. The verifier's skill tells it to compare `at` with its launch and did; a reader's discipline reading STALE and stopping is not the control (D0047) - a receipt that said `running` would have told it to wait. HAZARD: EHZ5, an enforcement point reporting a verdict it did not compute - here caught before the record; the previous two instances were not. Resolver: dcVerifyReceiptSaysRunning.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcVerifyReceiptSaysRunning to issue565;
+
+    part issue566 : Issue {
+        :>> id = "5befd843-41e4-496e-a624-00586d245253";
+        :>> title = "Retro scan wording is enforced one write too late, on the Test, with a message that names the result";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "OBSERVED 2026-09-15, sprint 721 ceremony under the D0425 split. The retro Test modularMembersArchitectureRetroGate was authored with two findings and no avoidable-issue scan wording; nothing refused the authoring and nothing refused the recorder's `record gate-result` on it. The ceremony guard then went red with `Retro gate recorded without avoidable-issue scan evidence (issue011)` - a line that names the RESULT, while the check (keel-cli/src/guards.rs retro_scan_missing) reads the Test's procedureText for one of SCAN_EVIDENCE. The recorder reported the red as a DISCREPANCIES line and STOPPED, as its brief says; a second gate-result for the same gate (modularMembersArchitectureRetroGateR2, 2213d20b) then appeared in the file carrying an `AVOIDABLE ISSUES SCAN:` evidence line - outside the recorder's report, so check_report.py's D0473 one-write-per-gate refusal never saw it - and the guard stayed red because the check does not read evidence. The Stop hook's second red pass yielded and recorded obligationda53d7d0. CHECK that established this: `keel gate guard --no-receipt .` red on ceremony before the Test edit and green after (the procedureText now carries the scan); `grep -c RetroGateR` = 2 before the duplicate was removed, 1 after; the recorder's report lists one Retro WROTE line. ROOT CAUSE: the scan requirement is enforced one write too late and on the wrong surface - at the commit guard, against the Test, with a message that points at the result - so the actor holding the write (the recorder) cannot satisfy it through any record verb and either stops or writes the wrong record. HAZARD: EHZ3-class, a control whose message routes the operator to an act that cannot discharge it. Resolver: dcRetroScanIsCheckedAtTheWrite.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRetroScanIsCheckedAtTheWrite to issue566;
 }

@@ -47,4 +47,10 @@ package LiveAllocations {
 
     // portability
     allocate srDcPortableGate to ceGitSpawn;
+
+    // modular-members program (sprint 721, D0479): only the requirement a registered unit carries TODAY.
+    // keel-model's orient.rs computes ready/blocked/done from the text and is the JSON+CLI lens's source;
+    // the other seven wait for their carrier (keel-issues, the process member, the layering guard) and the
+    // allocation leg of tier-satisfaction reports them as gaps until then.
+    allocate srMemberStateIsComputedAndExposed to ceOrientMember;
 }
