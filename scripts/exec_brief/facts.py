@@ -2585,7 +2585,8 @@ _ck = read(_ckp) or ""
 _ck_claude = read(os.path.join(REPO, ".claude", "skills", "delegated-ceremony", "references", "check_report.py")) or ""
 _fx_dir = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "fixtures")
 _pairs_src = re.search(r"^PAIRS = \[(.*?)^\]", _ck, re.S | re.M)
-_pairs = re.findall(r'\("([^"]+)",\s*(None|"[^"]*")\)', _pairs_src.group(1)) if _pairs_src else []
+# a PAIRS row is `(fixture, expectation)` until D0492, `(fixture, expectation, owed)` after it; both shapes are read
+_pairs = re.findall(r'\("([^"]+)",\s*(None|"[^"]*")(?:,\s*(?:None|\d+))?\)', _pairs_src.group(1)) if _pairs_src else []
 _refusal_sentences = re.findall(r'found\.append\(f?"(?:line \{n\}: )?([^`"{]+)', _ck)
 fact("recorderCheckerSource", {
     "refusalKinds": len(_refusal_sentences),
@@ -2601,7 +2602,7 @@ fact("recorderCheckerSource", {
     "lines": _ck.count("\n"),
 } if _ck else None, "the checker's source",
      ".engine/skills/delegated-ceremony/references/check_report.py: refusalKinds = `found.append(` calls in refusals(); pairs = "
-     "the `(fixture, expectation)` tuples inside `PAIRS = [...]`, positives carry a quoted expectation and negatives `None`; "
+     "the `(fixture, expectation[, owed])` tuples inside `PAIRS = [...]`, positives carry a quoted expectation and negatives `None`; "
      "fixturesOnDisk = those whose file exists under references/fixtures/; isRecordWriteFn / RECORD_KEY = the def and the compiled "
      "pattern the two new refusals read; claudeCopyIdentical = byte equality with .claude/skills/.../check_report.py (sync-claude).")
 
@@ -3371,6 +3372,94 @@ fact("authorityQueueKinds", {"kinds": _aq_kinds, "listsConfirmationGates": bool(
      "`keel show authority-queue .`: the distinct values of every `\"kind\"` field in the JSON; `listsConfirmationGates` is whether any "
      "kind names a confirmation - a `method=confirmation` Test with no result (a Business gate) is a human obligation the lens does "
      "not enumerate when this is false, so the decision page built from it has to carry that ask by hand." + ("" if ok else " lens failed: " + out))
+
+# ================================================================ 31. the recorder's report accounts for every owed record (D0492 / issue568)
+# The Decision's fields as the guard reads them; the checker's two new refusals, its --owed flag and the eight-row pair
+# table in source; the checker run live over the three sprint 723 fixtures, with and without --owed; the Issue and its
+# resolver; sprint 724's record; the brief and the process step that name the count. Nothing typed.
+_d0492 = _dec_file("0492-")
+_f492 = _decision_facts(_d0492, "d0492")
+_ck92 = read(_ckp) or ""
+_ck92_claude = read(os.path.join(REPO, ".claude", "skills", "delegated-ceremony", "references", "check_report.py")) or ""
+_pairs92_src = re.search(r"^PAIRS = \[(.*?)^\]", _ck92, re.S | re.M)
+_pairs92 = re.findall(r'\("([^"]+)",\s*(None|"[^"]*"),\s*(None|\d+)\)', _pairs92_src.group(1)) if _pairs92_src else []
+_ref92_m = re.search(r"^def refusals\(.*?(?=^def |\Z)", _ck92, re.S | re.M)  # the Python function, to the next def
+_ref92 = _ref92_m.group(0) if _ref92_m else ""
+
+
+def _ck_run(fixture, owed=None):
+    _args = [sys.executable, _ckp, os.path.join(_fx_dir, fixture), "--root", "."] + (["--owed", str(owed)] if owed is not None else [])
+    _rc, _o = run_rc(_args, timeout=120)
+    _ls = [l for l in (_o or "").strip().splitlines() if l.strip()]
+    return {"exit": _rc, "lines": len(_ls), "firstLine": _ls[0] if _ls else "", "namedRefusal": next((l.strip() for l in _ls[1:] if l.startswith("  ")), "")}
+
+
+_probe92_rc, _probe92_out = run_rc([sys.executable, _ckp, "--probe", "--root", "."], timeout=120)
+_probe92_lines = (_probe92_out or "").strip().splitlines()
+_s724 = _sprint_facts("sprint724_recorderReportAccountsForEveryOwedRecord.sysml", "d0492")
+_proc92 = read(os.path.join(REPO, ".engine", "processes", "delegated-ceremony.sysml")) or ""
+_skill92 = read(os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_skill92_claude = read(os.path.join(REPO, ".claude", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_i568 = _issue_facts("568", "dcRecorderReportAccountsForEveryOwedRecord")
+_nw_eb = re.search(r"action def EngineBuild \{(.*?)^    \}", _bl, re.S | re.M)
+_eb_actions = re.findall(r"^\s{8}action (\w+);", _nw_eb.group(1), re.M) if _nw_eb else []
+fact("recorderOwedControl", {
+    **_f492,
+    "namesIssue568": "issue568" in (_f492["context"] or ""),
+    "namesFirstReportPassed": "check_report.py passed it" in (_f492["context"] or ""),
+    "namesReminder": "D0047" in (_f492["context"] or ""),
+    "namesBeforeAfter": "exit 0" in (_f492["rationale"] or "") and "exit 1" in (_f492["rationale"] or ""),
+    "notAForkInRationale": "NOT A FORK:" in (_f492["rationale"] or ""),
+    "measuredPhraseInRationale": "MEASURED on this Windows 11 host:" in (_f492["rationale"] or ""),
+    "singleProbeRow": bool(re.search(r"^def probe\(root, only=None\):", _ck92, re.M)),
+    "source": {
+        "owedFlagParsed": '"--owed" in argv' in _ck92,
+        "refusalsTakeOwed": bool(re.search(r"^def refusals\(report_text, declared, owed=None\):", _ck92, re.M)),
+        "nothingWrittenRefusal": "wrote == 0 and refused == 0" in _ref92,
+        "shortfallRefusal": "wrote + refused < owed" in _ref92,
+        "refusedLinePattern": bool(re.search(r"^REFUSED_LINE = re\.compile\(", _ck92, re.M)),
+        "refusalKinds": len(re.findall(r"found\.append\(", _ref92)),
+        "pairs": len(_pairs92), "positives": len([p for p in _pairs92 if p[1] != "None"]), "negatives": len([p for p in _pairs92 if p[1] == "None"]),
+        "pairsUnderOwed": len([p for p in _pairs92 if p[2] != "None"]),
+        "sprint723Fixtures": sorted(p[0] for p in _pairs92 if "sprint723" in p[0]),
+        "fixturesOnDisk": len([p for p in _pairs92 if os.path.exists(os.path.join(_fx_dir, p[0]))]),
+        "claudeCopyIdentical": bool(_ck92) and _ck92 == _ck92_claude,
+    },
+    "live": {
+        "probeExit0": _probe92_rc == 0, "probeLastLine": _probe92_lines[-1] if _probe92_lines else "",
+        "pairsHolding": len([l for l in _probe92_lines if l.startswith("probe: known-") and ("-> PASS" in l or "-> REFUSED naming" in l)]),
+        "nothingWrittenNoOwed": _ck_run("positive-sprint723-nothing-written.txt"),
+        "nothingWrittenOwed7": _ck_run("positive-sprint723-nothing-written.txt", 7),
+        "sevenOwed7": _ck_run("negative-sprint723-seven-owed.txt", 7),
+        "sevenNoOwed": _ck_run("negative-sprint723-seven-owed.txt"),
+        "sixOfSevenOwed7": _ck_run("positive-sprint723-six-of-seven.txt", 7),
+        "sixOfSevenNoOwed": _ck_run("positive-sprint723-six-of-seven.txt"),
+    },
+    "issue568": _i568,
+    "resolverPosition": (_eb_actions.index("dcRecorderReportAccountsForEveryOwedRecord") + 1) if "dcRecorderReportAccountsForEveryOwedRecord" in _eb_actions else None,
+    "engineBuildItems": len(_eb_actions),
+    "sprint724": _s724,
+    "surfaces": {
+        "briefRuleSix": "(6) every owed record is accounted for" in _skill92,
+        "briefPassesOwed": "--owed <COUNT>" in _skill92,
+        "briefListsSevenRefusals": bool(re.search(r"^7\. under `--owed N`", _skill92, re.M)),
+        "briefClaudeIdentical": bool(_skill92) and _skill92 == _skill92_claude,
+        "processDispatchNamesCount": "which the recorder passes to the report check as --owed (D0492)" in _proc92,
+        "processReportNamesRefusals": "accounts for fewer than N records" in _proc92,
+        "processNamesD0492": _proc92.count("D0492"),
+    },
+} if _d0492 and _ck92 else None, "the owed-count control: Decision, checker source, checker live, Issue, sprint and surfaces",
+     _DEC_HOW + " Names by literal search in the field named (notAFork/measuredToken read the guard's fields and tokens; this Decision "
+     "carries `NOT A FORK:` and `MEASURED on this Windows 11 host:` in its rationale, so the two ...InRationale keys are the ones that hold). "
+     "singleProbeRow = `def probe(root, only=None):` in the checker. source: the checker's text - `\"--owed\" in argv` in main, the refusals() "
+     "signature, the two predicates `wrote == 0 and refused == 0` / `wrote + refused < owed` inside refusals(), the compiled REFUSED_LINE, "
+     "`found.append(` calls in refusals(), the three-tuple PAIRS rows (fixture, expectation, owed); claudeCopyIdentical = byte equality with "
+     "the .claude copy. live: `python check_report.py --probe --root .` exit and last line, pairsHolding = probe lines reading `-> PASS` or "
+     "`-> REFUSED naming`; then the checker run over each sprint 723 fixture with and without --owed 7 - exit code, line count, first line, "
+     "and the first indented refusal line. issue568 from .tracking/issues-claudeFable5.sysml with its #Resolves edge and the resolver's DoD "
+     "line; resolverPosition = the resolver's 1-based place among `action x;` lines in EngineBuild (declaration order IS priority, D0052). "
+     "sprint724 = results / outcomes / shas / charter from its delivery file. surfaces by literal search in the recorder brief (SKILL.md, "
+     "and byte equality with its .claude copy) and in .engine/processes/delegated-ceremony.sysml.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "

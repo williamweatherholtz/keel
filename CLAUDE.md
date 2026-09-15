@@ -143,7 +143,8 @@ Change Request cross-cuts and is itself frozen.
   pair, `suite --touched`, stopping at the first red), plus `gate check-engine`, `sync-claude --check`; writes a receipt only. RECORDER (haiku, no Write/Edit tool) writes ceremony through
   `keel record` from that receipt ONLY; a marker/edge the API lacks is a `REFUSED:` report line, never typed; its
   report ends with the last line of `keel gate --fast .`. `references/check_report.py` refuses a report otherwise,
-  and one whose `WROTE:` names a non-`record` command or writes one gate/task twice (D0473): a red after a write is
+  one whose `WROTE:` names a non-`record` command or writes one gate/task twice (D0473), and one accounting for nothing
+  or, under `--owed N` (the count the dispatch named), for fewer than N (D0492): a red after a write is
   a `DISCREPANCIES:` line. A recorder that leaves the tree red is ledgered `recorder:tree-red`. Neither reads the
   other's conclusion as fact.
 

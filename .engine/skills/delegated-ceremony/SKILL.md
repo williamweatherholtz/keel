@@ -66,7 +66,11 @@ and the write API does not offer is a line under REFUSED in your report - never 
 (record sprint --fill is where a record's edges come from; the primary triages an obligation);
 (5) one write per owed record: a red `gate --fast` after your write is a line under DISCREPANCIES naming
 the guard, never a second record of the same gate or task with reworded evidence, and never a tool
-(textpatch, sed, python, an editor) run against the file - a WROTE line naming one is refused.
+(textpatch, sed, python, an editor) run against the file - a WROTE line naming one is refused;
+(6) every owed record is accounted for: <COUNT> records are owed, and your report carries one WROTE line
+or one REFUSED line for each - a report that accounts for fewer is refused, and a report with no WROTE
+line and no REFUSED line is refused whatever the count (sprint 723's first recorder wrote nothing and
+reported NONE).
 Report shape, written to <ABS SCRATCH PATH>/recorder-report.txt:
   RECORDER REPORT  <date>  receipt=<path>  sprint=<file>
   WROTE: <the exact keel record command> -> <the verdict line it printed>      (one per write)
@@ -74,9 +78,12 @@ Report shape, written to <ABS SCRATCH PATH>/recorder-report.txt:
   DISCREPANCIES: NONE | <one line each, naming the receipt line or command>
   <the verbatim last line of `KEEL gate --fast .` run AFTER your last write - the report's last line>
 Before returning, run: python <ABS ROOT>/.claude/skills/delegated-ceremony/references/check_report.py
-<ABS SCRATCH PATH>/recorder-report.txt --root <ABS ROOT>. If it refuses, fix the report or the write
-it names and run it again; return the report only when it passes, and return its text verbatim.
+<ABS SCRATCH PATH>/recorder-report.txt --root <ABS ROOT> --owed <COUNT>. If it refuses, fix the report or
+the write it names and run it again; return the report only when it passes, and return its text verbatim.
 ```
+
+The primary fills `<COUNT>` with the number of records it listed under "Records owed" - the count is
+the control (D0492); the list alone was the reminder sprint 723's first recorder ignored.
 
 ## What the check refuses (references/check_report.py)
 
@@ -88,14 +95,24 @@ it names and run it again; return the report only when it passes, and return its
 4. a `WROTE:` line whose command is not `[keel] record <sub-verb>` - sprint 703's recorder ran
    `scripts/textpatch.py` against the sprint file and reported it as a write (issue532, D0473);
 5. two `WROTE:` lines naming one `--gate` or one `--task` - sprint 703's recorder recorded a red retro
-   gate three more times with reworded evidence; a red after a write is a DISCREPANCIES line.
+   gate three more times with reworded evidence; a red after a write is a DISCREPANCIES line;
+6. zero `WROTE:` lines and no `REFUSED:` line, with or without `--owed` - sprint 723's first recorder ran
+   no record command and returned three lines reading DISCREPANCIES: NONE (issue568, D0492);
+7. under `--owed N`, `WROTE:` plus `REFUSED:` lines numbering fewer than N - the refusal names the
+   shortfall (`owed 7, accounted 6`).
 
 `python check_report.py --probe --root <ROOT>` runs the D0388 pairs: `fixtures/positive-undeclared-marker.txt`
 (sprint 647's third act, refused) and `fixtures/negative-sprint647-receipt-driven.txt` (the same ceremony
 as it should have been reported; passes); `fixtures/positive-sprint703-textpatch-write.txt` (sprint 703's
 report as returned, refused naming the textpatch line), `fixtures/positive-sprint703-retro-recorded-twice.txt`
 (the retro gate written twice, refused naming both lines) and `fixtures/negative-sprint703-record-only.txt`
-(the same report with the textpatch line removed; passes).
+(the same report with the textpatch line removed; passes); `fixtures/positive-sprint723-nothing-written.txt`
+(sprint 723's first report as returned, refused naming zero writes), `fixtures/negative-sprint723-seven-owed.txt`
+(the second recorder's seven writes under `--owed 7`; passes) and `fixtures/positive-sprint723-six-of-seven.txt`
+(one gate line removed under `--owed 7`; refused naming the shortfall). `--probe <FIXTURE>` runs one row and
+exits 0 when that side holds - the form a verifier's `keel verify --probe POS,NEG` dispatch names, since the
+ladder needs both sides to exit 0 (sprint 724's first dispatch named the bare checker runs, and the positive's
+exit 1 stopped the ladder at the probe rung).
 
 ## What the primary does with the report
 

@@ -1654,4 +1654,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcRecorderReportAccountsForEveryOwedRecord to issue568;
+
+    part issue569 : Issue {
+        :>> id = "e0e7b794-c034-4db7-b173-2e0e4181d439";
+        :>> title = "A second touched run is not refused: two ladders raced on one receipt and reported reds no single run produces";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 724's VERIFIER launched the D0476 ladder twice, two seconds apart (touched-1789494936.log and touched-1789494938.log; one ladder's output captured by its background task, 891 s, 3 lib failures; the other redirected to .keel/metrics/verify-touched.out, 899 s, 5 lib failures). Nothing refused the second launch: the touched receipt's D0387 running stub carries no pid and neither `keel suite --touched` nor `keel verify` reads it before writing its own. The two runs raced on the receipt rename (verify-touched.out line 536: `touched: receipt could not be written: The system cannot find the file specified`) and on the lib tests' shared temp dirs, and the verifier's receipt reported five red tests - judge_set_tests::a_judged_set_writes_one_result_and_one_quote_receipt_per_item, write::tests::a_demo_pass_whose_receipt_is_a_declared_command_stays_a_pass, a_retro_gate_result_is_refused_while_its_test_records_no_scan, receiptless_ai_test_results_are_refused_at_the_write, reject_decision_refuses_ai_and_unregistered_judges - none of which holds alone: cargo nextest run --release -p keel-write -p keel-actor --lib at the same tree, nothing else running, 58 passed 0 failed. A ladder whose verdict depends on whether another ladder is running is not a gate; a second launch must be refused at the launch, naming the live pid, so the receipt says what happened instead of a red no test caused.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcTouchedRunIsExclusive to issue569;
+
+    part issue570 : Issue {
+        :>> id = "daa28847-4787-407d-8213-5e879544c601";
+        :>> title = "Unit tests share fixed scratch dirs under temp_dir, so two concurrent runs corrupt each other's trees";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Unit tests across keel-cli/src and members/*/src build their scratch trees at fixed names under std::env::temp_dir() - members/keel-write/src/write.rs:2086 `keel-judge-set`, :2291 `keel-atomic-write-test`, :2386 `keel-k6-{tag}`, and twenty more in guards.rs, deck.rs, pm.rs, adoption_check.rs, attestation.rs, onboard.rs, main.rs, history.rs - so two lib runs on one host share every one of them. During sprint 724's ceremony two runs overlapped (issue569) and produced two different failing sets (5 and 3 tests) from the same source: one process deleted or rewrote a tree the other was reading, which is why the receipt named NotFound errors and an extra aGateR4 result that no single run produces. Each named test passes alone (58/58 keel-write and keel-actor lib tests in one nextest run at the same tree). A test whose verdict depends on what else is running on the host is not evidence. The sites need one helper that suffixes the process id, and a census test that fails on any new literal-named scratch dir, so the class cannot return by a sweep wearing off.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcUnitTestScratchIsPerProcess to issue570;
 }
