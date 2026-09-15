@@ -1577,4 +1577,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcAuthorityQueueListsConfirmationGates to issue561;
+
+    part issue562 : Issue {
+        :>> id = "f7052b12-5ad4-43f2-87ac-521198e4a698";
+        :>> title = "The decision brief showed a measured fork's numbers without saying what the metric does; the human could not answer it";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The twenty-ninth decision brief (built by scripts/exec_brief/build_2026_09_14_sample_fork_and_needs.py at cfb1cb8) carried the d0466 fork with both sweeps' verdict lines, the weighted rule and three options, and passed check_templates.py --brief (two exhibits per ask, word budget, provenance strip). The human's response, 2026-09-14, verbatim: 'The sample fork item is still confusing to me. What's the point? You don't say what the metric is actually doing sufficiently'. The fork had been on the page since the twenty-eighth publish without a letter. What was missing was not a number but its meaning: what keel recall is, what one bench case is, what median position and top-3 mean for the searcher, what the dominance bonus does and what lowering it costs the ordinary search, and why the constant is on the human's page at all. Given in chat in plain terms, the letter came on the next message. Class: a brief-contract gap - the check counts figures and words and cannot see that a measurement was shown without being explained, so the same panel can go out again for any tuning fork (recall, cost thresholds, verb counts). Control: the ask panel carries a required metric gloss the checker refuses to omit (resolver dcBriefAskGlossesItsMetric); the D0388 pair is named in the resolver's DoD.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcBriefAskGlossesItsMetric to issue562;
+
+    part issue563 : Issue {
+        :>> id = "328bd857-bf69-43c9-8886-9a7a20359fd7";
+        :>> title = "A sprint closed with its story DoD green and the backlog item it delivered left unrecorded; nothing typed links the two";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 720 closed with its story DoD passing at ecc393e and its closeOut and retro recorded, and the backlog item it delivered, dcInstrumentAnswersCarryTheirSourceHash, had no DoD TestResult: keel show whats-next at 63221a8 ranked it FIRST as ready work, above dcViewIsAMember. Nothing links a sprint to the item it delivers except the slug shared by the story and action names: every sprint's #CharteredBy edge points at a Decision (659 of 659 on this tree, none at a backlog action), the sprint-closure guard reads the story DoD only, and the item's done-ness is computed from its own DoD result. The frontier detected it - as work to do, not as a gap - after one sprint had already closed over it. Recorded the item's DoD from a fresh run of its three checks (dcInstrumentAnswersCarryTheirSourceHashDoDR1). Class: an un-typed delivery relationship; the recorder had to remember, and did not. Control: a #Delivers edge (Change Request) the sprint-closure guard reads (resolver dcSprintNamesTheItemItDelivers).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcSprintNamesTheItemItDelivers to issue563;
 }
