@@ -107,7 +107,12 @@ pub struct Step {
     pub command: String,
 }
 
-/// The finished ladder.
+/// The ladder as the receipt holds it - in flight or finished.
+///
+/// `in_flight` is the rung running NOW: `Some` on the stub rewritten before every rung (issue565 -
+/// the D0387 running form the suite and touched receipts already carry), `None` once the ladder ends.
+/// A reader during a run, or after a killed one, sees `outcome = "running"` and the rungs finished
+/// so far - never the previous run's verdict, which is what the sprint 721 verifier read as its own.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ladder {
     pub head: String,
@@ -116,13 +121,25 @@ pub struct Ladder {
     pub steps: Vec<Step>,
     /// The rung the ladder stopped at; `None` is a green ladder.
     pub stopped_at: Option<Rung>,
+    /// The rung running when this receipt was written; `None` is a finished ladder.
+    pub in_flight: Option<Rung>,
 }
 
 impl Ladder {
-    /// Green when no rung is red.
+    /// Green when the ladder has ended and no rung is red. A running ladder is not green yet.
     #[must_use]
     pub const fn green(&self) -> bool {
-        self.stopped_at.is_none()
+        self.stopped_at.is_none() && self.in_flight.is_none()
+    }
+
+    /// The receipt's `outcome` word: `running` while a rung is in flight, else `pass` or `fail`.
+    #[must_use]
+    pub const fn outcome(&self) -> &'static str {
+        match (self.in_flight, self.stopped_at) {
+            (Some(_), _) => "running",
+            (None, None) => "pass",
+            (None, Some(_)) => "fail",
+        }
     }
 
     /// The failing rung's exit code, so `keel verify` exits as the rung did.
@@ -188,7 +205,15 @@ pub fn own_args(args: &[String]) -> Vec<String> {
 /// plainly as what was. The probe rung is asked of the runner only when a pair was named; otherwise
 /// it is `NotNamed` and the ladder continues - an unnamed pair is a fact about the invocation, not a
 /// red about the tree.
-pub fn climb<F: FnMut(Rung) -> (Verdict, String)>(probe_named: bool, mut runner: F) -> (Vec<Step>, Option<Rung>) {
+///
+/// `progress` is called with the rungs finished so far BEFORE each rung runs - the hook that rewrites
+/// the receipt as a running stub (issue565), so the file on disk never holds a previous run's verdict
+/// while this one is in flight.
+pub fn climb<F, P>(probe_named: bool, mut runner: F, mut progress: P) -> (Vec<Step>, Option<Rung>)
+where
+    F: FnMut(Rung) -> (Verdict, String),
+    P: FnMut(&[Step], Rung),
+{
     let mut steps = Vec::with_capacity(Rung::ORDER.len());
     let mut stopped_at = None;
     for rung in Rung::ORDER {
@@ -200,6 +225,7 @@ pub fn climb<F: FnMut(Rung) -> (Verdict, String)>(probe_named: bool, mut runner:
             steps.push(Step { rung, verdict: Verdict::NotNamed, seconds: 0, command: "--probe POSITIVE,NEGATIVE not given".to_owned() });
             continue;
         }
+        progress(&steps, rung);
         let started = Instant::now();
         let (verdict, command) = runner(rung);
         let seconds = started.elapsed().as_secs();
@@ -304,13 +330,14 @@ fn run_rung(rung: Rung, repo: &Path, exe: &Path, probe: Option<&(String, String)
 pub fn render_receipt(l: &Ladder) -> String {
     use std::fmt::Write as _;
     let mut s = format!(
-        "# verify receipt (D0476): the pre-commit ladder - validate, guard, clippy, the D0388 probe pair, the\n# touched run - in cost order, stopped at the first red. `stopped_at = \"none\"` is a green ladder; a rung\n# after the red is `not-run`; a probe rung with no --probe pair is `not-named`, never invented. On green\n# the touched receipt ({}) is the one keel land honours (D0474).\nhead = \"{}\"\nat = {}\nseconds = {}\noutcome = \"{}\"\nstopped_at = \"{}\"\n",
+        "# verify receipt (D0476): the pre-commit ladder - validate, guard, clippy, the D0388 probe pair, the\n# touched run - in cost order, stopped at the first red. `stopped_at = \"none\"` is a green ladder; a rung\n# after the red is `not-run`; a probe rung with no --probe pair is `not-named`, never invented. On green\n# the touched receipt ({}) is the one keel land honours (D0474).\n# `outcome = \"running\"` is the stub rewritten before every rung (D0387, issue565): a ladder in flight, or\n# one that was killed - `running` names the rung, the [[rung]] blocks are the ones finished so far, and\n# `at` is when this file was WRITTEN (the launch, for the first stub) - never the previous run's verdict.\nhead = \"{}\"\nat = {}\nseconds = {}\noutcome = \"{}\"\nstopped_at = \"{}\"\nrunning = \"{}\"\n",
         crate::touched::RECEIPT,
         l.head,
         l.at,
         l.seconds,
-        if l.green() { "pass" } else { "fail" },
+        l.outcome(),
         l.stopped_at.map_or("none", Rung::name),
+        l.in_flight.map_or("none", Rung::name),
     );
     for st in &l.steps {
         let code = match st.verdict {
@@ -337,6 +364,12 @@ pub fn parse_receipt(text: &str) -> Option<Ladder> {
         "none" => None,
         other => Some(Rung::from_name(other)?),
     };
+    // A receipt from before the running form has no `running` key: it was written at the end, so
+    // nothing is in flight.
+    let in_flight = match value_of(head_block, "running").unwrap_or("none") {
+        "none" => None,
+        other => Some(Rung::from_name(other)?),
+    };
     let mut steps = Vec::new();
     for block in rungs.split("\n[[rung]]").filter(|b| !b.trim().is_empty()) {
         let rung = Rung::from_name(value_of(block, "name")?)?;
@@ -350,7 +383,18 @@ pub fn parse_receipt(text: &str) -> Option<Ladder> {
         };
         steps.push(Step { rung, verdict, seconds: value_of(block, "seconds")?.parse().ok()?, command: value_of(block, "command")?.to_owned() });
     }
-    Some(Ladder { head, at, seconds, steps, stopped_at })
+    Some(Ladder { head, at, seconds, steps, stopped_at, in_flight })
+}
+
+/// Write the receipt, naming the failure on stderr; the ladder itself does not stop for it.
+fn write_receipt(repo: &Path, ladder: &Ladder) {
+    let path = repo.join(RECEIPT);
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Err(e) = crate::write::write_atomic(&path, render_receipt(ladder)) {
+        eprintln!("keel verify: receipt could not be written: {e}");
+    }
 }
 
 fn now_secs() -> u64 {
@@ -367,6 +411,8 @@ fn print_help() {
     println!("  Writes {RECEIPT} naming the rung it stopped at; a rung after the red is not-run, a probe rung");
     println!("  with no pair is not-named. Exits as the failing rung did. --no-receipt forces guard and the");
     println!("  touched run to run everything. On green the touched receipt is the one keel land honours.");
+    println!("  While a rung runs the receipt says outcome = \"running\" and names the rung (D0387): a reader");
+    println!("  mid-run waits; it never sees the previous run's verdict.");
 }
 
 /// `keel verify`.
@@ -403,18 +449,20 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     let forced = crate::receipt::forced(args);
     let head = crate::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
     let started = Instant::now();
-    let (steps, stopped_at) = climb(probe.is_some(), |rung| {
-        println!("keel verify: rung {} - {}", rung.name(), command_text(rung));
-        run_rung(rung, repo, &exe, probe.as_ref(), forced)
-    });
-    let ladder = Ladder { head, at: now_secs(), seconds: started.elapsed().as_secs(), steps, stopped_at };
-    let path = repo.join(RECEIPT);
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    if let Err(e) = crate::write::write_atomic(&path, render_receipt(&ladder)) {
-        eprintln!("keel verify: receipt could not be written: {e}");
-    }
+    let (steps, stopped_at) = climb(
+        probe.is_some(),
+        |rung| {
+            println!("keel verify: rung {} - {}", rung.name(), command_text(rung));
+            run_rung(rung, repo, &exe, probe.as_ref(), forced)
+        },
+        // issue565: the receipt says `running` from before the first rung starts, so a reader mid-run
+        // (the D0425 verifier) waits instead of taking the previous run's verdict for this one.
+        |so_far, rung| {
+            write_receipt(repo, &Ladder { head: head.clone(), at: now_secs(), seconds: started.elapsed().as_secs(), steps: so_far.to_vec(), stopped_at: None, in_flight: Some(rung) });
+        },
+    );
+    let ladder = Ladder { head, at: now_secs(), seconds: started.elapsed().as_secs(), steps, stopped_at, in_flight: None };
+    write_receipt(repo, &ladder);
     for st in &ladder.steps {
         println!("  {:<9} {:<12} {:>5} s", st.rung.name(), st.verdict.label(), st.seconds);
     }
@@ -448,7 +496,7 @@ mod tests {
             asked.push(r);
             let v = if r == Rung::Clippy { Verdict::Fail(101) } else { Verdict::Pass };
             (v, format!("cmd {}", r.name()))
-        });
+        }, |_, _| {});
         assert_eq!(stopped, Some(Rung::Clippy));
         assert_eq!(asked, vec![Rung::Validate, Rung::Guard, Rung::Clippy], "nothing after the red is run");
         let verdicts: Vec<_> = steps.iter().map(|s| s.verdict.clone()).collect();
@@ -463,7 +511,7 @@ mod tests {
         let (steps, stopped) = climb(true, |r| {
             asked.push(r);
             (Verdict::Pass, r.name().to_owned())
-        });
+        }, |_, _| {});
         assert_eq!(stopped, None);
         assert_eq!(asked, Rung::ORDER.to_vec());
         assert_eq!(asked.iter().filter(|r| **r == Rung::Touched).count(), 1);
@@ -478,7 +526,7 @@ mod tests {
         let (steps, stopped) = climb(false, |r| {
             asked.push(r);
             (Verdict::Pass, String::new())
-        });
+        }, |_, _| {});
         assert_eq!(stopped, None);
         assert!(!asked.contains(&Rung::Probe));
         assert!(asked.contains(&Rung::Touched));
@@ -517,6 +565,7 @@ mod tests {
                 Step { rung: Rung::Touched, verdict: Verdict::NotRun, seconds: 0, command: "keel suite --touched ROOT".into() },
             ],
             stopped_at: Some(Rung::Clippy),
+            in_flight: None,
         };
         let text = render_receipt(&l);
         assert!(text.contains("stopped_at = \"clippy\""));
@@ -528,5 +577,80 @@ mod tests {
         assert!(text.contains("stopped_at = \"none\"") && text.contains("outcome = \"pass\""));
         assert_eq!(parse_receipt(&text).map(|p| p.stopped_at), Some(None));
         assert_eq!(parse_receipt("not a receipt"), None);
+    }
+
+    /// issue565, the D0388 pair. Known-positive: a ladder with a rung in flight renders `outcome =
+    /// "running"`, names the rung, carries only the rungs finished so far and is not green - so a
+    /// reader mid-run cannot take it for a verdict. Known-negative: the same steps with nothing in
+    /// flight render the verdict. A receipt written before the running form (no `running` key) parses
+    /// as finished, so the last landed receipt is still readable.
+    #[test]
+    fn a_receipt_mid_run_says_running_and_a_finished_one_says_its_verdict() {
+        let done = vec![Step { rung: Rung::Validate, verdict: Verdict::Pass, seconds: 1, command: "keel gate validate .".into() }];
+        let running = Ladder { head: "9703282".into(), at: 1_789_478_355, seconds: 1, steps: done, stopped_at: None, in_flight: Some(Rung::Guard) };
+        let text = render_receipt(&running);
+        assert!(text.contains("outcome = \"running\"") && text.contains("running = \"guard\""), "{text}");
+        assert!(!text.contains("outcome = \"pass\""));
+        assert_eq!(text.matches("\n[[rung]]").count(), 1, "only the rungs finished so far");
+        let back = parse_receipt(&text).expect("a running receipt parses");
+        assert_eq!(back, running);
+        assert!(!back.green(), "a running ladder is not green yet");
+        let finished = Ladder { in_flight: None, ..running };
+        assert_eq!(finished.outcome(), "pass");
+        assert!(render_receipt(&finished).contains("outcome = \"pass\"\nstopped_at = \"none\"\nrunning = \"none\""));
+        let legacy = "head = \"1e2ed25\"\nat = 5\nseconds = 61\noutcome = \"pass\"\nstopped_at = \"none\"\n";
+        assert_eq!(parse_receipt(legacy).map(|l| (l.in_flight, l.green())), Some((None, true)));
+    }
+
+    /// issue565's control, D0047: the running form was added per receipt three times (issue399 suite,
+    /// issue468 touched, now verify) and the file left out was the one that fired. This census reads
+    /// every module in the crate that writes a `.keel/metrics/*-receipt.toml` with an `outcome`, and
+    /// fails for one that never renders `running` - a fourth such receipt cannot ship without it.
+    #[test]
+    fn every_receipt_writer_with_an_outcome_renders_a_running_form() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let sources: Vec<(String, String)> = std::fs::read_dir(&src)
+            .expect("src listing")
+            .map(|e| e.expect("entry").path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("rs"))
+            .map(|p| (p.file_name().expect("name").to_string_lossy().into_owned(), std::fs::read_to_string(&p).expect("read")))
+            .collect();
+        let (writers, missing) = receipt_writer_census(&sources);
+        assert_eq!(writers, ["suite.rs", "touched.rs", "verify.rs"], "the census is the three receipts; a new one joins this list AND renders running");
+        assert!(missing.is_empty(), "receipt writer(s) with no running form: {missing:?}");
+    }
+
+    /// The census predicate, probed both ways (D0388) before it is trusted on the crate: a module that
+    /// writes an `outcome` receipt and never says `running` is named (known-positive); one that renders
+    /// the word inside a format string is not (known-negative); a module with no receipt is not a writer.
+    #[test]
+    fn the_census_names_a_writer_without_running_and_passes_one_with_it() {
+        let sources = vec![
+            ("fourth.rs".to_owned(), "pub const RECEIPT: &str = \".keel/metrics/fourth-receipt.toml\";\nfn render() -> String { format!(\"outcome = \\\"{}\\\"\", \"pass\") }".to_owned()),
+            ("fine.rs".to_owned(), "pub const RECEIPT: &str = \".keel/metrics/fine-receipt.toml\";\nfn render() -> String { \"outcome = \\\"running\\\"\".to_owned() }".to_owned()),
+            ("bystander.rs".to_owned(), "fn outcome = running tests".to_owned()),
+        ];
+        let (writers, missing) = receipt_writer_census(&sources);
+        assert_eq!(writers, ["fine.rs", "fourth.rs"]);
+        assert_eq!(missing, ["fourth.rs"]);
+    }
+
+    /// (sorted writers, the writers among them with no `running` form). A writer is a module holding a
+    /// `.keel/metrics/*` RECEIPT constant and rendering an `outcome` key; the word counts as a Rust
+    /// literal (`"running"`) or inside a format string (`\"running\"`).
+    fn receipt_writer_census(sources: &[(String, String)]) -> (Vec<String>, Vec<String>) {
+        let mut writers = Vec::new();
+        let mut missing = Vec::new();
+        for (name, text) in sources {
+            if !(text.contains("RECEIPT: &str = \".keel/metrics/") && text.contains("outcome = ")) {
+                continue;
+            }
+            if !text.replace("\\\"", "\"").contains("\"running\"") {
+                missing.push(name.clone());
+            }
+            writers.push(name.clone());
+        }
+        writers.sort();
+        (writers, missing)
     }
 }
