@@ -2739,7 +2739,7 @@ fact("cliInForceDecision", _f477 if _d0477 else None, "the Decision's fields as 
 
 # --- D0477: the reader and the comparison in source, and the shared retired set
 _gr = read(_mh("guards") or "") or ""
-_lib = read(_mh("lib") or "") or ""
+_lib = read(_mh("lib", crate="keel-cli") or "") or ""
 # the reader moved from guards.rs to members/keel-schema/src/cli_facts.rs in sprint 717 (D0479: down into a leaf); the page reads it where it is
 _cf = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or ""
 _pcf = _fn_body(_cf, "parse_cli_facts") if _cf else ""
@@ -3136,8 +3136,8 @@ def _module_home(name):
 
 
 _view_mod = read(_module_home("view/mod") or "") or ""
-_guards_rs = read(os.path.join(_src, "guards.rs")) or ""
-_main_rs = read(os.path.join(_src, "main.rs")) or ""
+_guards_rs = read(_mh("guards") or "") or ""
+_main_rs = read(_mh("main", crate="keel-cli") or "") or ""
 _leaves = ["textscan", "ident", "done", "evidence", "suspect", "gitfacts", "binding"]
 _ups = ["reports", "priority"]
 _instr = read(os.path.join(REPO, ".tracking", "architecture", "engine-instruments.sysml")) or ""
@@ -3189,6 +3189,54 @@ fact("viewNoGuardSprint", {k: v for k, v in _s717.items() if k != "text"} | ({
      "Issue as for the others, with the resolver's EngineBuild position and whats-next rank; hookAsksIsLockedPath = `is_locked_path` "
      "inside `fn hook_pre_write` in keel-cli/src/main.rs (the finding is that it is absent).")
 
+# --- st126 / ProjectBusinessModularMembers: the Needs the Business gate asks the human to confirm, quoted from the record
+def _fields(body):
+    out = {}
+    for _m in re.finditer(r':>>\s*(\w+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([A-Za-z]+::[A-Za-z]+))\s*;', body):
+        out[_m.group(1)] = _m.group(2) if _m.group(2) is not None else _m.group(3)
+    return out
+
+
+_mm = read(os.path.join(REPO, ".tracking", "business", "modular-members.sysml")) or ""
+_mm_needs = []
+for _m in re.finditer(r"requirement\s+(\w+)\s*:\s*Need\s*\{(.*?)\n\s*\}", _mm, re.DOTALL):
+    _f = _fields(_m.group(2))
+    _mm_needs.append({"name": _m.group(1), "title": _f.get("title"), "statement": _f.get("statement"),
+                      "priority": (_f.get("priority") or "").split("::")[-1] or None,
+                      "source": (_f.get("source") or "").split("::")[-1] or None,
+                      "derivedFrom": re.findall(r"#DerivedFrom dependency from %s to (\w+);" % _m.group(1), _mm)})
+_mm_gate = re.search(r"verification\s+(\w+)\s*:\s*Test\s*\{(.*?)\n\s*\}", _mm, re.DOTALL)
+_mm_gate_name = _mm_gate.group(1) if _mm_gate else None
+_mm_gate_has_result = bool(_mm_gate and re.search(r":>>\s*verifiedBy\s*=\s*%s|judgedAgainst.*%s" % (_mm_gate_name, _mm_gate_name), _mm))
+_in = read(os.path.join(REPO, ".tracking", "intake", "intake-2026-09-14.sysml")) or ""
+_mm_stories = []
+for _m in re.finditer(r"part\s+(us\d+)\s*:\s*UserStory\s*\{(.*?)\n\s*\}", _in, re.DOTALL):
+    _f = _fields(_m.group(2))
+    if re.search(r"#DerivedFrom dependency from %s to st126;" % _m.group(1), _in):
+        _mm_stories.append({"name": _m.group(1), "title": _f.get("title"), "asA": _f.get("asA"), "iWant": _f.get("iWant"),
+                            "soThat": _f.get("soThat"), "implication": (_f.get("implication") or "").split("::")[-1] or None})
+_st126 = re.search(r"part st126\s*:\s*Statement\s*\{(.*?)\n\s*\}", _in, re.DOTALL)
+_st126_f = _fields(_st126.group(1)) if _st126 else {}
+fact("modularMembersNeeds", {
+    "needs": _mm_needs, "stories": _mm_stories,
+    "gate": {"name": _mm_gate_name, "method": (_fields(_mm_gate.group(2)).get("method") or "").split("::")[-1] if _mm_gate else None,
+             "hasResult": _mm_gate_has_result},
+    "statement": {"name": "st126", "saidBy": _st126_f.get("saidBy"), "saidAt": _st126_f.get("saidAt"), "text": _st126_f.get("text")},
+} if _mm_needs and _mm_stories and _st126 else None, "the Needs awaiting the human's word, their stories and the statement",
+     ".tracking/business/modular-members.sysml: every `requirement <name> : Need` block's title, statement, priority and source, "
+     "plus the `#DerivedFrom dependency from <need> to <story>;` lines naming it; the one `verification ... : Test` block is the "
+     "Business gate and `hasResult` is whether any TestResult in the file names it. .tracking/intake/intake-2026-09-14.sysml: "
+     "every UserStory with a `#DerivedFrom ... to st126;` edge, and st126's own fields, quoted.")
+
+# --- the authority-queue lens: which obligation kinds it enumerates; a confirmation gate awaiting a human is not among them
+ok, out = run([KEEL, "show", "authority-queue", "."], timeout=120)
+_aq_kinds = sorted(set(re.findall(r'"kind":\s*"([A-Za-z]+)"', out))) if ok else None
+fact("authorityQueueKinds", {"kinds": _aq_kinds, "listsConfirmationGates": bool(_aq_kinds and any("onfirmation" in k for k in _aq_kinds))} if _aq_kinds is not None else None,
+     "obligation kinds the lens enumerates",
+     "`keel show authority-queue .`: the distinct values of every `\"kind\"` field in the JSON; `listsConfirmationGates` is whether any "
+     "kind names a confirmation - a `method=confirmation` Test with no result (a Business gate) is a human obligation the lens does "
+     "not enumerate when this is false, so the decision page built from it has to carry that ask by hand." + ("" if ok else " lens failed: " + out))
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
@@ -3214,6 +3262,9 @@ DOC = {
 # stub before section 1 ran; a raise above rewrote it as failed; this is the one place `complete` becomes
 # true, and the stdout copy carries the same field so a redirected copy is checked the same way.
 DOC["complete"] = True
-finish_json(OUT_PATH, DOC)
-print(json.dumps(DOC, indent=2, sort_keys=False))
+# the files this instrument is made of: a reader refuses this answer once any of them changes (artefact.py, issue560)
+DOC = finish_json(OUT_PATH, DOC, sources=[os.path.abspath(__file__),
+                                          os.path.join(REPO, "scripts", "module_home.py"),
+                                          os.path.join(REPO, "scripts", "artefact.py")])
+print(json.dumps(DOC, indent=2, sort_keys=False))   # the same document the file holds, instrument hashes included
 

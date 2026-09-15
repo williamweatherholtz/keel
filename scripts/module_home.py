@@ -63,14 +63,25 @@ def src_dirs(root: str | None = None) -> list[str]:
     return [os.path.join(c, "src") for c in crate_dirs(root) if os.path.isdir(os.path.join(c, "src"))]
 
 
-def module_home(name: str, root: str | None = None) -> str | None:
+# Every crate has one of these, so resolving one by name alone is ambiguous by construction (issue560:
+# facts.py called module_home("lib") and died at HEAD); a caller says which crate.
+EVERY_CRATE_HAS = ("lib", "main")
+
+
+def module_home(name: str, root: str | None = None, crate: str | None = None) -> str | None:
     """The file for module `name` ("guards", "view/mod", "view"): `<src>/<name>.rs`, else `<src>/<name>/mod.rs`.
 
-    Raises AmbiguousModule when two crates both hold it; returns None when none does.
+    `crate` (a crate directory's basename, "keel-cli" or "keel-model") restricts the search to that crate.
+    Raises AmbiguousModule when two crates both hold it, or when `name` is one every crate has and no crate
+    is named; returns None when none does.
     """
+    if name in EVERY_CRATE_HAS and crate is None:
+        raise AmbiguousModule(f"module {name!r} is in every crate - say which: module_home({name!r}, crate=<name>)")
     parts = name.split("/")
     hits = []
     for src in src_dirs(root):
+        if crate is not None and os.path.basename(os.path.dirname(src)) != crate:
+            continue
         for cand in (os.path.join(src, *parts) + ".rs", os.path.join(src, *parts, "mod.rs")):
             if os.path.isfile(cand):
                 hits.append(cand)
@@ -91,6 +102,8 @@ def rust_sources(root: str | None = None) -> list[str]:
 
 # --- the anchor scan: a path expression naming a .rs file under keel-cli/src -----------------------------------
 ANCHOR = re.compile(r'''join\([^)\n]*["']keel-cli["'],\s*["']src["'],\s*["'][\w/]+\.rs["']|/\s*["']keel-cli/src/[\w/]+\.rs["']''')
+# a resolver call naming a module every crate has, with no crate= - the shape that died at HEAD (issue560)
+BARE_EVERY_CRATE = re.compile(r'''(?:module_home|_mh|_module_home)\(\s*["'](?:lib|main)["']\s*(?:,\s*[^,)]*)?\)''')
 SCAN_GLOBS = ("scripts/**/*.py", ".engine/tools/*.py")
 
 
@@ -103,7 +116,7 @@ def anchored_lines(root: str | None = None) -> list[tuple[str, int, str]]:
             if os.path.abspath(path) == me:
                 continue
             for i, line in enumerate(open(path, encoding="utf-8", errors="replace"), 1):
-                if ANCHOR.search(line):
+                if ANCHOR.search(line) or (BARE_EVERY_CRATE.search(line) and "crate=" not in line):
                     out.append((os.path.relpath(path, root), i, line.rstrip()))
     return out
 
@@ -138,7 +151,23 @@ def probe() -> int:
             check("known-negative: a module in two crates is refused", False, "no AmbiguousModule raised")
         except AmbiguousModule as e:
             check("known-negative: a module in two crates is refused", "2 crates" in str(e), str(e)[:80])
-        check("rust_sources walks every crate's src", len(rust_sources(tmp)) == 4, f"{len(rust_sources(tmp))} files, expected 4")
+        check("known-positive: crate= picks one of the two",
+              module_home("both", tmp, crate="a") == os.path.join(tmp, "a", "src", "both.rs"), "both, crate=a -> a/src/both.rs")
+        check("known-negative: crate= naming a crate that lacks it is None", module_home("both", tmp, crate="zz") is None, "both, crate=zz -> None")
+        for crate in ("a", "members/b"):
+            open(os.path.join(tmp, crate, "src", "lib.rs"), "w").write("")
+        try:
+            module_home("lib", tmp)
+            check("known-negative: lib with no crate is refused before the tree is read", False, "no AmbiguousModule raised")
+        except AmbiguousModule as e:
+            check("known-negative: lib with no crate is refused before the tree is read", "say which" in str(e), str(e)[:80])
+        check("known-positive: lib with crate= resolves",
+              module_home("lib", tmp, crate="a") == os.path.join(tmp, "a", "src", "lib.rs"), "lib, crate=a -> a/src/lib.rs")
+        check("known-positive: the scan catches a bare lib resolution",
+              bool(BARE_EVERY_CRATE.search('_lib = read(_mh("lib") or "") or ""')), "_mh(\"lib\") is the shape that died (issue560)")
+        check("known-negative: the scan passes one that names its crate",
+              not (BARE_EVERY_CRATE.search('_mh("lib", crate="keel-cli")') and "crate=" not in '_mh("lib", crate="keel-cli")'), "crate= present")
+        check("rust_sources walks every crate's src", len(rust_sources(tmp)) == 6, f"{len(rust_sources(tmp))} files, expected 6 (only_a, deep/mod, both x2, lib x2)")
 
     # The scan's own pair, chosen before the tree is read: the line that broke, and its replacement.
     broke = 'REVERIFY_RS = os.path.join(ROOT, "keel-cli", "src", "reverify.rs")'

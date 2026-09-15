@@ -1555,4 +1555,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcScriptsResolveModuleHomesFromTheManifest to issue559;
+
+    part issue560 : Issue {
+        :>> id = "84db8eb3-5cb1-4323-8c75-18e9e2477e38";
+        :>> title = "facts.py died at HEAD on sprint 719's resolver edit, which was never run; the brief was built from a previous answer with no control comparing answer to instrument";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "scripts/exec_brief/facts.py at HEAD 4d38dd7 died before writing an answer: `_mh('lib')` raised AmbiguousModule (every one of the eleven crates has a lib.rs), and once that was named `_src` at the D0479 modgraph section was undefined - both introduced by sprint 719's edit that replaced twelve keel-cli/src anchors with resolver calls. facts.py was not run after the edit: the twenty-eighth publish was built from the run at 15a8330 and said so in its builder docstring, and no control compared the answer to the instrument that wrote it. Found when the twenty-ninth publish's facts run failed (2026-09-14, after cfb1cb8). Class: an instrument edited and not re-run leaves the previous answer standing as current - the D0387 refusal covers a run that DIES, not an instrument that CHANGED. Control: artefact.require_complete refuses an answer whose recorded instrument sources no longer hash, or whose tree is not HEAD; module_home refuses a bare every-crate module and its scan flags the call shape.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcInstrumentAnswersCarryTheirSourceHash to issue560;
+
+    part issue561 : Issue {
+        :>> id = "a8f88877-10ae-44ec-ba99-3aaeee88deae";
+        :>> title = "authority-queue does not list a confirmation gate awaiting the human; the Needs gate for st126 was invisible to the lens the decision page is built from";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel show authority-queue . enumerates decisionAcceptance and findingDisposition only (keel-cli/src/view/mod.rs, OBLIGATION_FROM; facts.py authorityQueueKinds read the JSON on 2026-09-14 at cfb1cb8 and listsConfirmationGates was false). The Business gate for st126's Needs, ProjectBusinessModularMembers::modularMembersNeedsAccept, is a method=confirmation Test with no result - it waits on the human and nothing else - and it is not in the queue the human is told to read or in the lens the decision page is built from (decision-surfacing step 1: the lens IS the assessment). The ask had to be placed on the page by hand, which is the failure that skill exists to prevent: an obligation the human cannot find is not one they have been asked to meet. Class: a human obligation kind the queue does not enumerate. Control: the kind is added to the lens (a view change, CR when worked) and facts.py reads it; until then the page carries it by hand and says so.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcAuthorityQueueListsConfirmationGates to issue561;
 }

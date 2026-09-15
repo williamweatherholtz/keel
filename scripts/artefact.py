@@ -23,6 +23,13 @@ Two shapes, chosen by whether the artefact can carry its own outcome:
 
 Both write through a temp file and rename, so a reader never sees a half file.
 
+A third refusal (issue560): an answer whose INSTRUMENT has changed since it was written is not current
+either. facts.py was edited twice on 2026-09-14 and never run; the page was built from the previous run's
+file and the edits died at HEAD the next time anyone ran it. `finish_json(path, doc, sources=[...])` records
+the sha256 of each source file the instrument is made of, and `require_complete` recomputes them and refuses
+on a mismatch, and refuses a `tree` that is not the HEAD the reader stands on - the answer names the tree it
+was read from, so a reader on another tree is reading yesterday.
+
     import sys; sys.path.insert(0, "scripts")
     from artefact import begin_json, finish_json, require_complete, claim
 
@@ -85,12 +92,55 @@ def begin_json(path: str, note: str = "") -> str:
     return path
 
 
-def finish_json(path: str, doc: dict) -> None:
-    """The completed answer. `complete` is set here and nowhere else."""
+def _sha256(path: str) -> str:
+    import hashlib
+    with io.open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _repo_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _head_short() -> str | None:
+    import subprocess
+    try:
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=_repo_root(), capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.strip() or None if r.returncode == 0 else None
+
+
+def finish_json(path: str, doc: dict, sources: list[str] | None = None) -> dict:
+    """The completed answer. `complete` is set here and nowhere else. Returns the document as written, so a
+    caller that also prints a copy prints the same one (facts.py's stdout copy is what the builder reads).
+
+    `sources`: the files the instrument is made of (absolute or repo-relative); their hashes are written under
+    `instrument.sources` so a reader can tell an answer the instrument has since been edited under (issue560).
+    """
     doc = dict(doc)
     doc["complete"] = True
     doc.pop("state", None)
+    if sources:
+        root = _repo_root()
+        doc["instrument"] = {"sources": [
+            {"path": os.path.relpath(os.path.abspath(s), root).replace(os.sep, "/"), "sha256": _sha256(s)} for s in sources]}
     _write_atomic(path, json.dumps(doc, indent=2) + "\n")
+    return doc
+
+
+def _instrument_drift(doc: dict) -> list[str]:
+    """Which recorded source files no longer hash as they did when the answer was written; missing counts."""
+    root = _repo_root()
+    out = []
+    for s in (doc.get("instrument") or {}).get("sources") or []:
+        p = os.path.join(root, s["path"])
+        try:
+            if _sha256(p) != s["sha256"]:
+                out.append(s["path"])
+        except OSError:
+            out.append(s["path"] + " (missing)")
+    return out
 
 
 def require_complete(path: str) -> dict:
@@ -107,6 +157,14 @@ def require_complete(path: str) -> dict:
         err = doc.get("error")
         sys.exit(f"artefact: {path} is not a completed answer - state {state!r}"
                  + (f", error: {err}" if err else "") + "; refusing to read it as current")
+    drift = _instrument_drift(doc)
+    if drift:
+        sys.exit(f"artefact: {path} was written by an instrument that has since changed ({', '.join(drift)}) - "
+                 "re-run it; an edited instrument's previous answer is not current (issue560)")
+    tree, head = doc.get("tree"), (_head_short() if os.environ.get("KEEL_ARTEFACT_ANY_TREE") is None else None)
+    if isinstance(tree, str) and tree and head and not (head.startswith(tree) or tree.startswith(head)):
+        sys.exit(f"artefact: {path} was read from tree {tree} and HEAD is {head} - re-run the instrument on this tree "
+                 "(KEEL_ARTEFACT_ANY_TREE=1 to read a historical answer on purpose)")
     return doc
 
 
@@ -183,6 +241,25 @@ def probe() -> int:
         _write_atomic(pre, json.dumps({"answer": 1}) + "\n")
         case("a pre-D0387 file with no `complete` field is refused", refused(pre))
         case("a missing file is refused", refused(os.path.join(d, "absent.json")))
+
+        # issue560: an answer whose instrument has since been edited is refused; one whose sources still hash is not
+        src = os.path.join(d, "instrument.py")
+        _write_atomic(src, "VERSION = 1\n")
+        ans = os.path.join(d, "hashed.json")
+        written = finish_json(ans, {"answer": 7}, sources=[src])
+        case("known-negative: an answer whose recorded sources still hash is accepted", require_complete(ans).get("answer") == 7)
+        case("known-positive: the returned document carries the hashes the file carries",
+             written.get("instrument") == json.load(open(ans, encoding="utf-8")).get("instrument") and bool(written.get("instrument")))
+        _write_atomic(src, "VERSION = 2\n")
+        case("known-positive: the same answer is refused once the instrument changed", refused(ans))
+        os.remove(src)
+        case("known-positive: ...and when a source is missing", refused(ans))
+        stale = os.path.join(d, "stale-tree.json")
+        _write_atomic(stale, json.dumps({"complete": True, "tree": "0000000"}) + "\n")
+        case("known-positive: an answer read from another tree is refused", refused(stale))
+        os.environ["KEEL_ARTEFACT_ANY_TREE"] = "1"
+        case("known-negative: ...unless the reader asks for a historical answer", require_complete(stale).get("tree") == "0000000")
+        del os.environ["KEEL_ARTEFACT_ANY_TREE"]
 
         page = os.path.join(d, "page.html")
         _write_atomic(page, "<h1>yesterday</h1>")
