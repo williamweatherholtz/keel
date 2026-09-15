@@ -123,6 +123,9 @@ pub struct Ladder {
     pub stopped_at: Option<Rung>,
     /// The rung running when this receipt was written; `None` is a finished ladder.
     pub in_flight: Option<Rung>,
+    /// The process that wrote the receipt (issue569): a second `keel verify` reads it and refuses
+    /// while that process is alive. `0` on a receipt from before the pid rode it.
+    pub pid: u32,
 }
 
 impl Ladder {
@@ -330,7 +333,7 @@ fn run_rung(rung: Rung, repo: &Path, exe: &Path, probe: Option<&(String, String)
 pub fn render_receipt(l: &Ladder) -> String {
     use std::fmt::Write as _;
     let mut s = format!(
-        "# verify receipt (D0476): the pre-commit ladder - validate, guard, clippy, the D0388 probe pair, the\n# touched run - in cost order, stopped at the first red. `stopped_at = \"none\"` is a green ladder; a rung\n# after the red is `not-run`; a probe rung with no --probe pair is `not-named`, never invented. On green\n# the touched receipt ({}) is the one keel land honours (D0474).\n# `outcome = \"running\"` is the stub rewritten before every rung (D0387, issue565): a ladder in flight, or\n# one that was killed - `running` names the rung, the [[rung]] blocks are the ones finished so far, and\n# `at` is when this file was WRITTEN (the launch, for the first stub) - never the previous run's verdict.\nhead = \"{}\"\nat = {}\nseconds = {}\noutcome = \"{}\"\nstopped_at = \"{}\"\nrunning = \"{}\"\n",
+        "# verify receipt (D0476): the pre-commit ladder - validate, guard, clippy, the D0388 probe pair, the\n# touched run - in cost order, stopped at the first red. `stopped_at = \"none\"` is a green ladder; a rung\n# after the red is `not-run`; a probe rung with no --probe pair is `not-named`, never invented. On green\n# the touched receipt ({}) is the one keel land honours (D0474).\n# `outcome = \"running\"` is the stub rewritten before every rung (D0387, issue565): a ladder in flight, or\n# one that was killed - `running` names the rung, the [[rung]] blocks are the ones finished so far, and\n# `at` is when this file was WRITTEN (the launch, for the first stub) - never the previous run's verdict.\nhead = \"{}\"\nat = {}\nseconds = {}\noutcome = \"{}\"\nstopped_at = \"{}\"\nrunning = \"{}\"\npid = {}\n",
         crate::touched::RECEIPT,
         l.head,
         l.at,
@@ -338,6 +341,7 @@ pub fn render_receipt(l: &Ladder) -> String {
         l.outcome(),
         l.stopped_at.map_or("none", Rung::name),
         l.in_flight.map_or("none", Rung::name),
+        l.pid,
     );
     for st in &l.steps {
         let code = match st.verdict {
@@ -383,7 +387,27 @@ pub fn parse_receipt(text: &str) -> Option<Ladder> {
         };
         steps.push(Step { rung, verdict, seconds: value_of(block, "seconds")?.parse().ok()?, command: value_of(block, "command")?.to_owned() });
     }
-    Some(Ladder { head, at, seconds, steps, stopped_at, in_flight })
+    let pid = value_of(head_block, "pid").and_then(|p| p.parse().ok()).unwrap_or(0);
+    Some(Ladder { head, at, seconds, steps, stopped_at, in_flight, pid })
+}
+
+/// One ladder at a time per tree (issue569).
+///
+/// The refusal line when the receipt on disk is a running stub whose writer `alive(pid)` holds
+/// for. `None` for a finished ladder, a receipt from before the pid rode it, or a writer that is
+/// gone - a killed ladder's stub is replaced, as issue565 intended.
+#[must_use]
+pub fn exclusive_refusal(text: &str, alive: impl Fn(u32) -> bool) -> Option<String> {
+    let l = parse_receipt(text)?;
+    let rung = l.in_flight?;
+    (l.pid != 0 && alive(l.pid)).then(|| {
+        format!(
+            "a ladder is already in flight - {RECEIPT} says running at rung {}, written by pid {} at {}. REFUSING to launch a second: two ladders reach the touched run together and race on its receipt and the tests' scratch dirs (issue569). Nothing was written; wait for that process to exit. A stub whose pid is gone is a killed ladder and is replaced.",
+            rung.name(),
+            l.pid,
+            l.at
+        )
+    })
 }
 
 /// Write the receipt, naming the failure on stderr; the ladder itself does not stop for it.
@@ -412,7 +436,8 @@ fn print_help() {
     println!("  with no pair is not-named. Exits as the failing rung did. --no-receipt forces guard and the");
     println!("  touched run to run everything. On green the touched receipt is the one keel land honours.");
     println!("  While a rung runs the receipt says outcome = \"running\" and names the rung (D0387): a reader");
-    println!("  mid-run waits; it never sees the previous run's verdict.");
+    println!("  mid-run waits; it never sees the previous run's verdict. The stub names its writer (pid): a second");
+    println!("  keel verify is refused (exit 2) while that process is alive; a dead writer's stub is replaced (issue569).");
 }
 
 /// `keel verify`.
@@ -446,6 +471,12 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
             return 2;
         }
     };
+    // issue569: the receipt on disk is READ before this ladder writes its first stub. A live
+    // ladder's stub refuses this launch - two ladders would reach the touched run together.
+    if let Some(line) = exclusive_refusal(&std::fs::read_to_string(repo.join(RECEIPT)).unwrap_or_default(), crate::touched::pid_alive) {
+        eprintln!("keel verify: {line}");
+        return 2;
+    }
     let forced = crate::receipt::forced(args);
     let head = crate::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
     let started = Instant::now();
@@ -458,10 +489,10 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         // issue565: the receipt says `running` from before the first rung starts, so a reader mid-run
         // (the D0425 verifier) waits instead of taking the previous run's verdict for this one.
         |so_far, rung| {
-            write_receipt(repo, &Ladder { head: head.clone(), at: now_secs(), seconds: started.elapsed().as_secs(), steps: so_far.to_vec(), stopped_at: None, in_flight: Some(rung) });
+            write_receipt(repo, &Ladder { head: head.clone(), at: now_secs(), seconds: started.elapsed().as_secs(), steps: so_far.to_vec(), stopped_at: None, in_flight: Some(rung), pid: std::process::id() });
         },
     );
-    let ladder = Ladder { head, at: now_secs(), seconds: started.elapsed().as_secs(), steps, stopped_at, in_flight: None };
+    let ladder = Ladder { head, at: now_secs(), seconds: started.elapsed().as_secs(), steps, stopped_at, in_flight: None, pid: std::process::id() };
     write_receipt(repo, &ladder);
     for st in &ladder.steps {
         println!("  {:<9} {:<12} {:>5} s", st.rung.name(), st.verdict.label(), st.seconds);
@@ -480,7 +511,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{climb, own_args, parse_probe, parse_receipt, render_receipt, Ladder, Rung, Step, Verdict};
+    use super::{climb, exclusive_refusal, own_args, parse_probe, parse_receipt, render_receipt, Ladder, Rung, Step, Verdict};
 
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_owned()).collect()
@@ -566,6 +597,7 @@ mod tests {
             ],
             stopped_at: Some(Rung::Clippy),
             in_flight: None,
+            pid: 4242,
         };
         let text = render_receipt(&l);
         assert!(text.contains("stopped_at = \"clippy\""));
@@ -587,9 +619,10 @@ mod tests {
     #[test]
     fn a_receipt_mid_run_says_running_and_a_finished_one_says_its_verdict() {
         let done = vec![Step { rung: Rung::Validate, verdict: Verdict::Pass, seconds: 1, command: "keel gate validate .".into() }];
-        let running = Ladder { head: "9703282".into(), at: 1_789_478_355, seconds: 1, steps: done, stopped_at: None, in_flight: Some(Rung::Guard) };
+        let running = Ladder { head: "9703282".into(), at: 1_789_478_355, seconds: 1, steps: done, stopped_at: None, in_flight: Some(Rung::Guard), pid: 4242 };
         let text = render_receipt(&running);
         assert!(text.contains("outcome = \"running\"") && text.contains("running = \"guard\""), "{text}");
+        assert!(text.contains("\npid = 4242\n"), "the stub names its writer (issue569): {text}");
         assert!(!text.contains("outcome = \"pass\""));
         assert_eq!(text.matches("\n[[rung]]").count(), 1, "only the rungs finished so far");
         let back = parse_receipt(&text).expect("a running receipt parses");
@@ -599,7 +632,38 @@ mod tests {
         assert_eq!(finished.outcome(), "pass");
         assert!(render_receipt(&finished).contains("outcome = \"pass\"\nstopped_at = \"none\"\nrunning = \"none\""));
         let legacy = "head = \"1e2ed25\"\nat = 5\nseconds = 61\noutcome = \"pass\"\nstopped_at = \"none\"\n";
-        assert_eq!(parse_receipt(legacy).map(|l| (l.in_flight, l.green())), Some((None, true)));
+        assert_eq!(parse_receipt(legacy).map(|l| (l.in_flight, l.green(), l.pid)), Some((None, true, 0)));
+    }
+
+    fn stub_by(pid: u32, in_flight: Option<Rung>) -> String {
+        render_receipt(&Ladder { head: "9703282".into(), at: 1_789_478_355, seconds: 1, steps: vec![], stopped_at: None, in_flight, pid })
+    }
+
+    /// issue569 known-positive, chosen before the tree is read: the receipt says a rung is running
+    /// and names THIS process as its writer - alive by construction - so a second `keel verify` is
+    /// refused with a line naming the rung, the pid and the stub's `at`, through the real liveness read.
+    #[test]
+    fn a_second_ladder_is_refused_while_the_stub_writer_is_alive() {
+        let me = std::process::id();
+        let line = exclusive_refusal(&stub_by(me, Some(Rung::Clippy)), crate::touched::pid_alive).expect("refused: the writer is alive");
+        assert!(line.contains("rung clippy") && line.contains(&format!("pid {me} at 1789478355")), "{line}");
+        assert!(line.contains("REFUSING") && line.contains("issue569"), "{line}");
+    }
+
+    /// issue569 known-negative: a running stub whose writer is gone (a pid no process holds), a
+    /// finished receipt, and a receipt from before the pid rode it all refuse nothing - the launch
+    /// proceeds and the stub is replaced.
+    #[test]
+    fn a_stub_whose_writer_is_gone_is_replaced() {
+        let mut child = if cfg!(windows) { std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn() } else { std::process::Command::new("true").spawn() }.expect("spawn a short-lived child");
+        let gone = child.id();
+        let _ = child.wait();
+        assert_eq!(exclusive_refusal(&stub_by(gone, Some(Rung::Guard)), crate::touched::pid_alive), None, "a dead writer's stub is replaced (pid {gone})");
+        assert_eq!(exclusive_refusal(&stub_by(7, Some(Rung::Guard)), |_| false), None);
+        assert_eq!(exclusive_refusal(&stub_by(7, None), |_| true), None, "a finished ladder is not in flight");
+        let legacy = "head = \"1e2ed25\"\nat = 5\nseconds = 61\noutcome = \"running\"\nstopped_at = \"none\"\nrunning = \"guard\"\n";
+        assert_eq!(exclusive_refusal(legacy, |_| true), None, "a stub from before the pid rode it names no writer");
+        assert_eq!(exclusive_refusal("", |_| true), None, "no receipt, no refusal");
     }
 
     /// issue565's control, D0047: the running form was added per receipt three times (issue399 suite,

@@ -1676,4 +1676,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcUnitTestScratchIsPerProcess to issue570;
+
+    part issue571 : Issue {
+        :>> id = "570392be-db47-47df-af75-9ea6a4844140";
+        :>> title = "The D0388 probe pair reaches keel verify through the verifier's transcription, and twice in two sprints the transcription was wrong";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The D0388 probe pair reaches `keel verify --probe` through the VERIFIER's transcription of the dispatch, and twice in two sprints the transcription was wrong. Sprint 724's first dispatch named the bare checker runs (the positive exits 1 by design, so the ladder stopped at the probe rung); sprint 725's first verifier passed the two TEST NAMES (`touched::tests::a_second_launch_is_refused_while_the_stub_writer_is_alive`) as the two sides instead of the two `cargo test ... -- <name>` command lines the dispatch spelled out, so the probe rung tried to execute a test path as a program (exit 2, `.keel/metrics/verify-receipt.toml` rung `probe`, command `touched::tests::... ; touched::tests::...`). Each cost one full re-dispatch (validate, guard, clippy re-run; the touched run never reached) and the receipt reported a red no check produced. The pair is the primary's fact - it chose the check and the two cases before reading the tree - yet it travels as prose a haiku retypes into a shell argument with commas, quotes and `--` in it. A pair the primary WRITES to a file (`--probe-from FILE`, two lines, positive then negative; the receipt's rung row names the file and its two lines) and the verifier only NAMES removes the transcription: the dispatch slot becomes a path, and a file with other than two non-empty lines is refused at parse the way `--probe a,` is today.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcProbePairTravelsInAFile to issue571;
 }

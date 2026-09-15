@@ -135,7 +135,7 @@ with the ladder's `keel verify:` summary line). When `stopped_at` is `none` or `
 |---|---|---|
 | `outcome` | is not `"running"` | the stub written at launch says `running`; a killed run leaves it |
 | `at` | > the epoch in `verify-launch.epoch` | otherwise this is the PREVIOUS run's receipt; sprint 661 was recorded on one 46 minutes stale |
-| `stems` | == the sorted set of `<stem>` for every changed `keel-cli/src/<stem>.rs` (`git diff --name-only origin/main -- keel-cli/src` plus untracked) | the receipt must be over THIS change set |
+| `stems` | == the sorted set of `<stem>` for every changed `keel-cli/src/<stem>.rs` (`git diff --name-only origin/main -- keel-cli/src` plus untracked), PLUS `init` when any path under `.engine/` changed or is untracked (`git status --short -- .engine`): that tree is compiled into the binary, so `keel-cli/src/touched.rs` `embedded_stem` attributes it to the tests that run `keel init` (issue530) | the receipt must be over THIS change set |
 | `lib` | `true` whenever any `keel-cli/src` path changed | the lib run is where pass-alone/fail-together tests show (issue459) |
 | `passed` / `failed` / `failing` | copied verbatim | the recorder's `--evidence` quotes these |
 | `ran` / `skipped` | together they are the set; `skipped` names only binaries with an `[[observed]]` row at `code_key` (and `tree_key` when in `self_reading`) | a skipped binary was observed green at this content by an earlier run (D0474) - report it as skipped, never as passed by this run |

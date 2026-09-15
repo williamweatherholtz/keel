@@ -227,6 +227,8 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         println!("  The set runs under cargo-nextest, binaries in parallel, and the receipt carries every test's");
         println!("  duration ([[timing]], slowest first); the harness = false cucumber binaries run under cargo test");
         println!("  in a second invocation. Without nextest the whole set runs that way and `runner` says so (D0475).");
+        println!("  One touched run at a time per tree: the running stub names its writer (pid) and a second launch is");
+        println!("  refused (exit 2, nothing written) while that process is alive; a dead writer's stub is replaced (issue569).");
         return 0;
     }
     if args.iter().take_while(|a| *a != "--").any(|a| a == "--touched") {

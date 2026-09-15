@@ -160,7 +160,9 @@ Change Request cross-cuts and is itself frozen.
   under `cargo test`; no nextest = the whole set serial, and the receipt's `runner` says so. `[[timing]]` rows name the
   long pole (issue536). A full set takes 7–15 min: run `git commit` DETACHED, then read
   `git status -sb` and the CI conclusion (issue453). Receipts (`.keel/metrics/*-receipt.toml`) say `running`
-  while cargo runs; read `at`/`stems`/`head` after exit (D0387).
+  while cargo runs; read `at`/`stems`/`head` after exit (D0387). The stub names its writer's `pid`: a second
+  `suite --touched` / `verify` launch is REFUSED (exit 2, nothing written) while that pid is alive; a dead
+  writer's stub is replaced (D0493). A changed path under `.engine/` contributes the stem `init` (issue530).
 - `keel suite` gates nothing; it writes a receipt (D0356).
 
 ---

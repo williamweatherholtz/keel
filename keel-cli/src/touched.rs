@@ -537,7 +537,9 @@ fn now_secs() -> u64 {
 #[derive(Debug, Clone, Copy)]
 pub enum Phase<'a> {
     NotRun,
-    Running { started: u64, log: &'a Path, skipped: &'a [String] },
+    /// `pid` is the process writing the stub (issue569): a second launch reads it and refuses while
+    /// that process is alive, so two runs never race on this receipt or on the tests' scratch dirs.
+    Running { started: u64, log: &'a Path, skipped: &'a [String], pid: u32 },
     Done(&'a Run),
     /// The working tree's line endings disagree with the attribute (issue478): cargo never started,
     /// and the receipt names the paths in place of a verdict.
@@ -580,10 +582,11 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
         // this receipt): a reader during the run - or after a killed one - sees `running` with THIS
         // run's set and log, never the last run's pass over a different change set. The verifier of
         // sprint 661 read the prior run's 546/0 as its own while its own run was failing two lib tests.
-        Phase::Running { started, log, skipped } => {
+        Phase::Running { started, log, skipped, pid } => {
             let _ = write!(
                 s,
-                "outcome = \"running\"\npassed = 0\nfailed = 0\nfailing = []\nskipped = [{}]\nseconds = {}\nlog = \"{}\"\n",
+                "outcome = \"running\"\npid = {}\npassed = 0\nfailed = 0\nfailing = []\nskipped = [{}]\nseconds = {}\nlog = \"{}\"\n",
+                pid,
                 list(skipped),
                 at.saturating_sub(started),
                 log.to_string_lossy().replace('\\', "/")
@@ -630,6 +633,74 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
         }
     }
     s
+}
+
+/// Is `pid` a process alive on this host right now? `0` is never alive (an absent or unparsed pid).
+///
+/// Windows asks `tasklist` for exactly that pid; a Unix host reads `/proc/<pid>` where there is a
+/// `/proc`, else `kill -0`. The caller's own pid is alive - the known-positive of issue569's pair.
+#[must_use]
+pub fn pid_alive(pid: u32) -> bool {
+    pid != 0 && pid_alive_host(pid)
+}
+
+#[cfg(windows)]
+fn pid_alive_host(pid: u32) -> bool {
+    let filter = format!("PID eq {pid}");
+    std::process::Command::new("tasklist")
+        .args(["/FI", &filter, "/NH", "/FO", "CSV"])
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains(&format!("\",\"{pid}\",\"")))
+}
+
+#[cfg(not(windows))]
+fn pid_alive_host(pid: u32) -> bool {
+    let proc_dir = Path::new("/proc");
+    if proc_dir.is_dir() {
+        return proc_dir.join(pid.to_string()).is_dir();
+    }
+    std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().map(|s| s.success()).unwrap_or(false)
+}
+
+/// A run in flight as the receipt on disk states it.
+///
+/// The D0387 `running` stub with the `pid` that wrote it, its `at` and its log. `None` for a
+/// finished receipt, an absent one, or a stub from before the pid rode it (which names no writer
+/// to wait for and is replaced as before).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveRun {
+    pub pid: u32,
+    pub at: u64,
+    pub log: String,
+}
+
+#[must_use]
+pub fn live_run_in(text: &str) -> Option<LiveRun> {
+    let value = |key: &str| text.lines().find_map(|l| l.strip_prefix(key).and_then(|r| r.trim_start().strip_prefix('=')).map(|v| v.trim().trim_matches('"')));
+    if value("outcome")? != "running" {
+        return None;
+    }
+    Some(LiveRun { pid: value("pid")?.parse().ok()?, at: value("at")?.parse().ok()?, log: value("log").unwrap_or_default().to_owned() })
+}
+
+/// One touched run at a time per tree (issue569).
+///
+/// The refusal line when `text` - the receipt on disk - says a run is in flight and `alive(pid)`
+/// holds for the process that wrote it. `None` when nothing is in flight or the writer is gone: a
+/// killed run's stub is replaced, as D0387 intended.
+///
+/// Sprint 724's verifier launched the ladder twice two seconds apart; the two runs raced on this
+/// receipt's rename and on the lib tests' fixed scratch dirs, and the receipt reported five reds no
+/// single run produces. The launch is where that is refused, before anything is written or started.
+#[must_use]
+pub fn exclusive_refusal(text: &str, alive: impl Fn(u32) -> bool) -> Option<String> {
+    let live = live_run_in(text)?;
+    alive(live.pid).then(|| {
+        format!(
+            "a touched run is already in flight - {RECEIPT} says running, written by pid {} at {} (log {}). REFUSING to launch a second: two runs race on the receipt and on the tests' scratch dirs (issue569). Nothing was written and cargo was not started; wait for that process to exit. A stub whose pid is gone is a killed run and is replaced.",
+            live.pid, live.at, live.log
+        )
+    })
 }
 
 fn write_receipt(repo: &Path, t: &Touched, phase: Phase<'_>, memo: &Memo) {
@@ -887,6 +958,11 @@ fn run_member_libs(repo: &Path, runner: &Runner, members: &[String]) -> Result<M
 /// When the metrics directory cannot be created or cargo cannot be started at all.
 pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
     let none = || Run { passed: 0, failed: 0, failing: vec![], seconds: 0, cargo_ok: true, log: PathBuf::new(), ran: vec![], skipped: vec![], runner: String::new(), timings: vec![] };
+    // issue569: the receipt on disk is READ before this run writes anything. A live run's stub
+    // refuses this launch; nothing below runs, so neither receipt nor scratch dir is raced.
+    if let Some(line) = exclusive_refusal(&std::fs::read_to_string(repo.join(RECEIPT)).unwrap_or_default(), pid_alive) {
+        return Err(line);
+    }
     if t.nothing_to_run() {
         write_receipt(repo, t, Phase::NotRun, &carry(repo));
         return Ok(none());
@@ -909,7 +985,7 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
     }
     let started = now_secs();
     let log = metrics.join(format!("touched-{started}.log"));
-    write_receipt(repo, t, Phase::Running { started, log: &log, skipped: &skipped }, &Memo { keys: keys.clone(), observed: prior.clone() });
+    write_receipt(repo, t, Phase::Running { started, log: &log, skipped: &skipped, pid: std::process::id() }, &Memo { keys: keys.clone(), observed: prior.clone() });
     let manifest = repo.join("keel-cli").join("Cargo.toml");
     let runner = nextest_version(repo).map_or_else(
         || {
@@ -1136,7 +1212,7 @@ pub fn cmd(repo: &Path, force: bool) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        compute, embedded_stem, failing_binaries, merge_observed, module_stem, names_stem, parse_observed, render_receipt, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests, Memo, Observed,
+        compute, embedded_stem, exclusive_refusal, failing_binaries, live_run_in, merge_observed, module_stem, names_stem, parse_observed, pid_alive, render_receipt, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests, LiveRun, Memo, Observed,
         custom_harness_tests, is_unattributed_source, millis_of, parse_nextest, workspace_members, Phase, Run, Touched, LIB,
     };
     use crate::contentkey::ContentKeys;
@@ -1206,14 +1282,56 @@ mod tests {
     fn a_running_stub_is_not_a_verdict() {
         let log = std::path::PathBuf::from(".keel/metrics/touched-100.log");
         let skipped = vec!["orient_bdd".to_string()];
-        let text = render_receipt(&fixture(), "1234567", 103, Phase::Running { started: 100, log: &log, skipped: &skipped }, &Memo::default());
+        let text = render_receipt(&fixture(), "1234567", 103, Phase::Running { started: 100, log: &log, skipped: &skipped, pid: 4242 }, &Memo::default());
         assert!(text.contains("outcome = \"running\""), "{text}");
+        assert!(text.contains("pid = 4242"), "the stub names the process writing it (issue569): {text}");
         assert!(text.contains("passed = 0") && text.contains("failed = 0"), "{text}");
         assert!(text.contains("seconds = 3"), "{text}");
         assert!(text.contains("touched-100.log"), "{text}");
         assert!(text.contains("skipped = [\"orient_bdd\"]"), "the stub says what this run is not executing: {text}");
         assert!(text.contains("\"scaffold\"") && text.contains("lib = true"), "the stub carries the set it is running:\n{text}");
         assert!(!text.contains("\"pass\""), "{text}");
+        let live = live_run_in(&text).expect("a running stub reads back as a live run");
+        assert_eq!(live, LiveRun { pid: 4242, at: 103, log: ".keel/metrics/touched-100.log".into() });
+    }
+
+    fn running_stub_by(pid: u32) -> String {
+        let log = std::path::PathBuf::from(".keel/metrics/touched-100.log");
+        render_receipt(&fixture(), "1234567", 103, Phase::Running { started: 100, log: &log, skipped: &[], pid }, &Memo::default())
+    }
+
+    /// issue569 known-positive, chosen before the tree is read: the receipt says `running` with THIS
+    /// process's own pid - the writer is alive by construction - and a second launch is refused with a
+    /// line naming the pid and the stub's `at`. The liveness read is the real one (`pid_alive`).
+    #[test]
+    fn a_second_launch_is_refused_while_the_stub_writer_is_alive() {
+        let me = std::process::id();
+        let line = exclusive_refusal(&running_stub_by(me), pid_alive).expect("refused: the writer is alive");
+        assert!(line.contains(&format!("pid {me} at 103")), "{line}");
+        assert!(line.contains("REFUSING") && line.contains("issue569"), "{line}");
+        assert!(pid_alive(me), "this process is alive");
+        assert!(!pid_alive(0), "0 is never a live writer");
+    }
+
+    /// issue569 known-negative: a `running` stub whose pid no process holds is a killed run - the
+    /// launch proceeds and the stub is replaced, as D0387 intended. The pid is a child spawned and
+    /// waited on, so no process holds it when the stub is read; a finished receipt and a stub from
+    /// before the pid rode it refuse nothing either.
+    #[test]
+    fn a_stub_whose_writer_is_gone_is_replaced() {
+        let mut child = if cfg!(windows) { std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn() } else { std::process::Command::new("true").spawn() }.expect("spawn a short-lived child");
+        let gone = child.id();
+        let _ = child.wait();
+        assert!(!pid_alive(gone), "the child has exited: pid {gone}");
+        assert_eq!(exclusive_refusal(&running_stub_by(gone), pid_alive), None, "a dead writer's stub is replaced");
+        assert_eq!(exclusive_refusal(&running_stub_by(7), |_| false), None);
+        assert!(live_run_in(&running_stub_by(7)).is_some(), "the stub is read; only liveness clears it");
+        let finished = render_receipt(&fixture(), "1234567", 103, Phase::NotRun, &Memo::default());
+        assert_eq!(exclusive_refusal(&finished, |_| true), None, "a finished receipt is not a run in flight");
+        let before_pid = running_stub_by(7).replace("pid = 7\n", "");
+        assert_eq!(live_run_in(&before_pid), None, "a stub from before the pid rode it names no writer");
+        assert_eq!(exclusive_refusal(&before_pid, |_| true), None);
+        assert_eq!(exclusive_refusal("", |_| true), None, "no receipt, no refusal");
     }
 
     /// D0474 round trip: the receipt renders its keys and its `[[observed]]` table, and `parse_observed`
