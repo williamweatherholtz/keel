@@ -1,4 +1,4 @@
-// D0484 (PROPOSED — NOT YET ACCEPTED) — The build skill describes the workspace as its members, not as two crates
+// D0484 (status: the `status` field below is the truth) — The build skill describes the workspace as its members, not as two crates
 // Recorded via `keel record decision` (D0105 RMWX axis; issue054). Acceptance is a separate explicit
 // human gate (method=confirmation, D0106): flip status + add the d0484Accept event on sign-off.
 package Decision0484 {
@@ -14,11 +14,15 @@ package Decision0484 {
         :>> title = "The build skill describes the workspace as its members, not as two crates";
         :>> createdAt = "2026-09-14";
         :>> createdBy = "claudeFable5";
-        :>> status = DecisionStatus::proposed;
+        :>> status = DecisionStatus::accepted;
         :>> context = "The build skill (.engine/skills/build/SKILL.md) told the reader the Cargo workspace is two crates, keel-parser and keel-cli, compiled under deny(warnings). Sprint 714, the first D0479 extraction, added six leaf members under members/ (keel-perf, keel-git, keel-json, keel-actor, keel-schema, keel-github), each a library keel-cli re-exports under its old module path. A skill that names a layout the tree no longer has misleads the next builder about where a module lives and which crate a failing test belongs to. The skill file is a locked process definition (D0070), so even this doc-sync line needs a co-committed marked Decision (D0209 clause 2).";
         :>> decision = "The build skill's 'Workspace layout' paragraph names the members/ crates as a layer of the workspace - each a lib re-exported by keel-cli - alongside keel-parser and keel-cli, and says all of them compile under the same deny set. Nothing else in the skill changes: no step, gate, or output of the build process moves.";
         :>> rationale = "Doc-sync rides every change in the same commit (CLAUDE.md section 4); leaving the layout paragraph at two crates would fork the truth between the manifest and the skill. The change is descriptive: it follows the tree D0479 chartered rather than choosing a new process. It is marked process-change because the file is locked and the guard cannot tell a layout sentence from a step - the marker is what lets the guard stay text-level and strict. MEASURED: no command path changes - the paragraph is prose; sprint 714 ran the build gates once at 87085d2 (keel suite --touched: 851 passed, 0 failed) and the word gate in the decision text names none of them.";
         :>> consequences = "Later D0479 extractions that add members must touch the same paragraph, each under its own marked Decision or under a sprint chartered by an accepted marked Decision; that friction is the price of a locked skill surface and argues for the paragraph naming the pattern (members/ holds the D0479 members) rather than an enumerated list once the list grows.";
     }
     #DependsOn dependency from d0484 to d0479;
+
+    // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
+    verification d0484Accept : Test { :>> id = "c731e37f-4f90-4729-b186-166b7fed1523"; :>> method = VerificationMethod::confirmation; :>> procedureText = "Said in chat 2026-09-14 over the twenty-eighth publish of the decision brief, which carried fifteen held asks; one instruction covers the fourteen non-forks, d0484 among them. The fork d0466 is not covered - it needs an option letter and stays held. - their words, verbatim: “Accept all proposals. Proceed to design with needs, etc.” WARN: read-back - the quoted words do not name d0484 (D0201 B); recorded as given (D0423)."; }
+    part d0484AcceptR1 : TestResult { :>> id = "0fb7664d-e1be-4963-b8f9-e79c93c48350"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "d110d0a"; :>> judgedAt = "2026-09-14"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
 }

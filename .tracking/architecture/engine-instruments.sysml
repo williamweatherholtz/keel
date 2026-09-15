@@ -457,4 +457,24 @@ package EngineInstruments {
         :>> producesFeedback = fbModGraph;
     }
 
+    // moduleHome: scripts/module_home.py (D0479, sprint 719, issue559)
+    // KNOWN FAILURE MODES: it resolves a module by NAME against every workspace member's src, so two crates with a module of one name is refused (AmbiguousModule) rather than guessed, and a caller that wants one of them must say which crate; the anchor scan reads path EXPRESSIONS of two shapes (an os.path.join ending in keel-cli, src, x.rs and a pathlib / operator with a keel-cli/src/x.rs literal), so an anchor built any other way (a bare string constant later joined, a format string) passes the scan - a miss, never a false positive; the member list is read from the ROOT manifest only, so a nested workspace is not seen.
+    // PUBLISHED TO: the CI script-probe step (D0394) and, under dcScriptProbesRunInTheVerifyLadder, the verify rung that will carry it; the DoD of dcScriptsResolveModuleHomesFromTheManifest (its D0388 pair)
+    part fbModuleHome : Feedback {
+        :>> id = "b942f668-f53d-4321-97a4-6790373bf9c3";
+        :>> title = "whether every script that opens a Rust source file resolves its home from Cargo.toml [workspace] members, and none anchors keel-cli/src by hand - the Python side of issue557";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> sensedFrom = cpDeliverable;
+        :>> reportsTo = ctAgent;
+    }
+    part snModuleHome : Sensor {
+        :>> id = "a51b69d9-ef54-402e-a019-64440690fbdc";
+        :>> title = "moduleHome";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> mechanism = "scripts/module_home.py";
+        :>> measures = "where a named Rust module lives among the workspace members (a path, None, or a refusal naming both homes), and under --probe: a fixture workspace of two crates resolved as the D0388 pair, the two anchor shapes caught and the resolver call passed, and the real tree scanned for any .rs anchor under keel-cli/src in scripts/**/*.py or .engine/tools/*.py - exit 1 on any";
+        :>> determinism = Determinism::tree;
+        :>> reading = SensorReading::verdict;
+        :>> producesFeedback = fbModuleHome;
+    }
 }

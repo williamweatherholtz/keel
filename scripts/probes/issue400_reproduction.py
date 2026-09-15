@@ -30,6 +30,8 @@ import subprocess
 import sys
 
 REPO = os.getcwd()
+sys.path.insert(0, os.path.join(REPO, "scripts"))
+from module_home import module_home  # noqa: E402  (issue559: a module home is resolved, never anchored)
 FAILS = 0
 
 
@@ -42,7 +44,7 @@ def verdict(name: str, ok: bool, detail: str) -> None:
 
 # ------------------------------------------------------------------ (1) the guard-test census
 def guard_names() -> list[str]:
-    src = open(os.path.join(REPO, "keel-cli", "src", "guards.rs"), encoding="utf-8").read()
+    src = open(module_home("guards", REPO), encoding="utf-8").read()
     m = re.search(r"pub const GUARD_NAMES: \[&str; \d+\] =\s*\[([^\]]+)\];", src)
     return re.findall(r'"([a-z0-9-]+)"', m.group(1))
 

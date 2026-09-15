@@ -67,8 +67,8 @@ pub struct GuardProof {
 /// The census over one tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofCensus {
-    /// Whether `keel-cli/tests` or `keel-cli/src` existed under the root. Without a corpus every
-    /// guard is UNDETERMINED and the surface says why rather than listing seventy gaps.
+    /// Whether `keel-cli/tests` or any workspace member's `src` existed under the root. Without a
+    /// corpus every guard is UNDETERMINED and the surface says why rather than listing seventy gaps.
     pub corpus_present: bool,
     pub test_functions: usize,
     pub guards: Vec<GuardProof>,
@@ -117,7 +117,7 @@ impl ProofCensus {
         let share = if self.corpus_present {
             format!("{} of {total} enforced guards have a demonstrated catch; {} shown only passing; {} named in no test body", self.proven(), self.unproven(), self.undetermined())
         } else {
-            format!("no test corpus under this root (keel-cli/tests, keel-cli/src) - all {total} guards UNDETERMINED here; run at the engine's own root")
+            format!("no test corpus under this root (keel-cli/tests, the workspace members' src) - all {total} guards UNDETERMINED here; run at the engine's own root")
         };
         Json::Obj(vec![
             ("note".to_string(), Json::s("PROOF is the third state beside DECLARED and ARMED (D0360): PROVEN = a test body names the guard and asserts a failure (it was shown catching); UNPROVEN = named only in tests that assert no failure (shown passing, never catching); UNDETERMINED = named in no test body, so the textual heuristic cannot tell. An indicator, not a gate (D0088): the lists are the actionable output, the share is context. Same heuristic as .engine/tools/guard_proof_census.py; the two must agree on one tree.")),
@@ -179,20 +179,25 @@ pub fn census_of_bodies(bodies: &[(String, String, String)], guard_names: &[&str
     ProofCensus { corpus_present, test_functions: bodies.len(), guards }
 }
 
-/// Every test body in the corpus: `keel-cli/tests/*.rs` (one level) and `keel-cli/src/**/*.rs`.
-/// The bool says whether either directory existed.
+/// Every test body in the corpus: `keel-cli/tests/*.rs` (one level) and `src/**/*.rs` under every
+/// `[workspace] members` entry of the root manifest (issue559: sprint 718 moved the write API's and
+/// the census's tests into members/, and a corpus fixed on `keel-cli/src` stopped seeing them). A root
+/// with no manifest falls back to `keel-cli/src` alone. The bool says whether any directory existed.
 fn corpus_bodies(root: &Path) -> (Vec<(String, String, String)>, bool) {
     let tests = root.join("keel-cli").join("tests");
-    let src = root.join("keel-cli").join("src");
     let mut files: Vec<PathBuf> = Vec::new();
     let mut present = false;
     if let Ok(rd) = std::fs::read_dir(&tests) {
         present = true;
         files.extend(rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "rs")));
     }
-    if src.is_dir() {
-        present = true;
-        walk_rs(&src, &mut files);
+    let members = std::fs::read_to_string(root.join("Cargo.toml")).map(|m| crate::touched::workspace_members(&m)).unwrap_or_default();
+    let crates: Vec<PathBuf> = if members.is_empty() { vec![root.join("keel-cli")] } else { members.iter().map(|m| root.join(m)).collect() };
+    for src in crates.iter().map(|c| c.join("src")) {
+        if src.is_dir() {
+            present = true;
+            walk_rs(&src, &mut files);
+        }
     }
     files.sort();
     let mut out = Vec::new();
@@ -456,6 +461,28 @@ mod tests {
         assert_eq!(bodies.len(), 2);
         assert!(bodies[0].1.contains("doc-sync") && !bodies[0].1.contains("actors"));
         assert_eq!(bodies[1].1, "{\n    open");
+    }
+
+    #[test]
+    fn the_corpus_is_every_workspace_member_not_keel_cli_alone() {
+        // Known-positive, chosen before the tree is read: a member's test body names the guard and
+        // asserts a failure, so the guard is PROVEN only if members/ is walked. Known-negative: with no
+        // root manifest the same tree falls back to keel-cli/src and the guard is UNDETERMINED.
+        let dir = std::env::temp_dir().join(format!("keel-proof-members-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let member_src = dir.join("members").join("keel-write").join("src");
+        std::fs::create_dir_all(dir.join("keel-cli").join("src")).unwrap();
+        std::fs::create_dir_all(&member_src).unwrap();
+        std::fs::write(dir.join("keel-cli").join("src").join("lib.rs"), "fn nothing() {}\n").unwrap();
+        std::fs::write(member_src.join("reverify.rs"), POSITIVE).unwrap();
+        let without_manifest = census_over(&dir, &["doc-sync"]);
+        assert_eq!(without_manifest.undetermined(), 1, "no manifest: keel-cli/src alone, and it names nothing");
+        std::fs::write(dir.join("Cargo.toml"), "[workspace]\nmembers = [\n    \"members/keel-write\",\n    \"keel-cli\",\n]\n").unwrap();
+        let with_manifest = census_over(&dir, &["doc-sync"]);
+        assert_eq!(with_manifest.proven(), 1, "the member's test body is in the corpus");
+        assert_eq!(with_manifest.test_functions, 1);
+        assert_eq!(with_manifest.guards[0].proven_by, vec!["reverify.rs::the_guard_catches_it".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

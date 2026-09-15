@@ -25,10 +25,12 @@ from pathlib import Path
 # same three states in the binary (dcControlProofStateIsComputed, D0360); this script is the independent
 # reference the binary is held against - run both on one tree and the counts must agree.
 REPO = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "scripts"))
+from module_home import module_home, rust_sources  # noqa: E402  (issue559: the corpus is every crate's src, not one)
 
 names_block = re.search(
     r"pub const GUARD_NAMES: \[&str; \d+\] =\s*(\[[^\]]*\]);",
-    (REPO / "keel-cli/src/guards.rs").read_text(encoding="utf-8"),
+    Path(module_home("guards", str(REPO))).read_text(encoding="utf-8"),
     re.S,
 )
 guards = re.findall(r'"([a-z0-9-]+)"', names_block.group(1))
@@ -53,7 +55,7 @@ def test_bodies(text):
 
 
 bodies = []
-for src in list((REPO / "keel-cli/tests").glob("*.rs")) + list((REPO / "keel-cli/src").rglob("*.rs")):
+for src in list((REPO / "keel-cli/tests").glob("*.rs")) + [Path(p) for p in rust_sources(str(REPO))]:
     text = src.read_text(encoding="utf-8", errors="ignore")
     for fn, body in test_bodies(text):
         bodies.append((src.name, fn, body))

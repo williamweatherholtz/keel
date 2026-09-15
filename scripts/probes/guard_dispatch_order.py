@@ -43,7 +43,9 @@ import sys
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GUARDS_RS = os.path.join(ROOT, "keel-cli", "src", "guards.rs")
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from module_home import module_home  # noqa: E402  (issue559: a module home is resolved, never anchored)
+GUARDS_RS = module_home("guards")
 
 
 def makespan(durations, workers):

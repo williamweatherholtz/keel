@@ -1544,4 +1544,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRecordIssueRefusesANonResolverKind to issue558;
+
+    part issue559 : Issue {
+        :>> id = "30a0d4b9-b7cc-4495-ba12-4ece6090e63d";
+        :>> title = "Scripts anchored a module's home on keel-cli/src; sprint 718's move turned CI red after the push and left one census silently narrowed";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Scripts that open a Rust source file anchored its home on keel-cli/src, and sprint 718's move turned CI red after the push: scripts/probes/receipt_shape_census.py:53 joined ROOT with keel-cli/src/reverify.rs, reverify.rs had moved to members/keel-write/src, and the D0394 script-probe step failed at d110d0a with FileNotFoundError (run 34917362100). The sprint's standup line records that the script's docstring mention at line 14 followed the move; the constant at line 53 did not - two homes for one path in one file. The same anchor shape sat in eleven more lines: facts.py opened keel-cli/src/cli_facts.rs (moved to keel-schema earlier) under an except OSError that has been emitting cliFamilyCensus as null on every published brief since, plus five guards.rs and one lib.rs anchor and the local two-directory helper added in sprint 718; guard_dispatch_order.py and issue400_reproduction.py anchored guards.rs; .engine/tools/guard_proof_census.py anchored guards.rs and walked keel-cli/src alone, so the census that D0360 holds the binary against stopped seeing the test bodies that moved into members - and the binary's own corpus (control_proof.rs corpus_bodies) had the same fixed path, so the two agreed by being wrong the same way (55 named, 20 unnamed against a workspace corpus of 58 and 17). Every D0479 extraction moves more modules. This is the Python and census sibling of issue557 (Rust test anchors, resolved by dcOneRepoRootHelper): a module's home is a fact of Cargo.toml's member list and is resolved from it, never written into a script.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcScriptsResolveModuleHomesFromTheManifest to issue559;
 }

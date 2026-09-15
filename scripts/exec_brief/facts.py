@@ -24,6 +24,8 @@ from datetime import date, datetime, timedelta, timezone
 # ---------------------------------------------------------------- infrastructure
 
 REPO = os.getcwd()
+sys.path.insert(0, os.path.join(REPO, "scripts"))
+from module_home import module_home as _mh, AmbiguousModule as _AmbiguousModule  # noqa: E402  (issue559: no keel-cli/src anchors)
 # The binary is a COPY, never the build image: a running target/release/keel.exe blocks its own relink
 # (issue150), and this script ran it under a cargo build once (issue508). KEEL_BIN wins; then the
 # serve copy; the build image only when nothing else exists.
@@ -1389,8 +1391,11 @@ def _top_level_facts(src):
     return [(n, f, e, s) for n, f, e, s in _FACT_RX.findall(src) if f != "lens"]
 
 
+_cli_facts_home = _mh("cli_facts")
 try:
-    _cur_src = open(os.path.join(REPO, "keel-cli", "src", "cli_facts.rs"), encoding="utf-8").read()
+    if _cli_facts_home is None:
+        raise OSError("module cli_facts is in no workspace crate (scripts/module_home.py over Cargo.toml [workspace] members)")
+    _cur_src = open(_cli_facts_home, encoding="utf-8").read()
 except OSError as _e:
     _cur_src = None
     fact("cliFamilyCensus", None, "top-level verbs by family", _CENSUS_HOW.format(base=_D0399_BASE) +
@@ -1591,7 +1596,7 @@ fact("dominanceSweep", {
 # the record or the Decision's own RESEARCH line - never retyped.
 
 # --- D0465: the working-tree guards.rs - does the second authorising source exist, and how many keystone tests hold it
-_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_gr = read(_mh("guards") or "") or ""
 _kv = re.search(r"fn keystone_violations\((.*?)\) -> ", _gr)
 fact("keystoneCharterPath", {
     "acceptedChartersFn": bool(re.search(r"^\s*fn accepted_charters\(", _gr, re.M)),
@@ -2176,7 +2181,7 @@ fact("rejectVerdictDecision", {
 # --- D0470: the three layers in source - the refusal inside each verdict's lock, and the two command lists
 _wr = read(os.path.join(REPO, "members", "keel-write", "src", "write.rs")) or ""
 _cs = read(os.path.join(REPO, "keel-cli", "src", "view", "control_structure.rs")) or ""
-_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_gr = read(_mh("guards") or "") or ""
 
 
 def _fn_body(text, name):
@@ -2343,7 +2348,7 @@ fact("cliReferenceDecision", {
      "and namesEightSites = those spans in the context; processChangeWords = `process-change` anywhere in the four.")
 
 # --- D0471: the guard in source - its name in GUARD_NAMES, its dispatch arm, the shared walk, and the three declaration surfaces
-_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_gr = read(_mh("guards") or "") or ""
 _gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gr, re.S)
 _gnames = re.findall(r'"([a-z0-9-]+)"', _gn.group(2)) if _gn else []
 _gmd = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
@@ -2479,7 +2484,7 @@ fact("sharedWalkDecision", {
      "named; pathWordsInDecision = the D0469 PATH_WORDS present as whole lower-case words in the decision text.")
 
 # --- D0472: the relation in source - tool_reference's first statement, one definition of the walk, and who calls it
-_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
+_gr = read(_mh("guards") or "") or ""
 _grl = _gr.splitlines()
 def _lineno(pattern):
     for _i, _l in enumerate(_grl, 1):
@@ -2733,8 +2738,8 @@ fact("cliInForceDecision", _f477 if _d0477 else None, "the Decision's fields as 
      "in context; D0108 / D0271 in decision; `one invocation drift, zero duplicate names` in rationale; `Removal path:` in consequences.")
 
 # --- D0477: the reader and the comparison in source, and the shared retired set
-_gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
-_lib = read(os.path.join(REPO, "keel-cli", "src", "lib.rs")) or ""
+_gr = read(_mh("guards") or "") or ""
+_lib = read(_mh("lib") or "") or ""
 # the reader moved from guards.rs to members/keel-schema/src/cli_facts.rs in sprint 717 (D0479: down into a leaf); the page reads it where it is
 _cf = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or ""
 _pcf = _fn_body(_cf, "parse_cli_facts") if _cf else ""
@@ -2776,7 +2781,7 @@ _names_in_force = [nm for _, nm in _in_force]
 _dups = sorted({nm for nm in _names_in_force if _names_in_force.count(nm) > 1})
 _acc_line = next((l for l in _cmd_lines if l.strip().startswith("part cliAccept2 ")), "")
 _acc_inv = (re.search(r':>>\s*invocation\s*=\s*"([^"]*)"', _acc_line) or [None, None])[1]
-_cf = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or read(os.path.join(REPO, "keel-cli", "src", "cli_facts.rs")) or ""
+_cf = read(_mh("cli_facts") or "") or ""
 _cf_acc = re.search(r'name: "accept",[^}]*?invocation: "([^"]*)"', _cf, re.S)
 fact("cliFactsInForce", {
     "cliCommandLines": len(_cmd_lines),
@@ -3009,10 +3014,20 @@ fact("buildSkillParagraph", {
     "namesDenySet": "deny(warnings" in _para,
     "claudeCopyIdentical": bool(_skill) and _skill == _skill_claude,
     "skillLockedWords": "process-change" in (_f484["rationale"] or ""),
-} if _skill else None, "the layout paragraph against the manifest",
+    # the D0486 wording: the paragraph names the layering and points at Cargo.toml, and enumerates no leaf
+    "namesLeafLayer": "leaf crates" in _para,
+    "namesReadModelLayer": bool(re.search(r"read model\s+`keel-model`", _para)),
+    "namesWriteLayer": bool(re.search(r"write layer\s+`keel-write`", _para)),
+    "namesCargoMembersTable": "`[workspace] members` in `Cargo.toml` is the one list" in _para,
+    "namesD0486": "D0486" in _para,
+    "leafMembersEnumerated": [c for c in _para_crates if c in _manifest_crates and c not in ("keel-parser", "keel-cli", "keel-model", "keel-write")],
+} if _skill else None, "the layout paragraph against the manifest, and against D0486's wording",
      ".engine/skills/build/SKILL.md: the paragraph from `**Workspace layout:**` to the next blank line; cratesNamed = its `keel-x` code "
      "spans; manifestCrates = the last path segment of each root Cargo.toml member; everyManifestCrateNamed = set inclusion; "
-     "D0479 / `re-exports` / `deny(warnings` by literal search; claudeCopyIdentical = byte equality with .claude/skills/build/SKILL.md.")
+     "D0479 / `re-exports` / `deny(warnings` by literal search; claudeCopyIdentical = byte equality with .claude/skills/build/SKILL.md; "
+     "the layering words by literal search (`leaf crates`, `read model `keel-model``, `write layer `keel-write``, the Cargo.toml "
+     "sentence, D0486); leafMembersEnumerated = the code spans that are manifest members other than the parser, the cli and the two "
+     "named layers (D0486 says this list is empty).")
 
 _s714 = _sprint_facts("sprint714_workspaceHoldsTheLeafMembers.sysml", "d0479")
 _i551 = _issue_facts("551", "dcRecordRefusesAnUnknownFlag")
@@ -3032,6 +3047,59 @@ fact("buildSkillSprint", {k: v for k, v in _s714.items() if k != "text"} | ({
      _SPRINT_HOW + " Literal spans D0484 / issue551 / issue550 / `the edge was authored by hand` / `byte-identical`; `N tests over the "
      "non-cli members` and `keel suite --touched: N passed` from the evidence; the two Issues as for the others, with the resolver's "
      "EngineBuild position and whats-next rank.")
+
+# --- D0486: the Decision that replaces D0484's enumerated clause, and sprint 718's record with its three findings
+_d0486 = _dec_file("0486-")
+_f486 = _decision_facts(_d0486, "d0486")
+_f486.update({
+    "supersedesClauseD0484": bool(re.search(r"#SupersedeClause dependency from d0486 to d0484;", _d0486)),
+    "supersedesD0484Whole": bool(re.search(r"#Supersede dependency from d0486 to d0484;", _d0486)),
+    "dependsOnD0479": bool(re.search(r"#DependsOn dependency from d0486 to d0479;", _d0486)),
+    "namesD0484": "D0484" in (_f486["context"] or ""),
+    "namesSprint718": "Sprint 718" in (_f486["context"] or ""),
+    "namesThreeMembers": all(m in (_f486["context"] or "") for m in ("members/keel-fs", "members/keel-model", "members/keel-write")),
+    "namesLocked": "locked process definition" in (_f486["context"] or ""),
+    "namesD0209": "D0209 clause 2" in (_f486["context"] or ""),
+    "saysLayering": "describes members/ by its D0479 layering" in (_f486["decision"] or ""),
+    "saysCargoOneList": "names the workspace members table in Cargo.toml as the one list of crates" in (_f486["decision"] or ""),
+    "saysEnumeratesNoMember": "It enumerates no member." in (_f486["decision"] or ""),
+    "saysNothingElseChanges": "Nothing else in the skill changes" in (_f486["decision"] or ""),
+    "namesD0105": "D0105" in (_f486["rationale"] or ""),
+    "saysD0484PredictedDrift": "D0484 recorded that it would" in (_f486["rationale"] or ""),
+    "saysOnlyANewLayer": "only a new LAYER does" in (_f486["consequences"] or ""),
+    "saysKeepsD0484Rule": "keeping its rule that the skill describes the workspace as its members" in (_f486["consequences"] or ""),
+    "d0484": {"status": _f484["status"], "acceptance": _f484["acceptance"], "marker": _f484["marker"]},
+    "d0479": _f484["d0479"],
+})
+fact("buildSkillLayeringDecision", _f486 if _d0486 else None,
+     "the Decision's fields as the guard reads them, the clause it reverses and the charter it layers on",
+     _DEC_HOW + " supersedesClauseD0484 / supersedesD0484Whole / dependsOnD0479 = the literal edge lines in the file (D0398: never both); "
+     "names by literal search in the field named; d0484 = D0484's own status, acceptance kind and marker; d0479 as for buildSkillDecision.")
+
+_s718 = _sprint_facts("sprint718_modelAndWriteAreMembers.sysml", "d0479")
+_i556 = _issue_facts("556", "dcArchDriftDropsSupersededElements")
+_i557 = _issue_facts("557", "dcOneRepoRootHelper")
+_i557["resolverPosition"] = (_eb_actions.index("dcOneRepoRootHelper") + 1) if "dcOneRepoRootHelper" in _eb_actions else None
+_i557["resolverReadyRank"] = (_ready_names.index("dcOneRepoRootHelper") + 1) if "dcOneRepoRootHelper" in _ready_names else None
+_i558 = _issue_facts("558", "dcRecordIssueRefusesANonResolverKind")
+fact("buildSkillLayeringSprint", {k: v for k, v in _s718.items() if k != "text"} | ({
+    "retroNamesD0486": "D0486" in _s718["text"],
+    "retroNamesIssue556": "issue556" in _s718["text"],
+    "retroNamesIssue557": "issue557" in _s718["text"],
+    "retroNamesIssue558": "issue558" in _s718["text"],
+    "retroSaysD0484WentStale": "went stale on the very next extraction" in _s718["text"],
+    "helpByteIdentical": "byte-identical" in _s718["text"],
+    "touchedPassed": (re.search(r"touched (\d+) passed 0 failed", _s718["text"]) or [None, None])[1],
+    "touchedSeconds": (re.search(r"touched \d+ passed 0 failed in (\d+) s", _s718["text"]) or [None, None])[1],
+    "deliveredItems": re.findall(r"dc\w+", (re.search(r"DELIVERED BACKLOG ITEMS: ([^.]*)\.", _s718["text"]) or [None, ""])[1]),
+    "issue556": _i556, "issue557": _i557, "issue558": _i558,
+    "issue556ResolverDod": _dod_results("dcArchDriftDropsSupersededElements"),
+    "issue558ResolverDod": _dod_results("dcRecordIssueRefusesANonResolverKind"),
+} if _s718.get("exists") else {}), "sprint 718's record and the three findings it carried",
+     _SPRINT_HOW + " Literal spans D0486 / issue556 / issue557 / issue558 / `went stale on the very next extraction` / `byte-identical`; "
+     "`touched N passed 0 failed in S s` from the evidence; deliveredItems = the dc-names in the Story's `DELIVERED BACKLOG ITEMS:` "
+     "sentence; the three Issues as for the others (issue557's resolver with its EngineBuild position and whats-next rank); the two "
+     "delivered resolvers' `DoDRn : TestResult` outcomes and shas in .tracking/backlog.sysml.")
 
 # --- D0485: the Decision, the module graph it makes the check, the compositions it moved, sprint 717's record and its finding
 _d0485 = _dec_file("0485-")
@@ -3060,8 +3128,14 @@ _mg = read(_mg_p) or ""
 _mg_pairs = re.findall(r'\("(\w+)",\s*"(\w+)"\)', (re.search(r"FORBIDDEN\s*=\s*\[(.*?)\]", _mg, re.S) or [None, ""])[1])
 _rc_mg, _out_mg = run_rc([sys.executable, _mg_p, "--check"])
 _mg_counts = re.search(r"\((\d+) modules, (\d+) edges\)", _out_mg)
-_src = os.path.join(REPO, "keel-cli", "src")
-_view_mod = read(os.path.join(_src, "view", "mod.rs")) or ""
+
+
+def _module_home(name):
+    """The file for a module wherever the workspace holds it (scripts/module_home.py, issue559); None if nowhere."""
+    return _mh(name)
+
+
+_view_mod = read(_module_home("view/mod") or "") or ""
 _guards_rs = read(os.path.join(_src, "guards.rs")) or ""
 _main_rs = read(os.path.join(_src, "main.rs")) or ""
 _leaves = ["textscan", "ident", "done", "evidence", "suspect", "gitfacts", "binding"]
@@ -3078,15 +3152,17 @@ fact("viewNoGuardGraph", {
     "viewNamesGuards": "crate::guards" in re.sub(r"//[^\n]*", "", _view_mod),
     "guardsHasComputeReadiness": "pub fn compute_readiness(" in _guards_rs,
     "guardsHasAssuredReport": "pub fn assured_report(" in _guards_rs,
-    "leafModulesPresent": [m for m in _leaves if os.path.exists(os.path.join(_src, m + ".rs"))],
-    "compositionsPresent": [m for m in _ups if os.path.exists(os.path.join(_src, m + ".rs"))],
-    "dynInNewModules": sum((read(os.path.join(_src, m + ".rs")) or "").count("dyn ") for m in _leaves + _ups if os.path.exists(os.path.join(_src, m + ".rs"))),
+    "leafModulesPresent": [m for m in _leaves if _module_home(m)],
+    "leafModuleHomes": {m: os.path.relpath(_module_home(m), REPO).replace(os.sep, "/") for m in _leaves if _module_home(m)},
+    "compositionsPresent": [m for m in _ups if _module_home(m)],
+    "dynInNewModules": sum((read(_module_home(m)) or "").count("dyn ") for m in _leaves + _ups if _module_home(m)),
     "mainCallsMovedSymbols": all(s in _main_rs for s in ["keel_cli::priority::priority", "reports::report", "guards::assured_report"]),
     "sensorDeclared": "snModGraph : Sensor" in _instr and 'mechanism = "scripts/modgraph.py"' in _instr,
 } if _mg else None, "the module graph check run live, and the shape of the source it reports on",
      "scripts/modgraph.py: FORBIDDEN pairs parsed from its `FORBIDDEN = [...]` list; `--check` run here, exit code and last line kept, "
-     "modules/edges from its `(N modules, M edges)` span; keel-cli/src read for the `readiness` signature in view/mod.rs, `crate::guards` in "
-     "view/mod.rs with // comments removed, `compute_readiness` and `assured_report` in guards.rs, the leaf and composition files on disk, "
+     "modules/edges from its `(N modules, M edges)` span; view/mod.rs read where it lives (keel-cli/src, else members/keel-model/src "
+     "after sprint 718) for the `readiness` signature and `crate::guards` with // comments removed, `compute_readiness` and `assured_report` "
+     "in keel-cli/src/guards.rs, the leaf and composition files on disk in either home (leafModuleHomes says which), "
      "`dyn ` counted over them, the three moved call sites in main.rs; .tracking/architecture/engine-instruments.sysml for `snModGraph : Sensor` "
      "with the script as its mechanism.")
 

@@ -50,7 +50,9 @@ import sys
 import tomllib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REVERIFY_RS = os.path.join(ROOT, "keel-cli", "src", "reverify.rs")
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+from module_home import module_home  # noqa: E402  (issue559: a module home is resolved, never anchored)
+REVERIFY_RS = module_home("reverify")
 REVERIFY_TOML = os.path.join(ROOT, ".engine", "contracts", "reverify.toml")
 TRACKING = os.path.join(ROOT, ".tracking")
 ALPHABET_EXTRA = "_./:=@-"
@@ -61,6 +63,8 @@ KNOWN_NEGATIVE = ["keel suite 571 passed, 0 failed", "keel show control-structur
 
 def prose_words() -> list[str]:
     """PROSE_WORDS as reverify.rs declares it - the census measures the binary's list, not a copy."""
+    if REVERIFY_RS is None:
+        sys.exit("reverify.rs is in no workspace crate (scripts/module_home.py)")
     src = open(REVERIFY_RS, encoding="utf-8").read()
     m = re.search(r"const PROSE_WORDS: \[&str; (\d+)\] = \[(.*?)\];", src, re.S)
     if not m:
