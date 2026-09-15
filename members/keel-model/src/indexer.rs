@@ -9,7 +9,7 @@ use std::path::Path;
 
 use keel_parser::ast::{Attribute, Item, Package, Value};
 
-use crate::collect_sysml;
+use crate::corpus::collect_sysml;
 
 // ── exported data types ───────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ pub struct ExtractedIndex {
     /// false-suspect propagation without blocking ready computation).
     pub ordering_only: HashSet<(String, String)>,
     /// Project state cursor from `state.sysml`.
-    pub cursor: crate::Cursor,
+    pub cursor: crate::indexer::Cursor,
 }
 
 // ── attribute helpers ─────────────────────────────────────────────────────────
@@ -231,7 +231,7 @@ pub fn extract(tracking: &Path) -> ExtractedIndex {
 
     let cursor = packages
         .iter()
-        .find_map(|(_, pkg)| crate::parse_cursor(pkg))
+        .find_map(|(_, pkg)| crate::indexer::parse_cursor(pkg))
         .unwrap_or_default();
 
     let mut tasks: HashMap<String, TaskData> = HashMap::new();
@@ -262,4 +262,61 @@ pub fn extract(tracking: &Path) -> ExtractedIndex {
     }
 
     ExtractedIndex { tasks, ordering_only, cursor }
+}
+
+// ── the workflow cursor (out of lib.rs, sprint 718) ─────────────────────────
+
+/// Workflow cursor read from `.tracking/state.sysml`.
+#[derive(Debug, Clone, Default)]
+pub struct Cursor {
+    /// Active workflow name (e.g. `"DeliveryWorkflow"`).
+    pub active_workflow: String,
+    /// Active phase name (e.g. `"Delivery/implement"`).
+    pub active_phase: String,
+    /// ISO-8601 date the phase was entered.
+    pub entered_at: String,
+    /// Actor who entered the phase.
+    pub entered_by: String,
+}
+
+
+/// Extract the workflow cursor from a parsed package.
+///
+/// Returns `Some(Cursor)` if the package contains a `Part` with an
+/// `activeWorkflow` attribute; `None` otherwise.
+#[must_use]
+pub fn parse_cursor(pkg: &Package) -> Option<Cursor> {
+    for item in &pkg.items {
+        if let Item::Part(p) = item {
+            let mut cursor = Cursor::default();
+            let mut found = false;
+            for attr in &p.attributes {
+                let Some(s) = str_value(&attr.value) else {
+                    continue;
+                };
+                match attr.name.as_str() {
+                    "activeWorkflow" => {
+                        s.clone_into(&mut cursor.active_workflow);
+                        found = true;
+                    }
+                    "activePhase" => s.clone_into(&mut cursor.active_phase),
+                    "enteredAt" => s.clone_into(&mut cursor.entered_at),
+                    "enteredBy" => s.clone_into(&mut cursor.entered_by),
+                    _ => {}
+                }
+            }
+            if found {
+                return Some(cursor);
+            }
+        }
+    }
+    None
+}
+
+
+fn str_value(value: &Value) -> Option<&str> {
+    match value {
+        Value::Str(s) | Value::Ident(s) => Some(s),
+        _ => None,
+    }
 }

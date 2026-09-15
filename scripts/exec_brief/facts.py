@@ -2174,7 +2174,7 @@ fact("rejectVerdictDecision", {
      "namesTheTwoRejected = those names in the context (or consequences); safetyChangeWords = `safety-change` anywhere in the four.")
 
 # --- D0470: the three layers in source - the refusal inside each verdict's lock, and the two command lists
-_wr = read(os.path.join(REPO, "keel-cli", "src", "write.rs")) or ""
+_wr = read(os.path.join(REPO, "members", "keel-write", "src", "write.rs")) or ""
 _cs = read(os.path.join(REPO, "keel-cli", "src", "view", "control_structure.rs")) or ""
 _gr = read(os.path.join(REPO, "keel-cli", "src", "guards.rs")) or ""
 
@@ -2213,7 +2213,7 @@ fact("rejectVerdictLayers", {
     "guardReadsBothRules": bool(_loop),
     "refuseAiJudgmentCallers": len(re.findall(r"^\s*refuse_ai_judgment\(path, judged_by,", _wr, re.M)),
 } if _wr and _cs and _gr else None, "the write path, the command lists and the guard as the source reads",
-     "keel-cli/src/write.rs: the body of `fn accept_decision_locked(` / `fn reject_decision_locked(` up to the next `\\n}\\n`; a "
+     "members/keel-write/src/write.rs: the body of `fn accept_decision_locked(` / `fn reject_decision_locked(` up to the next `\\n}\\n`; a "
      "layer refuses when `refuse_ai_judgment(` precedes the first `read_to_string(` in that body; rejectRefusalWhat = the "
      "third argument of that call; writeList = `const HUMAN_ONLY_WRITE_COMMANDS: [&str; N] = [..]` (declared N and the quoted "
      "members); authorityList = the same over `const HUMAN_AUTHORITY_COMMANDS` in view/control_structure.rs; "
@@ -2953,7 +2953,7 @@ _i552["namesBlockedBy"] = "blocked_by" in ((re.search(r"part issue552 : Issue\s*
 _i552["resolverPosition"] = (_eb_actions.index("dcReadyHonoursItemDependencies") + 1) if "dcReadyHonoursItemDependencies" in _eb_actions else None
 _i552["resolverReadyRank"] = (_ready_names.index("dcReadyHonoursItemDependencies") + 1) if "dcReadyHonoursItemDependencies" in _ready_names else None
 _i549 = _issue_facts("549", "dcReadyHonoursItemDependencies")
-_vm = read(os.path.join(REPO, "keel-cli", "src", "view", "mod.rs")) or ""
+_vm = read(os.path.join(REPO, "members", "keel-model", "src", "queries.rs")) or ""
 _bb = _fn_body(_vm, "blocked_by") if _vm else ""
 fact("charterBlockIssue", {
     "issue552": _i552, "issue549": _i549,
@@ -2964,7 +2964,7 @@ fact("charterBlockIssue", {
      ".tracking/issues-claudeFable5.sysml: `part issue552 : Issue {` and `part issue549`, each with severity, resolver edge and whether the "
      "resolver's DoD names it; resolverPosition = the resolver's place in EngineBuild, resolverReadyRank = its line in whats-next (null once done); "
      "resolverDodResults = the resolver's `DoDRn : TestResult` outcomes and shas in .tracking/backlog.sysml; "
-     "keel-cli/src/view/mod.rs: the edge kinds `e.kind == \"x\"` inside `fn blocked_by`.")
+     "members/keel-model/src/queries.rs: the edge kinds `e.kind == \"x\"` inside `fn blocked_by`.")
 
 # --- D0484: the Decision, the paragraph it governs against the manifest, the charter it layers on, sprint 714's record
 _d0484 = _dec_file("0484-")

@@ -1712,7 +1712,7 @@ fn cmd_orient(args: &[String]) -> i32 {
             eprintln!("[keel] WARNING: the commit gate is NOT ARMED — {why}. Fix: git config core.hooksPath .githooks (D0174/K2).");
         }
     }
-    println!("{}", orient::compute(&root).to_json());
+    println!("{}", keel_cli::reports::orient(&root).to_json());
     0
 }
 
@@ -4841,15 +4841,31 @@ fn cmd_record_issue(args: &[String]) -> i32 {
         Ok(a) => a,
         Err(msg) => { eprintln!("{msg}"); return 2; }
     };
-    match keel_cli::view::item_exists(&root, &resolver) {
-        Ok(true) => {}
-        Ok(false) => {
-            eprintln!("error: resolver '{resolver}' is declared nowhere in the model.");
-            eprintln!("  Authoring the edge anyway would make this Issue read as TRIAGED by something that does not");
-            eprintln!("  exist (issue109). Declare the resolving action or Decision first, then re-run.");
-            return 2;
+    // The resolver must be what the `resolver-kind` guard accepts, checked HERE through the guard's
+    // own predicate (issue558): an edge the commit gate refuses is not a triage, and "triaged on
+    // arrival" printed for one was this command reporting a state the tree never held.
+    let actions = keel_cli::guards::declared_task_names(&root);
+    if !actions.contains(&resolver) {
+        match keel_cli::view::Model::build(&root) {
+            Ok(model) => match model.items.get(&resolver) {
+                None => {
+                    eprintln!("error: resolver '{resolver}' is declared nowhere in the model.");
+                    eprintln!("  Authoring the edge anyway would make this Issue read as TRIAGED by something that does not");
+                    eprintln!("  exist (issue109). Declare the resolving action or Decision first, then re-run.");
+                    return 2;
+                }
+                Some(item) if !keel_cli::guards::resolver_kind_holds(&actions, &resolver, &item.type_name) => {
+                    eprintln!("error: resolver '{resolver}' is a {}, not a declared action or a Decision.", item.type_name);
+                    eprintln!("  A resolver is the work that closes the issue or the Decision that moots it; the");
+                    eprintln!("  `resolver-kind` guard refuses any other #Resolves source at commit (issue136/issue558),");
+                    eprintln!("  so writing the edge here would only move that refusal to the gate. Name the action");
+                    eprintln!("  (a backlog item or sprint task) or the Decision, then re-run.");
+                    return 2;
+                }
+                Some(_) => {}
+            },
+            Err(e) => { eprintln!("error: cannot read the model to check the resolver: {e}"); return 2; }
         }
-        Err(e) => { eprintln!("error: cannot read the model to check the resolver: {e}"); return 2; }
     }
     // Bound to locals so the borrows outlive the struct; the inline form silently collapsed both to
     // None (they type-checked and were wrong — a flag the caller passed would have been dropped).

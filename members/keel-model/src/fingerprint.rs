@@ -89,7 +89,7 @@ pub fn of(root: &Path) -> u64 {
             }
         }
     }
-    let fp = crate::perf::timed(&crate::perf::FINGERPRINT_NANOS, || compute(root));
+    let fp = keel_perf::perf::timed(&keel_perf::perf::FINGERPRINT_NANOS, || compute(root));
     if let Ok(mut g) = MEMO.lock() {
         *g = Some((epoch, root.to_path_buf(), fp));
     }
@@ -102,9 +102,9 @@ pub fn compute(root: &Path) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     for base in [".tracking", ".engine", ".knowledge"] {
-        crate::perf::add(&crate::perf::TREES_WALKED, 1);
-        let files = crate::collect_sysml_uncached(&root.join(base));
-        crate::perf::add(&crate::perf::FILES_STATTED, files.len() as u64);
+        keel_perf::perf::add(&keel_perf::perf::TREES_WALKED, 1);
+        let files = crate::corpus::collect_sysml_uncached(&root.join(base));
+        keel_perf::perf::add(&keel_perf::perf::FILES_STATTED, files.len() as u64);
         for f in files {
             if let Ok(m) = std::fs::metadata(&f) {
                 f.to_string_lossy().hash(&mut h);
@@ -126,10 +126,22 @@ mod tests {
 
     /// The memo must not answer for a tree it was not asked about. Two roots in one epoch is the case
     /// a single-slot memo gets wrong, and getting it wrong returns another tree's answer.
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
+    }
+
     #[test]
     fn the_memo_is_keyed_by_root_not_only_by_epoch() {
-        let a = Path::new(".");
-        let b = Path::new("..");
+        let repo = repo_root();
+        let a = repo.as_path();
+        let engine = repo.join(".engine");
+        let b = engine.as_path();
         let fa = of(a);
         let fb = of(b);
         assert_eq!(of(a), fa, "asking again for the same root in one epoch must be stable");
@@ -144,11 +156,11 @@ mod tests {
         let first = of(root);
         new_epoch();
         assert_eq!(of(root), first, "an unchanged tree must fingerprint the same after a bump");
-        let before = crate::perf::TREES_WALKED.load(Ordering::Relaxed);
+        let before = keel_perf::perf::TREES_WALKED.load(Ordering::Relaxed);
         new_epoch();
         let _ = of(root);
-        let after = crate::perf::TREES_WALKED.load(Ordering::Relaxed);
-        if crate::perf::enabled() {
+        let after = keel_perf::perf::TREES_WALKED.load(Ordering::Relaxed);
+        if keel_perf::perf::enabled() {
             assert!(after > before, "a bumped epoch must re-walk the tree rather than answer from memo");
         }
     }

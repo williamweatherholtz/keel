@@ -27,4 +27,4 @@ surfaces = "the stop hook's critical path (keel show enforcement-report slowFire
 # issue440: 26.9 MB with 24 MB dead before anyone read the size; 4 055 880 bytes after the cut. Twice
 # that says the cache is holding something the one-head rule (dcChangedCacheKeepsOneHead) does not drop.
 above = 8000000
-surfaces = "git-facts cache growth (issue440's class): read which keys hold more than one head and what the cache keeps that the one-head rule does not cover (keel-cli/src/gitfacts.rs)"
+surfaces = "git-facts cache growth (issue440's class): read which keys hold more than one head and what the cache keeps that the one-head rule does not cover (members/keel-model/src/gitfacts.rs)"

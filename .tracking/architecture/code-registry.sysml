@@ -273,5 +273,56 @@ package ProjectCodeRegistry {
     }
     #Supersede dependency from ceViewCore to ceComputedViews;
     #Feedback dependency from ceViewCore to ceGuards;
+    // sprint 718 (D0479): write.rs, orient.rs and the claim read side moved into members keel-write and
+    // keel-model. The four elements they update are claudeOpus5's, so each path follows its file by a new
+    // element and a #Supersede edge (D0108), not an edit - the same shape sprint 714 used for actor.rs.
+    part ceWriteApiMember : CodeElement {
+        :>> id = "5e6be2d0-f84d-4cbe-8a6e-20b8d5e9df1d";
+        :>> title = "The write API (member keel-write)";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> kind = "module";
+        :>> filePath = "members/keel-write/src/write.rs";
+        :>> riskClass = RiskClass::dataLoss;
+        :>> invariantSafety = InvariantSafety::enforced;
+        :>> stpaRole = StpaRole::actuator;
+        :>> designPattern = DesignPattern::service;
+        :>> abstractness = "0.2";
+    }
+    #Supersede dependency from ceWriteApiMember to ceWriteApi;
+    part ceRecordClaimMember : CodeElement {
+        :>> id = "0cc6c718-9dd5-4cd3-9665-6b4fe614d05b";
+        :>> title = "record_claim (member keel-write)";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> kind = "function";
+        :>> filePath = "members/keel-write/src/write.rs";
+        :>> riskClass = RiskClass::correctness;
+        :>> invariantSafety = InvariantSafety::checked;
+        :>> codeHash = "d06410e8fe04092c";
+    }
+    #Supersede dependency from ceRecordClaimMember to ceRecordClaim;
+    part ceOrientMember : CodeElement {
+        :>> id = "f1955b9b-3214-4fd6-acc8-dc8e9b2d874b";
+        :>> title = "Orientation (member keel-model)";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> kind = "module";
+        :>> filePath = "members/keel-model/src/orient.rs";
+        :>> riskClass = RiskClass::correctness;
+        :>> invariantSafety = InvariantSafety::checked;
+        :>> stpaRole = StpaRole::sensor;
+        :>> designPattern = DesignPattern::facade;
+        :>> abstractness = "0.25";
+    }
+    #Supersede dependency from ceOrientMember to ceOrient;
+    part ceClaimHolderRuleMember : CodeElement {
+        :>> id = "d07bff8a-f0b3-4f88-bac3-529448a12edd";
+        :>> title = "claims (holder rule; member keel-model)";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> kind = "function";
+        :>> filePath = "members/keel-model/src/claims.rs";
+        :>> riskClass = RiskClass::correctness;
+        :>> invariantSafety = InvariantSafety::checked;
+        :>> codeHash = "11f99b7330e345db";
+    }
+    #Supersede dependency from ceClaimHolderRuleMember to ceClaimHolderRule;
 
 }

@@ -27,74 +27,9 @@
 
 use std::path::Path;
 
-/// How this clone stands relative to its upstream.
-pub struct Divergence {
-    pub branch: String,
-    /// Commits on the remote that this clone does not have.
-    pub behind: usize,
-    /// Commits here that the remote does not have.
-    pub ahead: usize,
-    /// No upstream configured, or the remote is unreachable — reported, never assumed to be zero.
-    pub unknown: Option<String>,
-}
-
-impl Divergence {
-    #[must_use]
-    pub const fn diverged(&self) -> bool {
-        self.behind > 0 && self.ahead > 0
-    }
-    /// A compact JSON object for `orient`.
-    ///
-    /// ALWAYS emitted, including the unknown case. "I could not tell" and "you are in sync" are
-    /// different answers, and a computed view that renders them identically is the silent-failure
-    /// shape this project keeps paying for (issue093, issue096).
-    #[must_use]
-    pub fn to_json(&self) -> String {
-        self.unknown.as_ref().map_or_else(
-            || format!(
-                "{{\"branch\":\"{}\",\"behind\":{},\"ahead\":{},\"diverged\":{}}}",
-                self.branch.replace('"', "\\\""),
-                self.behind,
-                self.ahead,
-                self.diverged()
-            ),
-            |u| format!("{{\"branch\":\"{}\",\"unknown\":\"{}\"}}", self.branch.replace('"', "\\\""), u.replace('"', "\\\"")),
-        )
-    }
-}
-
-fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
-    let out = crate::gitx::git().arg("-C").arg(repo).args(args).output().map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-    }
-}
-
-/// Read behind/ahead WITHOUT contacting the remote — i.e. against the last fetch.
-///
-/// Separated from fetching on purpose: `orient` must be able to report the sync state on every
-/// invocation, and a view that silently performs network I/O is a view you stop running. `keel sync`
-/// fetches first and then calls this; `orient` calls it alone and reports what the last fetch knew.
-#[must_use]
-pub fn divergence(repo: &Path) -> Divergence {
-    let branch = git(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_else(|_| "HEAD".to_string());
-    // `@{u}` is git's upstream shorthand; the braces are git syntax, not a format placeholder.
-    let upstream_ref = concat!("@", "{u}");
-    let Ok(upstream) = git(repo, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", upstream_ref]) else {
-        return Divergence { branch, behind: 0, ahead: 0, unknown: Some("no upstream configured for this branch".to_string()) };
-    };
-    match git(repo, &["rev-list", "--left-right", "--count", &format!("{upstream}...HEAD")]) {
-        Ok(counts) => {
-            let mut it = counts.split_whitespace();
-            let behind = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-            let ahead = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-            Divergence { branch, behind, ahead, unknown: None }
-        }
-        Err(e) => Divergence { branch, behind: 0, ahead: 0, unknown: Some(e) },
-    }
-}
+// How this clone stands relative to its upstream is a git fact (keel-model, sprint 718).
+pub use crate::gitfacts::{divergence, Divergence};
+use crate::gitfacts::git_out as git;
 
 /// Does the full enforced gate pass against the tree as it stands right now?
 ///

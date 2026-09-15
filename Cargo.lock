@@ -1040,12 +1040,15 @@ dependencies = [
  "getrandom 0.3.4",
  "include_dir",
  "keel-actor",
+ "keel-fs",
  "keel-git",
  "keel-github",
  "keel-json",
+ "keel-model",
  "keel-parser",
  "keel-perf",
  "keel-schema",
+ "keel-write",
  "serde",
  "serde_json",
  "sha2",
@@ -1054,6 +1057,13 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tower",
+]
+
+[[package]]
+name = "keel-fs"
+version = "0.4.1"
+dependencies = [
+ "keel-parser",
 ]
 
 [[package]]
@@ -1070,6 +1080,23 @@ version = "0.4.1"
 [[package]]
 name = "keel-json"
 version = "0.4.1"
+
+[[package]]
+name = "keel-model"
+version = "0.4.1"
+dependencies = [
+ "getrandom 0.3.4",
+ "keel-actor",
+ "keel-fs",
+ "keel-git",
+ "keel-json",
+ "keel-parser",
+ "keel-perf",
+ "keel-schema",
+ "serde",
+ "thiserror",
+ "toml",
+]
 
 [[package]]
 name = "keel-parser"
@@ -1093,6 +1120,22 @@ name = "keel-schema"
 version = "0.4.1"
 dependencies = [
  "include_dir",
+]
+
+[[package]]
+name = "keel-write"
+version = "0.4.1"
+dependencies = [
+ "keel-actor",
+ "keel-fs",
+ "keel-git",
+ "keel-json",
+ "keel-model",
+ "keel-parser",
+ "keel-schema",
+ "serde",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]

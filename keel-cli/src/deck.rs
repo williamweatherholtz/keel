@@ -433,7 +433,7 @@ fn collect(root: &Path) -> Vec<Item> {
         });
     };
     let parse = |s: String| serde_json::from_str::<serde_json::Value>(&s).unwrap_or(serde_json::Value::Null);
-    let orient = parse(crate::orient::compute(root).to_json());
+    let orient = parse(crate::reports::orient(root).to_json());
     let empty = Vec::new();
     for d in orient.get("pendingAcceptances").and_then(|v| v.as_array()).unwrap_or(&empty) {
         if let Some(n) = d.as_str() {

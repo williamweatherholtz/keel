@@ -11,6 +11,15 @@ use crate::json::Json;
 #[allow(clippy::wildcard_imports)] // the report cards are written in the view's vocabulary
 use crate::view::*;
 
+/// The orient view WITH its burndown (D0098): the frontier from the read model, the burndown from the
+/// view layer. The read model cannot compose a view (D0479/D0485), so the JSON emitters call this.
+#[must_use]
+pub fn orient(root: &Path) -> crate::orient::Output {
+    let mut o = crate::orient::compute(root);
+    o.burndown = burndown_summary_json(root).unwrap_or_default();
+    o
+}
+
 /// Compute a report's `(title, cards)`; shared by the JSON emitter and the HTML scorecard.
 fn report_cards(root: &Path, name: &str) -> Result<(String, Vec<Json>), ViewError> {
     let model = Model::build(root)?;

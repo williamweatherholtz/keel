@@ -12,7 +12,7 @@ use std::path::Path;
 use keel_parser::ast::{Item, Package, Part, Value};
 use keel_parser::{parse, tokenize};
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 /// A failure encountered while reading/parsing a tracking file.
 #[derive(Debug, thiserror::Error)]
@@ -22,11 +22,13 @@ pub enum AlgoError {
     Parse(String, String),
 }
 
-pub(crate) fn is_word(c: char) -> bool {
+#[must_use]
+pub fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-pub(crate) const fn is_space(c: char) -> bool {
+#[must_use]
+pub const fn is_space(c: char) -> bool {
     c == ' ' || c == '\t'
 }
 
@@ -43,7 +45,7 @@ fn jint(n: usize) -> Json {
 
 fn tracking_packages(root: &Path) -> Result<Vec<Package>, AlgoError> {
     let mut pkgs = Vec::new();
-    for path in crate::collect_sysml(&root.join(".tracking")) {
+    for path in crate::corpus::collect_sysml(&root.join(".tracking")) {
         let name = path.display().to_string();
         let src = std::fs::read_to_string(&path).map_err(|e| AlgoError::Parse(name.clone(), e.to_string()))?;
         let tokens = tokenize(&src, &name).map_err(|e| AlgoError::Parse(name.clone(), e.to_string()))?;
@@ -169,7 +171,7 @@ fn part_ident(line: &str) -> Option<String> {
 }
 
 /// Story names declared in a file: `^[ \t]*part <ident> : Story\b`.
-pub(crate) fn story_names(text: &str) -> Vec<String> {
+pub fn story_names(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in text.lines() {
         let Some(ident) = part_ident(line) else { continue };
@@ -266,7 +268,7 @@ struct AuditScan {
 /// here) for charter coverage, ceremony completeness, and estimation discipline.
 fn scan_delivery_files(tracking: &Path, chartered: &HashSet<String>, order: &[String]) -> AuditScan {
     let mut scan = AuditScan::default();
-    for path in crate::collect_sysml(&tracking.join("delivery")) {
+    for path in crate::corpus::collect_sysml(&tracking.join("delivery")) {
         let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         let stories = story_names(&text);
@@ -357,7 +359,7 @@ pub fn audit(root: &Path) -> Result<String, AlgoError> {
     // Charter work names + sitting reviews, scanned across ALL tracking files.
     let mut chartered: HashSet<String> = HashSet::new();
     let mut sitting: BTreeSet<String> = BTreeSet::new();
-    for path in crate::collect_sysml(&tracking) {
+    for path in crate::corpus::collect_sysml(&tracking) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         collect_charter_work(&text, &mut chartered);
         collect_sitting_reviews(&text, &mut sitting);

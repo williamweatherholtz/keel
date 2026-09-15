@@ -204,7 +204,7 @@ fn narrowing_filters(repo: &Path, tasks: &HashMap<String, TaskData>, done_map: &
     // issue247: this was `.unwrap_or_default()`, the exact opposite of the conservatism its own
     // comment promised — an Err yielded an EMPTY set, nothing was filtered, and every retired task
     // returned to the frontier. Record the failure instead; the caller empties `ready` and says so.
-    let superseded = crate::view::superseded_names(repo).unwrap_or_else(|e| {
+    let superseded = crate::queries::superseded_names(repo).unwrap_or_else(|e| {
         compute_failures.push(format!(
             "superseded set could not be computed ({e}) - retired work would re-enter the frontier"
         ));
@@ -212,7 +212,7 @@ fn narrowing_filters(repo: &Path, tasks: &HashMap<String, TaskData>, done_map: &
     });
     // Nor is a task that `#DependsOn` a still-PROPOSED Decision (issue112) — superseded means
     // RETIRED, this means WAITING ON A HUMAN, and it returns by itself once the Decision resolves.
-    let blocked = crate::view::blocked_on_acceptance(repo).unwrap_or_else(|e| {
+    let blocked = crate::queries::blocked_on_acceptance(repo).unwrap_or_else(|e| {
         compute_failures.push(format!(
             "blocked-on-acceptance set could not be computed ({e}) - work awaiting a human would read as ready"
         ));
@@ -225,7 +225,7 @@ fn narrowing_filters(repo: &Path, tasks: &HashMap<String, TaskData>, done_map: &
     // the two above: this REMOVES work, and an Err would widen the frontier.
     let done_set: HashSet<String> = done_map.iter().filter(|(_, &v)| v).map(|(k, _)| k.clone()).collect();
     let is_item = |n: &str| tasks.contains_key(n);
-    let blocked_on_items: Vec<BlockedItem> = match crate::view::blocked_on_items(repo, &done_set, &is_item) {
+    let blocked_on_items: Vec<BlockedItem> = match crate::queries::blocked_on_items(repo, &done_set, &is_item) {
         Ok(rows) => rows.into_iter().map(|(item, waits_on, why)| BlockedItem { item, waits_on, why }).collect(),
         Err(e) => {
             compute_failures.push(format!(
@@ -238,11 +238,11 @@ fn narrowing_filters(repo: &Path, tasks: &HashMap<String, TaskData>, done_map: &
     // AND on an unresolved actor is DELIBERATE here, and is not a compute failure: if this machine has
     // no bound identity nothing is hidden, because a claim must never make work invisible to someone
     // who cannot be told it is theirs.
-    let me = crate::actor::resolve(repo, None).unwrap_or_default();
+    let me = keel_actor::actor::resolve(repo, None).unwrap_or_default();
     let claimed_by_others: HashSet<String> = if me.is_empty() {
         HashSet::new()
     } else {
-        crate::claim::held_by_others(repo, &me).unwrap_or_default().into_iter().map(|(item, _)| item).collect()
+        crate::claims::held_by_others(repo, &me).unwrap_or_default().into_iter().map(|(item, _)| item).collect()
     };
     Narrowing { superseded, blocked, blocked_on_items, claimed_by_others, compute_failures }
 }
@@ -252,9 +252,9 @@ fn narrowing_filters(repo: &Path, tasks: &HashMap<String, TaskData>, done_map: &
 /// The `first A then B;` successions every workflow under `.engine/workflows/` declares, as
 /// (file stem, A, B) in declaration order. The ONE place the chain is read (D0435).
 #[must_use]
-pub(crate) fn workflow_successions(root: &Path) -> Vec<(String, String, String)> {
+pub fn workflow_successions(root: &Path) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
-    for path in crate::collect_sysml(&root.join(".engine").join("workflows")) {
+    for path in crate::corpus::collect_sysml(&root.join(".engine").join("workflows")) {
         let Ok(text) = crate::corpus::read_to_string(&path) else { continue };
         let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         for line in text.lines() {
@@ -277,7 +277,7 @@ pub(crate) fn workflow_successions(root: &Path) -> Vec<(String, String, String)>
 
 /// Every phase a workflow chain names - the vocabulary a `checkedBy = "gate:<phase>"` resolves against.
 #[must_use]
-pub(crate) fn workflow_phases(root: &Path) -> HashSet<String> {
+pub fn workflow_phases(root: &Path) -> HashSet<String> {
     let mut out = HashSet::new();
     for (_, a, b) in workflow_successions(root) {
         out.insert(a);
@@ -296,7 +296,7 @@ pub(crate) fn workflow_phases(root: &Path) -> HashSet<String> {
 /// whose processes bind no gate has NO ceremony order: every caller then reports a sprint as
 /// unenforceable-by-step rather than enforcing an order nobody declared.
 #[must_use]
-pub(crate) fn gate_order(root: &Path) -> Vec<String> {
+pub fn gate_order(root: &Path) -> Vec<String> {
     let bound: HashSet<String> = crate::binding::step_check_bindings(root)
         .into_iter()
         .filter_map(|(_, _, _, name)| name.strip_prefix("gate:").map(str::to_owned))
@@ -361,7 +361,7 @@ fn linearise(edges: &[(&str, &str)]) -> Vec<String> {
 
 /// `closeOut` -> `CloseOut`: the phase as the gate's Test name spells it.
 #[must_use]
-pub(crate) fn gate_name(phase: &str) -> String {
+pub fn gate_name(phase: &str) -> String {
     let mut c = phase.chars();
     c.next()
         .map_or_else(String::new, |f| f.to_uppercase().collect::<String>() + c.as_str())
@@ -391,9 +391,19 @@ mod gate_order_tests {
     /// The order READ FROM THIS TREE is the six the sprint records declare - the replacement for the
     /// `include_str!` test that held a compiled constant to the file. If agile-workflow's bindings or
     /// delivery.sysml's chain move, this is where it shows.
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
+    }
+
     #[test]
     fn this_trees_ceremony_order_is_the_delivery_chain() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = repo_root();
         assert_eq!(gate_order(&root), ["Refine", "Standup", "Implement", "Review", "CloseOut", "Retro"]);
     }
 
@@ -426,7 +436,7 @@ fn in_progress_sprints(repo: &Path) -> Vec<SprintCeremony> {
     let mut out = Vec::new();
     let order = gate_order(repo);
     let Some(terminal) = order.last() else { return out };
-    for path in crate::collect_sysml(&delivery) {
+    for path in crate::corpus::collect_sysml(&delivery) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         let passed: Vec<String> = order.iter()
             .filter(|g| gate_passed(&text, g))
@@ -461,7 +471,7 @@ struct Frontier {
     ready: Vec<String>,
     blocked: Vec<BlockedItem>,
     compute_failures: Vec<String>,
-    sync_state: crate::sync::Divergence,
+    sync_state: crate::gitfacts::Divergence,
 }
 
 /// The ready frontier alone, in declaration order (D0052).
@@ -473,7 +483,7 @@ struct Frontier {
 /// Returns `(ready, compute_failures, outstanding)`.
 #[must_use]
 pub fn ready(root: &Path) -> (Vec<String>, Vec<String>, usize) {
-    let idx = crate::perf::phase("frontier:extract", || crate::indexer::extract(&root.join(".tracking")));
+    let idx = keel_perf::perf::phase("frontier:extract", || crate::indexer::extract(&root.join(".tracking")));
     let f = frontier(root, idx, false, false);
     let outstanding = f.done_map.values().filter(|&&v| !v).count();
     (f.ready, f.compute_failures, outstanding)
@@ -497,7 +507,7 @@ fn frontier(repo: &Path, idx: ExtractedIndex, fetched: bool, evidence: bool) -> 
     // (D0052), so leaving it ready schedules work a Decision has forbidden. Conservative on error:
     // failing to read the model must not silently make everything ready again.
     let Narrowing { superseded, blocked, blocked_on_items, claimed_by_others, compute_failures } =
-        crate::perf::phase("frontier:narrowing", || narrowing_filters(repo, &tasks, &done_map));
+        keel_perf::perf::phase("frontier:narrowing", || narrowing_filters(repo, &tasks, &done_map));
     let waiting_on_item: HashSet<&str> = blocked_on_items.iter().map(|b| b.item.as_str()).collect();
     let mut ready: Vec<String> = Vec::new();
     for (name, data) in &tasks {
@@ -551,7 +561,7 @@ fn compute_orient(repo: &Path, idx: ExtractedIndex, fetched: bool) -> Output {
     // Open issues (D0077): an issue with no complete #Resolves resolver. Reuse this orient
     // run's done-set as the resolver-completeness authority; build the view Model for the edges.
     let done_set: HashSet<String> = done_map.iter().filter(|(_, &v)| v).map(|(k, _)| k.clone()).collect();
-    let open_issues = crate::view::open_issue_names(repo, &done_set).unwrap_or_default();
+    let open_issues = crate::queries::open_issue_names(repo, &done_set).unwrap_or_default();
 
     Output {
         in_progress_sprints: in_progress_sprints(repo),
@@ -564,8 +574,9 @@ fn compute_orient(repo: &Path, idx: ExtractedIndex, fetched: bool) -> Output {
         suspect_reasons,
         done,
         outstanding,
-        // Compact non-blocking burndown (D0098); empty -> "{}" on render if it can't be computed.
-        burndown: crate::view::burndown_summary_json(repo).unwrap_or_default(),
+        // Compact non-blocking burndown (D0098); empty -> "{}" on render. A VIEW composition, so the
+        // read model leaves it empty and `keel_cli::reports::orient` fills it (D0479/D0485, sprint 718).
+        burndown: String::new(),
         compute_failures,
         // D0138: state what is NOT enforced, so a subset-activated project cannot read as fully checked.
         inactive_processes: crate::activation::Activation::load(repo).inactive_processes(),
@@ -575,7 +586,7 @@ fn compute_orient(repo: &Path, idx: ExtractedIndex, fetched: bool) -> Output {
         // could not be read would be the silent failure issue096 is about, so a failure surfaces
         // as a named sentinel the human will notice rather than as a clean zero.
         sync: sync_state.to_json(),
-        pending_acceptances: crate::view::pending_acceptances(repo)
+        pending_acceptances: crate::queries::pending_acceptances(repo)
             .unwrap_or_else(|_| vec!["<unreadable: could not compute pending acceptances>".to_owned()]),
     }
 }

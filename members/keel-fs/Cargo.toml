@@ -1,0 +1,10 @@
+[package]
+name = "keel-fs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The atomic file write every keel writer passes through: temp file, parse check for .sysml, rename."
+
+[dependencies]
+keel-parser = { path = "../../keel-parser" }

@@ -12,7 +12,8 @@ use std::collections::HashSet;
 /// Essential, not cosmetic: `procedureText` fields legitimately discuss markers (`#Marker dependency
 /// from a to b`, `#Kind dependency`, `#Changes dependency`), and a naive scan reports each as an
 /// undeclared marker. Those three alone would have produced 9 false violations on a hard guard.
-pub(crate) fn strip_string_literals(line: &str) -> String {
+#[must_use]
+pub fn strip_string_literals(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut in_str = false;
     for c in line.chars() {
@@ -55,12 +56,13 @@ const MARKER_FOLLOWERS: [&str; 5] = ["dependency", "part", "item", "verification
 #[must_use]
 pub fn engine_markers() -> &'static HashSet<String> {
     static M: std::sync::LazyLock<HashSet<String>> =
-        std::sync::LazyLock::new(|| crate::schema::VOCAB.markers.clone());
+        std::sync::LazyLock::new(|| keel_schema::schema::VOCAB.markers.clone());
     &M
 }
 
 /// Marker names USED in real syntactic positions in `text`, as `(marker, 1-based line)`.
-pub(crate) fn markers_used(text: &str) -> Vec<(String, usize)> {
+#[must_use]
+pub fn markers_used(text: &str) -> Vec<(String, usize)> {
     let mut out = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let line = strip_string_literals(raw);
@@ -84,7 +86,8 @@ pub(crate) fn markers_used(text: &str) -> Vec<(String, usize)> {
 }
 
 /// Marker names DECLARED as `metadata def <Name>;` in `texts`.
-pub(crate) fn markers_declared(texts: &[String]) -> HashSet<String> {
+#[must_use]
+pub fn markers_declared(texts: &[String]) -> HashSet<String> {
     // The engine's own algebra is always valid — a project must never have to re-declare it (D0136).
     let mut out: HashSet<String> = engine_markers().clone();
     for text in texts {
@@ -109,13 +112,13 @@ pub(crate) fn markers_declared(texts: &[String]) -> HashSet<String> {
 /// The obligation is not "always create an item" — sometimes a control already exists, and adding a
 /// duplicate is noise. The obligation is that the choice is STATED rather than left silent, so a
 /// reader can tell a considered decision from an omission.
-pub(crate) const RETRO_NO_ITEM_JUSTIFICATIONS: &[&str] = &["no new item", "no item needed", "already tracked", "no further item"];
+pub const RETRO_NO_ITEM_JUSTIFICATIONS: &[&str] = &["no new item", "no item needed", "already tracked", "no further item"];
 
 /// Every tracked-item NAME this retro's own text mentions — `dcCamelCase` and `issueNNN` tokens.
 ///
 /// The RETRO's text, not the whole sprint file: a sprint file legitimately names the task it
 /// delivered in its `DoD` line, and that name satisfied the old check for every retro ever written.
-pub(crate) fn named_items(text: &str) -> Vec<String> {
+pub fn named_items(text: &str) -> Vec<String> {
     /// `dc` is followed by an uppercase letter; `issue` by a digit.
     type NextOk = fn(char) -> bool;
     let bytes = text.as_bytes();
@@ -156,7 +159,8 @@ pub(crate) fn named_items(text: &str) -> Vec<String> {
 /// first version split the whole file on the word, so a retro whose text mentioned "verification"
 /// (the commonest word in this repository) was cut in half and silently not examined: the guard passed
 /// a retro it had not read. Found by this guard's own arming test on 2026-09-03 (issue364, second shape).
-pub(crate) fn retro_texts(sprint_file: &str) -> Vec<String> {
+#[must_use]
+pub fn retro_texts(sprint_file: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut blocks: Vec<String> = Vec::new();
     for line in sprint_file.lines() {
@@ -186,7 +190,8 @@ pub(crate) fn retro_texts(sprint_file: &str) -> Vec<String> {
 
 /// True if a `part <...><Gate>Gate<...>R<n> : TestResult` with `outcome = pass`
 /// exists for the given canonical gate name in `text`.
-pub(crate) fn gate_passed(text: &str, gate: &str) -> bool {
+#[must_use]
+pub fn gate_passed(text: &str, gate: &str) -> bool {
     gate_outcome_in(text, gate, &["VerdictKind::pass"])
 }
 
@@ -195,7 +200,8 @@ pub(crate) fn gate_passed(text: &str, gate: &str) -> bool {
 /// recorded in sequence even though it is not yet passed. Sequence is the guard's concern; done-ness
 /// stays [`gate_passed`]'s, so `advance`, orient and the suspect algebra still read a proposed gate as
 /// not passed.
-pub(crate) fn gate_recorded(text: &str, gate: &str) -> bool {
+#[must_use]
+pub fn gate_recorded(text: &str, gate: &str) -> bool {
     gate_outcome_in(text, gate, &["VerdictKind::pass", "VerdictKind::proposed"])
 }
 
@@ -205,7 +211,8 @@ pub(crate) fn gate_recorded(text: &str, gate: &str) -> bool {
 /// (sprint708's closeOut, CI red on issue542) was written in its turn. [`gate_recorded`] stays the
 /// flow view's finish reader, which refuses `fail` on purpose; done-ness stays [`gate_passed`]'s.
 /// The five members are listed, not `pass` negated, so a sixth verdict is a visible edit here.
-pub(crate) fn gate_has_result(text: &str, gate: &str) -> bool {
+#[must_use]
+pub fn gate_has_result(text: &str, gate: &str) -> bool {
     gate_outcome_in(
         text,
         gate,

@@ -69,9 +69,9 @@ pub struct Activation {
 fn units_from_model(root: &Path) -> BTreeMap<String, Unit> {
     let dir = root.join(".engine/processes");
     let mut units = BTreeMap::new();
-    for path in crate::collect_sysml(&dir) {
+    for path in crate::corpus::collect_sysml(&dir) {
         let Some(stem) = path.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
-        let Ok(pkg) = crate::parse_pkg(&path) else { continue };
+        let Ok(pkg) = crate::corpus::parse_pkg(&path) else { continue };
         let mut guards: Vec<String> = Vec::new();
         for item in &pkg.items {
             // A process part may be a `part` or — after the D0143 retype — a typed `action` usage.
@@ -116,7 +116,8 @@ fn units_from_model(root: &Path) -> BTreeMap<String, Unit> {
 /// of whether it asserts a guard, so the catalogue must resolve it for guard-less processes too —
 /// otherwise `export` writes a bundle missing the skill, which is srPortModularProcessUnit's
 /// "without leaving its enforcement behind" failing on the other leg.
-pub(crate) fn deploying_skills(root: &Path, process: &str) -> Vec<String> {
+#[must_use]
+pub fn deploying_skills(root: &Path, process: &str) -> Vec<String> {
     // D0220: a skill may declare its deployment BESIDE ITSELF so a unit carries its own
     // registration, so every `.sysml` under `.engine/skills/` is a registry — not just the central
     // file. Moving decision-channel's entry out of the central registry made its skill vanish from
@@ -124,7 +125,7 @@ pub(crate) fn deploying_skills(root: &Path, process: &str) -> Vec<String> {
     // directory rather than one path.
     let skills_dir = root.join(".engine").join("skills");
     let mut text = String::new();
-    for f in crate::collect_sysml(&skills_dir) {
+    for f in crate::corpus::collect_sysml(&skills_dir) {
         if let Ok(s) = std::fs::read_to_string(&f) {
             text.push('\n');
             text.push_str(&s);
@@ -233,18 +234,24 @@ impl Activation {
             }
         }
 
-        // A unit naming a guard that does not exist is a dead reference: the project believes a control
-        // is bound to a process when nothing checks it. Same defect class as issue093.
-        for (proc_name, unit) in &out.units {
+        out
+    }
+
+    /// A unit naming a guard that does not exist is a dead reference: the project believes a control
+    /// is bound to a process when nothing checks it. Same defect class as issue093. `known` is the
+    /// enforced guard census, supplied by the guard layer (the read model does not know the guards).
+    #[must_use]
+    pub fn unknown_guard_refs(&self, known: &[&str]) -> Vec<String> {
+        let mut out = Vec::new();
+        for (proc_name, unit) in &self.units {
             for g in &unit.guards {
-                if !crate::guards::GUARD_NAMES.contains(&g.as_str()) {
-                    out.errors.push(format!(
+                if !known.contains(&g.as_str()) {
+                    out.push(format!(
                         ".engine/processes/{proc_name}.sysml: asserts constraint `{g}`, which is not an enforced guard — nothing would check it"
                     ));
                 }
             }
         }
-
         out
     }
 
@@ -318,7 +325,7 @@ impl Activation {
 /// reports the whole set and says which part of it is switchable.
 #[must_use]
 pub fn declared_processes(root: &Path) -> Vec<String> {
-    let mut out: Vec<String> = crate::collect_sysml(&root.join(".engine").join("processes"))
+    let mut out: Vec<String> = crate::corpus::collect_sysml(&root.join(".engine").join("processes"))
         .iter()
         .filter_map(|p| p.file_stem().and_then(|s| s.to_str()).map(str::to_string))
         .collect();
@@ -342,9 +349,19 @@ mod tests {
     /// processes, and refusing the other 12 as "not a declared process unit" told them those did not
     /// exist. The unit set is deliberately narrower - activation switches guards - so the two must be
     /// separately observable rather than one standing in for the other.
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
+    }
+
     #[test]
     fn declared_processes_is_every_file_not_only_the_guard_bearing_units() {
-        let root = Path::new("..");
+        let root = &repo_root();
         let all = super::declared_processes(root);
         let act = Activation::load(root);
         let units = act.unit_names();

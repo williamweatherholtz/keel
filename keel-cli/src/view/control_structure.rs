@@ -147,7 +147,7 @@ const ACT_WRITE_LAYER: Actuator = Actuator {
     name: "actWriteLayer",
     title: "the keel write layer lands the file",
     mechanism: "temp-file-then-rename under .keel-write-lock; actor and date required or the write refuses (D0129, issue184/185)",
-    source: "keel-cli/src/write.rs",
+    source: "members/keel-write/src/write.rs",
 };
 const ACT_GIT_PUSH: Actuator = Actuator {
     name: "actGitPush",

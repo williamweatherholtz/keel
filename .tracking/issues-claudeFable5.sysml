@@ -1511,4 +1511,37 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcLockedSurfaceEditIsNamedAtWriteTime to issue555;
+
+    part issue556 : Issue {
+        :>> id = "ff552009-9f8a-4da9-93bd-62ac90ce6775";
+        :>> title = "arch drift counts a #Supersede-retired CodeElement as MISSING";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel show arch drift counted a CodeElement retired by an incoming #Supersede edge as MISSING drift. Found in sprint 718: after ceRecordClaimMember superseded ceRecordClaim (its file moved from keel-cli/src/write.rs to members/keel-write/src/write.rs, D0108 forbids editing claudeOpus5's element in place), arch drift still printed MISSING record_claim keel-cli/src/write.rs not readable and counted it, so the honest D0108 shape - successor element plus #Supersede edge - read as drift. Every other lens drops a superseded item (invariant 4); arch_model in keel-cli/src/view/mod.rs did not. Fixed in the same sprint: arch_model filters the targets of supersede edges, with the test a_superseded_element_leaves_the_registry_and_its_successor_stays over this repo's four pairs.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcArchDriftDropsSupersededElements to issue556;
+
+    part issue557 : Issue {
+        :>> id = "36fb8e2f-fa1c-470d-b25b-28342cd4a23b";
+        :>> title = "Member unit tests keyed on cwd-relative anchors broke again after a module move (714, 718)";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Member unit tests keyed on a cwd-relative anchor break when their module moves two levels down, and the class recurred: sprint 714 fixed four by hand (gitx.rs, github.rs twice, cli_surface.rs) and recorded no control; sprint 718 hit eight more (activation.rs, fingerprint.rs, orient.rs, queries.rs, write.rs four times) on the same shapes - Path::new('..'), read_to_string('src/main.rs') and read_to_string('src/write.rs'), CARGO_MANIFEST_DIR joined with '..'. Each names the repository only while the crate sits directly under it, which a member does not. A second occurrence is the D0047 line: sprint 718 adds the scan no_member_test_anchors_on_a_cwd_relative_path (touched.rs) over every members/*/src file, probed red by mutation; keel-cli/src still holds sixteen such anchors and nine crates carry their own repo_root() copy, which dcOneRepoRootHelper collapses onto one keel_fs helper and widens the scan to cover.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcOneRepoRootHelper to issue557;
+
+    part issue558 : Issue {
+        :>> id = "640a4dcc-4072-4a5d-9ead-05dfdf6b6ce4";
+        :>> title = "record issue accepts a resolver kind the resolver-kind guard refuses at commit";
+        :>> createdAt = "2026-09-14";
+        :>> createdBy = "claudeFable5";
+        :>> description = "`keel record issue --resolver X` checked only that X exists in the model (main.rs cmd_record_issue, item_exists), then printed 'triaged on arrival'. The `resolver-kind` guard refuses a #Resolves source that is neither a declared action nor a Decision, and the `issues` guard refuses a resolver that never names its issue - so a write the command reported as a triage was refused at the next commit. Observed in sprint 718: issue556 was first triaged to the sprint Story modelAndWriteAreMembersStory; the write accepted it and the pre-commit guard aborted the commit with both refusals. The write path and the gate had two predicates for one fact.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRecordIssueRefusesANonResolverKind to issue558;
 }

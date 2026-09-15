@@ -1,0 +1,20 @@
+[package]
+name = "keel-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The read model: the parsed corpus, the item/edge graph, the indexer, the done set, the frontier and the predicates that narrow it."
+
+[dependencies]
+keel-parser = { path = "../../keel-parser" }
+keel-fs = { path = "../keel-fs" }
+keel-perf = { path = "../keel-perf" }
+keel-git = { path = "../keel-git" }
+keel-json = { path = "../keel-json" }
+keel-actor = { path = "../keel-actor" }
+keel-schema = { path = "../keel-schema" }
+getrandom = "0.3"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+thiserror = "1"

@@ -4,7 +4,7 @@
 # (merge, NEVER rebase) and retry.
 #
 # WHY NEVER REBASE (issue071 — the existential one): a passing TestResult counts as done only while
-# its `judgedAgainst` SHA still RESOLVES (keel-cli/src/orient.rs). `git pull --rebase` rewrites local
+# its `judgedAgainst` SHA still RESOLVES (members/keel-model/src/orient.rs). `git pull --rebase` rewrites local
 # commit identity, so evidence already recorded points at pre-rebase commits that were never pushed.
 # The rewriting machine still finds them as loose objects and reports GREEN, while every other clone
 # reports invalidEvidence, re-lists finished work as ready, and a second contributor redoes it —

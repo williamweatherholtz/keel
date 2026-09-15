@@ -11,7 +11,7 @@
 //! No `TestResult`s are generated: results are appended when a gate is actually judged
 //! (`record gate-result`), never pre-created.
 
-use crate::ident::gen_uuid;
+use keel_model::ident::gen_uuid;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 pub const PLACEHOLDER: &str = "KEEL-SCAFFOLD-FILL-ME";
 
 /// Each ceremony gate's verification method and title. The gates themselves - which and in what
-/// order - are `crate::orient::gate_order(root)` (D0435); a gate this table does not know is
+/// order - are `keel_model::orient::gate_order(root)` (D0435); a gate this table does not know is
 /// scaffolded as `inspect` with a plain title.
 const GATE_KINDS: [(&str, &str, &str); 6] = [
     ("Refine", "inspect", "refine gate (DoR)"),
@@ -171,7 +171,7 @@ fn sprint_with(
         field(fill, "dod", &format!("{PLACEHOLDER}: DELIVERED BACKLOG ITEMS: <items>. <what done means, verified how>."))
     );
     let _ = writeln!(t, "    }}\n");
-    for g in crate::orient::gate_order(root) {
+    for g in keel_model::orient::gate_order(root) {
         let (method, title) = gate_kind(&g);
         let _ = writeln!(
             t,
@@ -227,15 +227,20 @@ pub fn today() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-#[cfg(test)]
-pub(crate) mod tests {
-    use super::{sprint, sprint_filled, PLACEHOLDER};
-
+/// Sprint fixtures shared by this crate's tests and by keel-cli's guard tests (the crate boundary moved
+/// between them in sprint 718; a `#[cfg(test)]` module is not reachable across it).
+#[doc(hidden)]
+// A fixture panics where a test would: the same allowance lib.rs grants under cfg(test).
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+pub mod test_support {
     /// Since D0435 the scaffold reads the ceremony order from the tree: the workflow's `first A then B;`
     /// chain, for the workflow whose phases some `ProcessStep` binds as `checkedBy = "gate:<phase>"`.
     /// A fixture that declares neither scaffolds a Story and `DoD` and NO gate - which is the D0435
     /// unenforceable-by-step case, not a defect - so a test that expects six gates declares this.
-    fn declare_ceremony(root: &std::path::Path) {
+    ///
+    /// # Panics
+    /// Test fixture: panics when the fixture tree cannot be written.
+    pub fn declare_ceremony(root: &std::path::Path) {
         std::fs::create_dir_all(root.join(".engine").join("workflows")).expect("mkdir workflows");
         std::fs::create_dir_all(root.join(".engine").join("processes")).expect("mkdir processes");
         std::fs::write(
@@ -268,6 +273,29 @@ pub(crate) mod tests {
         .expect("write process");
     }
 
+    /// # Panics
+    /// Test fixture: panics when the temp tree cannot be created.
+    #[must_use]
+    pub fn temp_root(tag: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("keel-scaffold-{tag}"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".tracking").join("delivery")).expect("mkdir");
+        std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");
+        std::fs::write(
+            root.join(".engine").join("decisions").join("9997-t.sysml"),
+            "package D9997 { part d9997 : Decision { :>> id = \"e2e00000-0000-4000-8000-000000009997\"; } }\n",
+        )
+        .expect("write charter");
+        declare_ceremony(&root);
+        root
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::{sprint, sprint_filled, PLACEHOLDER};
+    use super::test_support::{declare_ceremony, temp_root};
+
     /// issue267: the filled scaffold carries every section's prose, no placeholder, and ZERO
     /// `TestResult`s - verdicts come from the write API alone; a missing section is refused by name.
     #[test]
@@ -296,20 +324,6 @@ pub(crate) mod tests {
         let tokens = keel_parser::tokenize(&text, "sprint.sysml").expect("lex");
         assert!(keel_parser::parse(tokens, "sprint.sysml").is_ok(), "the filled record parses");
         let _ = std::fs::remove_dir_all(&root);
-    }
-
-    pub fn temp_root(tag: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!("keel-scaffold-{tag}"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join(".tracking").join("delivery")).expect("mkdir");
-        std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");
-        std::fs::write(
-            root.join(".engine").join("decisions").join("9997-t.sysml"),
-            "package D9997 { part d9997 : Decision { :>> id = \"e2e00000-0000-4000-8000-000000009997\"; } }\n",
-        )
-        .expect("write charter");
-        declare_ceremony(&root);
-        root
     }
 
     /// D0435, known-negative: a tree that binds no `gate:<phase>` has no ceremony order, so the scaffold
@@ -341,7 +355,7 @@ pub(crate) mod tests {
         assert_eq!(ids.len(), 8, "story + DoD + six gates");
         let mut seen = std::collections::HashSet::new();
         for id in &ids {
-            assert!(crate::ident::uuid_shaped(id), "guard 38 rejects a scaffolded id: {id}");
+            assert!(keel_model::ident::uuid_shaped(id), "guard 38 rejects a scaffolded id: {id}");
             assert!(seen.insert(*id), "duplicate id in one scaffold");
         }
         for g in ["RefineGate", "StandupGate", "ImplementGate", "ReviewGate", "CloseOutGate", "RetroGate"] {

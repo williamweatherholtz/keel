@@ -1,0 +1,19 @@
+[package]
+name = "keel-write"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The write API: every authored fact enters the tree through here, under one lock, atomically, provenance bound."
+
+[dependencies]
+keel-parser = { path = "../../keel-parser" }
+keel-fs = { path = "../keel-fs" }
+keel-model = { path = "../keel-model" }
+keel-git = { path = "../keel-git" }
+keel-json = { path = "../keel-json" }
+keel-actor = { path = "../keel-actor" }
+keel-schema = { path = "../keel-schema" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+thiserror = "1"

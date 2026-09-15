@@ -148,7 +148,7 @@ fn with<T>(root: &Path, f: impl FnOnce(&mut Facts) -> T) -> T {
     let mut g = FACTS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let reload = g.as_ref().is_none_or(|fx| fx.root != root);
     if reload {
-        *g = Some(crate::perf::phase("gitfacts:load", || load(root)));
+        *g = Some(keel_perf::perf::phase("gitfacts:load", || load(root)));
     }
     g.as_mut().map_or_else(|| unreachable!("the slot was filled just above"), f)
 }
@@ -165,7 +165,7 @@ pub fn flush(root: &Path) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if crate::perf::phase("gitfacts:flush", || crate::write::write_atomic(&path, text)).is_ok() {
+        if keel_perf::perf::phase("gitfacts:flush", || keel_fs::fsx::write_atomic(&path, text)).is_ok() {
             fx.dirty = false;
         }
     });
@@ -333,7 +333,7 @@ pub fn head_sha(root: &Path) -> Option<String> {
             return h.clone();
         }
     }
-    let h = crate::gitx::git()
+    let h = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "HEAD"])
@@ -349,11 +349,12 @@ pub fn head_sha(root: &Path) -> Option<String> {
 // ── batched git reads (moved from orient, D0479: a view may not reach into orient for git) ──────
 
 /// A commit that git resolves - conservative: if git is unavailable, don't invalidate.
-pub(crate) fn git_sha_valid(sha: &str, repo: &Path) -> bool {
+#[must_use]
+pub fn git_sha_valid(sha: &str, repo: &Path) -> bool {
     if sha.is_empty() {
         return false;
     }
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["cat-file", "-t", sha])
@@ -382,7 +383,8 @@ fn feed_stdin(child: &mut std::process::Child, lines: &[String]) -> Option<std::
 
 /// Validate many commit SHAs in ONE `git cat-file --batch-check` spawn (orientPerf): returns
 /// `sha -> is-commit`. Conservative on git failure (true) — matches `git_sha_valid`.
-pub(crate) fn valid_commits(repo: &Path, shas: &[String]) -> HashMap<String, bool> {
+#[must_use]
+pub fn valid_commits(repo: &Path, shas: &[String]) -> HashMap<String, bool> {
     let mut out: HashMap<String, bool> = HashMap::new();
     // A full id already confirmed as a commit stays one (dcGitFactsAreContentAddressed); only the rest
     // go to git. A negative is never remembered - a fetch can make it true.
@@ -402,7 +404,7 @@ pub(crate) fn valid_commits(repo: &Path, shas: &[String]) -> HashMap<String, boo
         return out;
     }
     let shas = &shas[..];
-    let spawn = crate::gitx::git()
+    let spawn = keel_git::gitx::git()
         .arg("-C").arg(repo)
         .args(["cat-file", "--batch-check"])
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
@@ -412,7 +414,7 @@ pub(crate) fn valid_commits(repo: &Path, shas: &[String]) -> HashMap<String, boo
         return out;
     };
     let feeder = feed_stdin(&mut child, shas);
-    let waited = crate::perf::timed(&crate::perf::GIT_NANOS, || child.wait_with_output());
+    let waited = keel_perf::perf::timed(&keel_perf::perf::GIT_NANOS, || child.wait_with_output());
     if let Some(f) = feeder { let _ = f.join(); }
     let Ok(o) = waited else {
         for s in shas { out.insert(s.clone(), true); }
@@ -439,19 +441,20 @@ pub(crate) fn valid_commits(repo: &Path, shas: &[String]) -> HashMap<String, boo
 /// Read many `<rev>:<path>` blobs in ONE `git cat-file --batch` spawn (orientPerf): returns
 /// `key -> content` (None if missing). Parses the size-delimited batch protocol. `pub(crate)` so
 /// the coverage/critique element-content staleness check (D0084) can reuse the batched read.
-pub(crate) fn batch_cat_blobs(repo: &Path, keys: &[String]) -> HashMap<String, Option<String>> {
+#[must_use]
+pub fn batch_cat_blobs(repo: &Path, keys: &[String]) -> HashMap<String, Option<String>> {
     let mut out: HashMap<String, Option<String>> = HashMap::new();
     if keys.is_empty() {
         return out;
     }
-    let spawn = crate::gitx::git()
+    let spawn = keel_git::gitx::git()
         .arg("-C").arg(repo)
         .args(["cat-file", "--batch"])
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
         .spawn();
     let Ok(mut child) = spawn else { return out; };
     let feeder = feed_stdin(&mut child, keys);
-    let waited = crate::perf::timed(&crate::perf::GIT_NANOS, || child.wait_with_output());
+    let waited = keel_perf::perf::timed(&keel_perf::perf::GIT_NANOS, || child.wait_with_output());
     if let Some(f) = feeder { let _ = f.join(); }
     let Ok(o) = waited else { return out; };
     let data = o.stdout;
@@ -473,6 +476,82 @@ pub(crate) fn batch_cat_blobs(repo: &Path, keys: &[String]) -> HashMap<String, O
     }
     out
 }
+
+// ── how this clone stands relative to its upstream (out of sync.rs, sprint 718) ──
+
+/// How this clone stands relative to its upstream.
+pub struct Divergence {
+    pub branch: String,
+    /// Commits on the remote that this clone does not have.
+    pub behind: usize,
+    /// Commits here that the remote does not have.
+    pub ahead: usize,
+    /// No upstream configured, or the remote is unreachable — reported, never assumed to be zero.
+    pub unknown: Option<String>,
+}
+
+impl Divergence {
+    #[must_use]
+    pub const fn diverged(&self) -> bool {
+        self.behind > 0 && self.ahead > 0
+    }
+    /// A compact JSON object for `orient`.
+    ///
+    /// ALWAYS emitted, including the unknown case. "I could not tell" and "you are in sync" are
+    /// different answers, and a computed view that renders them identically is the silent-failure
+    /// shape this project keeps paying for (issue093, issue096).
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        self.unknown.as_ref().map_or_else(
+            || format!(
+                "{{\"branch\":\"{}\",\"behind\":{},\"ahead\":{},\"diverged\":{}}}",
+                self.branch.replace('"', "\\\""),
+                self.behind,
+                self.ahead,
+                self.diverged()
+            ),
+            |u| format!("{{\"branch\":\"{}\",\"unknown\":\"{}\"}}", self.branch.replace('"', "\\\""), u.replace('"', "\\\"")),
+        )
+    }
+}
+
+/// One git command's trimmed stdout, or its trimmed stderr as the error.
+///
+/// # Errors
+/// Returns the process's stderr when git exits non-zero, or the spawn error's text.
+pub fn git_out(repo: &Path, args: &[&str]) -> Result<String, String> {
+    let out = keel_git::gitx::git().arg("-C").arg(repo).args(args).output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+/// Read behind/ahead WITHOUT contacting the remote — i.e. against the last fetch.
+///
+/// Separated from fetching on purpose: `orient` must be able to report the sync state on every
+/// invocation, and a view that silently performs network I/O is a view you stop running. `keel sync`
+/// fetches first and then calls this; `orient` calls it alone and reports what the last fetch knew.
+#[must_use]
+pub fn divergence(repo: &Path) -> Divergence {
+    let branch = git_out(repo, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_else(|_| "HEAD".to_string());
+    // `@{u}` is git's upstream shorthand; the braces are git syntax, not a format placeholder.
+    let upstream_ref = concat!("@", "{u}");
+    let Ok(upstream) = git_out(repo, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", upstream_ref]) else {
+        return Divergence { branch, behind: 0, ahead: 0, unknown: Some("no upstream configured for this branch".to_string()) };
+    };
+    match git_out(repo, &["rev-list", "--left-right", "--count", &format!("{upstream}...HEAD")]) {
+        Ok(counts) => {
+            let mut it = counts.split_whitespace();
+            let behind = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+            let ahead = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+            Divergence { branch, behind, ahead, unknown: None }
+        }
+        Err(e) => Divergence { branch, behind: 0, ahead: 0, unknown: Some(e) },
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

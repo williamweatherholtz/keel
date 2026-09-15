@@ -22,42 +22,17 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use keel_parser::ast::{ActionDef, Item, Package, Part, Value};
-use keel_parser::{parse, tokenize, Diagnostic, PackageRegistry};
+use keel_parser::{Diagnostic, PackageRegistry};
 
-pub mod activation;
+pub use keel_model::activation;
 pub use keel_schema::cli_facts;
 pub use keel_json::color;
 pub use keel_schema::cli_surface;
 pub use keel_schema::control_defects;
 pub mod control_proof;
-/// The declared-vs-binary version skew for the project owning `target`, if any (D0251).
-///
-/// Root discovery mirrors `write::model_lock_path`: walk up to the `.tracking`/`.engine` parent. Returns
-/// `None` when there is no declaration (D0136: absence is a state — a pre-D0190 tree keeps working),
-/// when the declaration matches, or when no project root is findable (a caller writing outside a
-/// model tree has no pin to honour).
-#[must_use]
-pub fn pin_skew(target: &Path) -> Option<(String, String)> {
-    // The target may BE the .tracking dir (set_attr locks on it directly), or live under it.
-    let mut cur = target;
-    let root = loop {
-        if matches!(cur.file_name().and_then(|n| n.to_str()), Some(".tracking" | ".engine")) {
-            break cur.parent()?;
-        }
-        cur = cur.parent()?;
-    };
-    let text = std::fs::read_to_string(root.join(".engine").join("contracts").join("engine-version.toml")).ok()?;
-    let declared = text
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("engine"))
-        .and_then(|r| r.split('"').nth(1))
-        .map(str::to_string)?;
-    let binary = env!("CARGO_PKG_VERSION");
-    (declared != binary).then(|| (declared, binary.to_string()))
-}
-
 pub use keel_actor::actor;
-pub mod algo;
+pub use keel_write::pin_skew;
+pub use keel_model::algo;
 pub mod arch;
 pub mod verification;
 pub use keel_schema::schema;
@@ -74,11 +49,11 @@ pub use keel_github::github;
 pub mod github_ingest;
 pub mod adoption_check;
 pub mod attestation;
-pub mod intake_write;
+pub use keel_write::intake_write;
 pub mod workspace;
 pub mod onboard;
 pub mod proactive;
-pub mod claim;
+pub use keel_write::claim;
 pub mod deck;
 pub use keel_actor::device;
 pub use keel_schema::embedded;
@@ -86,44 +61,50 @@ pub mod launcher;
 pub mod library;
 pub mod enroll;
 pub use keel_git::gitx;
-pub mod corpus;
+pub use keel_model::corpus;
 pub mod receipt;
 pub mod contentkey;
-pub mod gitfacts;
-pub mod binding;
-pub mod done;
-pub mod evidence;
+pub use keel_model::gitfacts;
+pub use keel_model::binding;
+pub use keel_model::done;
+pub use keel_model::evidence;
 pub mod priority;
 pub mod reports;
-pub mod ident;
-pub mod suspect;
-pub mod textscan;
+pub use keel_model::ident;
+pub use keel_model::suspect;
+pub use keel_model::textscan;
 pub mod govern;
 pub mod guards;
 pub mod hook_binary;
 pub mod hardening;
-pub mod indexer;
+pub use keel_model::indexer;
 pub mod migrate;
 use keel_json::json;
-pub mod fingerprint;
+pub use keel_model::fingerprint;
 pub use keel_perf::perf;
 pub mod pm;
 pub mod plan_cover;
-pub mod orient;
+pub use keel_model::orient;
 pub mod process_cmd;
 pub mod claude_surface;
 pub mod console_registry;
-pub mod queries;
-pub mod reverify;
-pub mod scaffold;
+pub use keel_model::queries;
+pub use keel_write::reverify;
+pub use keel_write::scaffold;
 pub mod serve;
 pub mod status;
 pub mod sync;
 pub mod shellcheck;
 pub mod view;
-pub mod write;
+pub use keel_write::write;
+pub use keel_model::claims;
+pub use keel_model::model;
 
 // ── file discovery ────────────────────────────────────────────────────────────
+
+// The corpus walk, the parse report type and the workflow cursor are the read model's (sprint 718).
+pub use keel_model::corpus::{collect_sysml, collect_sysml_uncached, parse_pkg, CheckError};
+pub use keel_model::indexer::{parse_cursor, Cursor};
 
 /// Recursively collect every `.sysml` file under `dir`, sorted by path.
 ///
@@ -164,41 +145,7 @@ pub fn supersede_edges(root: &Path) -> Vec<(String, String)> {
     out
 }
 
-#[must_use]
-pub fn collect_sysml(dir: &Path) -> Vec<PathBuf> {
-    corpus::collect_sysml(dir)
-}
-
-/// The walk itself, never memoized - what `fingerprint::compute` reads, because the thing that
-/// detects change must not read a memo (dcOneCorpusPerProcess).
-#[must_use]
-pub fn collect_sysml_uncached(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return out;
-    };
-    for entry in entries.flatten() {
-        let p = entry.path();
-        if p.is_dir() {
-            out.extend(collect_sysml_uncached(&p));
-        } else if p.extension().and_then(|e| e.to_str()) == Some("sysml") {
-            out.push(p);
-        }
-    }
-    out.sort();
-    out
-}
-
 // ── report types ─────────────────────────────────────────────────────────────
-
-/// A parse or I/O failure encountered while processing a single file.
-#[derive(Debug, Clone)]
-pub struct CheckError {
-    /// The file that caused the error.
-    pub file: PathBuf,
-    /// Human-readable description of the failure.
-    pub message: String,
-}
 
 /// Accumulated results from a [`check_files`] or [`validate_root`] run.
 #[derive(Debug, Default)]
@@ -220,19 +167,6 @@ impl Report {
 }
 
 // ── orient types ─────────────────────────────────────────────────────────────
-
-/// Workflow cursor read from `.tracking/state.sysml`.
-#[derive(Debug, Clone, Default)]
-pub struct Cursor {
-    /// Active workflow name (e.g. `"DeliveryWorkflow"`).
-    pub active_workflow: String,
-    /// Active phase name (e.g. `"Delivery/implement"`).
-    pub active_phase: String,
-    /// ISO-8601 date the phase was entered.
-    pub entered_at: String,
-    /// Actor who entered the phase.
-    pub entered_by: String,
-}
 
 /// Results of an [`orient_root`] computation.
 #[derive(Debug, Default)]
@@ -330,47 +264,7 @@ fn part_outcome_is_pass(part: &Part) -> bool {
     })
 }
 
-fn str_value(value: &Value) -> Option<&str> {
-    match value {
-        Value::Str(s) | Value::Ident(s) => Some(s),
-        _ => None,
-    }
-}
-
 // ── public orient API ─────────────────────────────────────────────────────────
-
-/// Extract the workflow cursor from a parsed package.
-///
-/// Returns `Some(Cursor)` if the package contains a `Part` with an
-/// `activeWorkflow` attribute; `None` otherwise.
-#[must_use]
-pub fn parse_cursor(pkg: &Package) -> Option<Cursor> {
-    for item in &pkg.items {
-        if let Item::Part(p) = item {
-            let mut cursor = Cursor::default();
-            let mut found = false;
-            for attr in &p.attributes {
-                let Some(s) = str_value(&attr.value) else {
-                    continue;
-                };
-                match attr.name.as_str() {
-                    "activeWorkflow" => {
-                        s.clone_into(&mut cursor.active_workflow);
-                        found = true;
-                    }
-                    "activePhase" => s.clone_into(&mut cursor.active_phase),
-                    "enteredAt" => s.clone_into(&mut cursor.entered_at),
-                    "enteredBy" => s.clone_into(&mut cursor.entered_by),
-                    _ => {}
-                }
-            }
-            if found {
-                return Some(cursor);
-            }
-        }
-    }
-    None
-}
 
 /// Compute the orient state (ready/done/outstanding) from a set of parsed packages.
 ///
@@ -461,26 +355,6 @@ pub fn orient_root(root: &Path) -> OrientReport {
 }
 
 // ── internal parse helper ─────────────────────────────────────────────────────
-
-/// Read and parse one `.sysml` file into a [`Package`].
-///
-/// # Errors
-/// Returns [`CheckError`] if the file cannot be read, or if tokenizing/parsing fails.
-pub fn parse_pkg(path: &Path) -> Result<Package, CheckError> {
-    let src = std::fs::read_to_string(path).map_err(|e| CheckError {
-        file: path.to_path_buf(),
-        message: e.to_string(),
-    })?;
-    let name = path.to_string_lossy();
-    let tokens = tokenize(&src, &name).map_err(|e| CheckError {
-        file: path.to_path_buf(),
-        message: e.to_string(),
-    })?;
-    parse(tokens, &name).map_err(|e| CheckError {
-        file: path.to_path_buf(),
-        message: e.to_string(),
-    })
-}
 
 // ── public commands ───────────────────────────────────────────────────────────
 

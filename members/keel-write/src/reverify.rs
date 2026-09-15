@@ -163,7 +163,7 @@ pub fn demo_replays_in_text(text: &str, prefixes: &[String]) -> Vec<(String, Str
 pub fn demo_replays(root: &Path) -> Vec<DemoReplay> {
     let prefixes = demo_prefixes(root);
     let mut out = Vec::new();
-    for file in crate::collect_sysml(&root.join(".tracking")) {
+    for file in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         let Ok(text) = std::fs::read_to_string(&file) else { continue };
         for (test, command) in demo_replays_in_text(&text, &prefixes) {
             let task = test.strip_suffix("DoD").filter(|t| text.contains(&format!("action {t};"))).map(str::to_string);
@@ -292,7 +292,7 @@ pub fn manifest_task_names(manifest_text: &str) -> HashSet<String> {
 fn drift_tasks(root: &Path) -> Vec<String> {
     let manifest = std::fs::read_to_string(root.join(".engine").join("deliverable-manifest.txt")).unwrap_or_default();
     let names = manifest_task_names(&manifest);
-    let mut out: Vec<String> = crate::orient::compute(root).suspect.into_iter().filter(|t| names.contains(t)).collect();
+    let mut out: Vec<String> = keel_model::orient::compute(root).suspect.into_iter().filter(|t| names.contains(t)).collect();
     out.sort();
     out
 }
@@ -300,11 +300,11 @@ fn drift_tasks(root: &Path) -> Vec<String> {
 /// The `.tracking` file declaring `action <task>;` (where the task's `DoD` + results live).
 fn find_task_file(root: &Path, task: &str) -> Option<PathBuf> {
     let needle = format!("action {task};");
-    crate::collect_sysml(&root.join(".tracking")).into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains(&needle)))
+    keel_model::corpus::collect_sysml(&root.join(".tracking")).into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains(&needle)))
 }
 
 fn git_capture(root: &Path, args: &[&str]) -> Option<String> {
-    let out = crate::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
+    let out = keel_git::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 

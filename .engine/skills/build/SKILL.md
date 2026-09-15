@@ -24,9 +24,10 @@ for `test-verify`, not a substitute for it.
 ## Expert Vocabulary Payload
 
 **Workspace layout:** Cargo workspace at repo root; crates `keel-parser` (lib),
-the D0479 leaf members under `members/` (`keel-perf`, `keel-git`, `keel-json`,
-`keel-actor`, `keel-schema`, `keel-github` — each a lib that `keel-cli` re-exports
-under its old module path), and `keel-cli` (bin → `target/release/keel.exe`). All compile under
+the D0479 members under `members/` — layered leaf crates, then the read model
+`keel-model`, then the write layer `keel-write`, each a lib that `keel-cli` re-exports
+under its old module path; `[workspace] members` in `Cargo.toml` is the one list of them
+(D0486) — and `keel-cli` (bin → `target/release/keel.exe`). All compile under
 `#![deny(warnings, clippy::all, clippy::pedantic, clippy::nursery)]` — a warning
 **is** a build failure here, by design (rustS0 DoD).
 

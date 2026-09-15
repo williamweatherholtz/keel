@@ -13,12 +13,12 @@ task: rustS2Parser | keel-parser/src/parser.rs keel-parser/src/ast.rs
 task: rustS3Semantic | keel-parser/src/registry.rs
 task: rustS4SpecCompat | keel-parser/src/spec_compat.rs
 task: rustS5CLI | keel-cli/src/main.rs keel-cli/src/lib.rs
-task: rustS6Orient | keel-cli/src/orient.rs keel-cli/src/indexer.rs
-task: rustS7QueryAlign | keel-cli/src/orient.rs keel-cli/src/lib.rs
+task: rustS6Orient | members/keel-model/src/orient.rs members/keel-model/src/indexer.rs
+task: rustS7QueryAlign | members/keel-model/src/orient.rs keel-cli/src/lib.rs
 task: rustS8runtimeParser | keel-parser/src
-task: rustS9writeApi | keel-cli/src/write.rs
+task: rustS9writeApi | members/keel-write/src/write.rs
 task: runtimeParser | keel-parser/src
-task: writeApi | keel-cli/src/write.rs
+task: writeApi | members/keel-write/src/write.rs
 task: rustToolchainFix | keel-parser keel-cli Cargo.toml Cargo.lock
 task: specVersionRuntimeCheck | keel-parser/src/spec_compat.rs
 task: serveItemActions | keel-cli/src/serve.rs keel-cli/assets/console.html

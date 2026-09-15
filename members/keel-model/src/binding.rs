@@ -85,7 +85,7 @@ fn introducing_commits(repo: &Path, ids: &[&str]) -> HashMap<String, String> {
 /// reversing, or use [`crate::gitfacts::remember_introduced`], which keeps the oldest.
 fn walk(repo: &Path, from: Option<&str>, head: &str) -> Vec<(String, String)> {
     let range = from.map_or_else(|| head.to_string(), |f| format!("{f}..{head}"));
-    let out = crate::gitx::git()
+    let out = keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["log", "--format=COMMIT %H", "-p", "--no-color", "--no-renames", "--first-parent"])
@@ -141,7 +141,7 @@ fn ids_on(line: &str) -> Vec<String> {
 /// `commit -> parents` for every commit reachable from HEAD, from one `git rev-list --parents`.
 /// Empty when git cannot answer, in which case no re-binding happens (fail closed to `judgedAgainst`).
 fn parents_graph(repo: &Path) -> HashMap<String, Vec<String>> {
-    let out = crate::gitx::git()
+    let out = keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["rev-list", "--parents", "HEAD"])
@@ -186,7 +186,7 @@ fn is_ancestor(parents: &HashMap<String, Vec<String>>, anc: &str, from: &str) ->
 #[must_use]
 pub fn step_check_bindings(root: &Path) -> Vec<(PathBuf, usize, String, String)> {
     let mut out = Vec::new();
-    for path in crate::collect_sysml(&root.join(".engine/processes")) {
+    for path in crate::corpus::collect_sysml(&root.join(".engine/processes")) {
         let Ok(text) = crate::corpus::read_to_string(&path) else { continue };
         let mut step = String::new();
         for (i, raw) in text.lines().enumerate() {
@@ -247,7 +247,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("keel-binding-{}", crate::ident::gen_uuid()));
         std::fs::create_dir_all(dir.join(".tracking")).unwrap();
         let git = |args: &[&str]| {
-            let o = crate::gitx::git().arg("-C").arg(&dir).args(args).output().unwrap();
+            let o = keel_git::gitx::git().arg("-C").arg(&dir).args(args).output().unwrap();
             assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
             String::from_utf8_lossy(&o.stdout).trim().to_string()
         };

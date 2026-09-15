@@ -20,14 +20,14 @@ pub struct Evidence {
     pub invalid_evidence: Vec<String>,
     /// Passes whose anchor is unresolvable HERE while the clone cannot judge. Unsorted.
     pub unsynchronized_evidence: Vec<String>,
-    pub sync_state: crate::sync::Divergence,
+    pub sync_state: crate::gitfacts::Divergence,
 }
 
 /// `fetched`: the caller has JUST fetched (`keel sync`). `evidence`: the caller reads `verified_at`
 /// and the evidence classes; when false and the clone cannot judge anyway, the SHA validation and the
 /// landing-commit binding are skipped because neither can change `done_map` (issue439).
 #[must_use]
-pub(crate) fn classify(repo: &Path, tasks: &HashMap<String, TaskData>, fetched: bool, evidence: bool) -> Evidence {
+pub fn classify(repo: &Path, tasks: &HashMap<String, TaskData>, fetched: bool, evidence: bool) -> Evidence {
     // Step 1: compute done/invalid-evidence/verified-at.
     let mut done_map: HashMap<String, bool> = HashMap::new();
     let mut verified_at: HashMap<String, String> = HashMap::new();
@@ -57,7 +57,7 @@ pub(crate) fn classify(repo: &Path, tasks: &HashMap<String, TaskData>, fetched: 
     // stop running — so from `orient` the answer is "unverifiable from here", with the remedy named.
     // `keel sync` fetches first and passes `fetched = true`, which is where the issue071 protection
     // against a truly orphaned anchor lands.
-    let sync_state = crate::perf::phase("frontier:divergence", || crate::sync::divergence(repo));
+    let sync_state = keel_perf::perf::phase("frontier:divergence", || crate::gitfacts::divergence(repo));
     let no_upstream = sync_state.unknown.is_some();
     let clone_can_judge = fetched || no_upstream;
 
@@ -73,7 +73,7 @@ pub(crate) fn classify(repo: &Path, tasks: &HashMap<String, TaskData>, fetched: 
     // With nothing to judge and no caller reading `verified_at`, every anchor is taken as it stands
     // (`unwrap_or(true)` below) - the same `done` the validated path reaches when `clone_can_judge` is false.
     let sha_valid = if evidence || clone_can_judge {
-        crate::perf::phase("frontier:valid-commits", || crate::gitfacts::valid_commits(repo, &shas))
+        keel_perf::perf::phase("frontier:valid-commits", || crate::gitfacts::valid_commits(repo, &shas))
     } else {
         HashMap::new()
     };
@@ -87,7 +87,7 @@ pub(crate) fn classify(repo: &Path, tasks: &HashMap<String, TaskData>, fetched: 
         .filter(|r| r.outcome == "pass" && !r.judged_against.is_empty() && !r.id.is_empty())
         .map(|r| crate::binding::Ask { id: &r.id, judged_against: &r.judged_against })
         .collect();
-    let bound = if evidence { crate::perf::phase("frontier:bind", || crate::binding::bind(repo, &asks)) } else { HashMap::new() };
+    let bound = if evidence { keel_perf::perf::phase("frontier:bind", || crate::binding::bind(repo, &asks)) } else { HashMap::new() };
 
     for (name, data) in tasks {
         if let Some(latest) = data.results.last() {

@@ -7,6 +7,9 @@ members = [
     "members/keel-actor",
     "members/keel-schema",
     "members/keel-github",
+    "members/keel-fs",
+    "members/keel-model",
+    "members/keel-write",
     "keel-cli",
 ]
 resolver = "2"

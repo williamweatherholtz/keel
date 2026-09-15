@@ -32,7 +32,7 @@ fn git_criterion_at(sha: &str, task: &str, repo: &Path) -> Option<String> {
 
 fn git_criterion_at_uncached(sha: &str, task: &str, repo: &Path) -> Option<String> {
     let dod_pfx = format!("verification {task}DoD");
-    let grep = crate::gitx::git()
+    let grep = keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["grep", "-h", "-F", "--no-color", "-e", &dod_pfx, sha, "--", ".tracking"])
@@ -72,7 +72,8 @@ fn extract_dod_criterion(content: &str, task: &str) -> Option<String> {
 /// Cutting at the first `"` and skipping the unescape is the issue044 false-stale class: a criterion
 /// carrying `\s` or an escaped quote read as CHANGED against itself. `None` when the literal never
 /// closes or carries an escape the lexer would refuse - then there is no text to judge.
-pub(crate) fn string_literal_body(rest: &str) -> Option<String> {
+#[must_use]
+pub fn string_literal_body(rest: &str) -> Option<String> {
     let mut out = String::new();
     let mut chars = rest.chars();
     loop {
@@ -93,9 +94,9 @@ pub(crate) fn string_literal_body(rest: &str) -> Option<String> {
 /// Map every CURRENT `<task>DoD` verification to its repo-relative file path (one working-tree
 /// pass, no git). Lets criterion lookup fetch a single historical blob instead of scanning all
 /// files at the commit — the dominant `orient` cost (orientPerf, sr11FastStart).
-pub(crate) fn build_dod_files(repo: &Path) -> HashMap<String, String> {
+pub fn build_dod_files(repo: &Path) -> HashMap<String, String> {
     let mut out: HashMap<String, String> = HashMap::new();
-    for path in crate::collect_sysml(&repo.join(".tracking")) {
+    for path in crate::corpus::collect_sysml(&repo.join(".tracking")) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         let Some(rel) = path.strip_prefix(repo).ok().and_then(std::path::Path::to_str).map(|s| s.replace('\\', "/")) else {
             continue;
@@ -116,7 +117,8 @@ pub(crate) fn build_dod_files(repo: &Path) -> HashMap<String, String> {
 /// task is suspect if a non-ordering dep's `DoD` criterion text changed since the task's verified
 /// commit. Returns `(task, reason)` pairs. Falls back to a per-call scan only for blobs the batch
 /// couldn't resolve (rare — a `DoD` file absent at that commit).
-pub(crate) fn criterion_suspects(
+#[must_use]
+pub fn criterion_suspects(
     repo: &Path,
     tasks: &HashMap<String, TaskData>,
     ordering_only: &HashSet<(String, String)>,
@@ -177,7 +179,7 @@ pub(crate) fn criterion_suspects(
             .cloned()
             .flatten()
     };
-    let head = crate::gitx::git()
+    let head = keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", "--short", "HEAD"])
@@ -258,7 +260,7 @@ fn changed_paths_since(repo: &Path, sha: &str) -> Vec<String> {
             return cached;
         }
     }
-    let diffed: Option<Vec<String>> = crate::gitx::git()
+    let diffed: Option<Vec<String>> = keel_git::gitx::git()
         .arg("-C").arg(repo)
         .args(["diff", "--name-only", &format!("{sha}..HEAD")])
         .output()
@@ -285,7 +287,7 @@ fn path_drifted(path: &str, changed: &[String]) -> bool {
 /// Mark manifest deliverable tasks suspect when THEIR OWN source drifted since they were verified
 /// (D0050, per-task). Perf (orientPerf/sr11): ONE `git diff` per DISTINCT verified-commit (memoized)
 /// instead of one `git log` per task — then prefix-match paths in-process.
-pub(crate) fn apply_deliverable_suspicion(
+pub fn apply_deliverable_suspicion(
     repo: &Path,
     done_map: &HashMap<String, bool>,
     verified_at: &HashMap<String, String>,
@@ -311,7 +313,7 @@ pub(crate) fn apply_deliverable_suspicion(
 
 /// Propagate suspicion up the dependency graph to fixpoint: a done task is suspect if any of its
 /// (non-ordering-only) deps is suspect. Extracted from `compute_orient` (step 4).
-pub(crate) fn propagate_transitive_suspect(
+pub fn propagate_transitive_suspect(
     tasks: &HashMap<String, TaskData>,
     ordering_only: &HashSet<(String, String)>,
     done_map: &HashMap<String, bool>,
@@ -344,7 +346,7 @@ pub(crate) fn propagate_transitive_suspect(
 /// their transitive closure, then deliverable drift (D0050). Returns the sorted suspect list and the
 /// per-task reason `suspect --explain` shows.
 #[must_use]
-pub(crate) fn walk(
+pub fn walk(
     repo: &Path,
     tasks: &HashMap<String, TaskData>,
     ordering_only: &HashSet<(String, String)>,

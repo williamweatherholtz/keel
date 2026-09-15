@@ -10,9 +10,12 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::ident::gen_uuid;
+use keel_model::ident::gen_uuid;
 
 use keel_parser::ast::{Item, Package};
+
+// The atomic write is a leaf (keel-fs, sprint 718); every writer here still reaches it by this name.
+pub use keel_fs::fsx::write_atomic;
 
 // ── error type ────────────────────────────────────────────────────────────────
 
@@ -93,6 +96,8 @@ fn model_lock_path(target: &Path) -> std::path::PathBuf {
     }
     target.with_extension("keel-lock")
 }
+
+
 
 
 /// Hold an exclusive lock on `path` for the duration of `f` (issue185).
@@ -178,60 +183,6 @@ pub fn with_file_lock<T, E: From<std::io::Error>>(
     let out = f();
     let _ = std::fs::remove_file(&lock);
     out
-}
-
-/// Write `content` to `path` ATOMICALLY: a sibling temp file, then a rename over the target (issue184).
-///
-/// `std::fs::write` truncates and then writes, so the target is momentarily EMPTY and then progressively
-/// filled. A death in between - a kill, an OOM, a watchdog exit from another thread - leaves the
-/// authoritative record truncated. Invariant 1 makes these files the TRUTH, and every one of the 21 write
-/// sites in this crate reached that truth non-atomically.
-///
-/// THE DANGEROUS CASE IS NOT THE OBVIOUS ONE. A truncated file fails the parser, so the gate converts
-/// corruption into a red gate. The case that survives is a PARTIAL write that still parses - these files
-/// are lists of independent items, so a prefix is often syntactically complete once a closing brace
-/// happens to land, and that file passes the gate with items silently missing.
-///
-/// The temp file is a SIBLING, not in a temp directory, because rename is only atomic within a
-/// filesystem. On Windows `fs::rename` fails if the target exists, so the target is removed first - a
-/// narrow window that is still strictly better than truncate-then-fill, and the temp file survives a
-/// failure at that point rather than the original being gone.
-///
-/// # Errors
-/// Returns the underlying [`std::io::Error`] if the temp write, the removal or the rename fails - or,
-/// for a `.sysml` target, an `InvalidData` error when the content would not parse: the write is
-/// REFUSED and nothing on disk changes (issue366 / D0305). A record command that reports success over
-/// a file `validate` rejects is worse than the failure it hides, so this is the one choke point every
-/// API writer of model text passes through and the one place the refusal can live.
-pub fn write_atomic(path: &std::path::Path, content: impl AsRef<str>) -> std::io::Result<()> {
-    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("sysml")) {
-        let name = path.display().to_string();
-        let parsed = keel_parser::tokenize(content.as_ref(), &name)
-            .map_err(|e| e.to_string())
-            .and_then(|t| keel_parser::parse(t, &name).map(|_| ()).map_err(|e| e.to_string()));
-        if let Err(e) = parsed {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("refusing to write {name}: the result would not parse - {e} (issue366: a write API never reports success over a file validate rejects)"),
-            ));
-        }
-    }
-    let tmp = path.with_extension(format!(
-        "{}.keel-tmp",
-        path.extension().map_or_else(String::new, |e| e.to_string_lossy().to_string())
-    ));
-    std::fs::write(&tmp, content.as_ref())?;
-    if path.exists() {
-        std::fs::remove_file(path)?;
-    }
-    match std::fs::rename(&tmp, path) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            // Leave the temp file in place on failure: it holds the ONLY copy of the new content, and
-            // deleting it here would turn a failed write into a lost write.
-            Err(e)
-        }
-    }
 }
 
 // ── AST helpers ───────────────────────────────────────────────────────────────
@@ -605,7 +556,7 @@ fn refuse_receiptless_ai_test(path: &Path, judged_by: &str, evidence: Option<&st
     if !root.join(".tracking").join("actors.sysml").exists() {
         return Ok(());
     }
-    match crate::actor::kind_of(&root, judged_by).as_deref() {
+    match keel_actor::actor::kind_of(&root, judged_by).as_deref() {
         Some("human") => Ok(()),
         _ => Err(WriteError::ReceiptOwed(what.to_owned(), judged_by.to_owned())),
     }
@@ -644,7 +595,7 @@ fn proposed_tier<'a>(path: &Path, pkg: &Package, verification: &str, verdict: &'
     if !root.join(".tracking").join("actors.sysml").exists() {
         return verdict;
     }
-    match crate::actor::kind_of(&root, judged_by).as_deref() {
+    match keel_actor::actor::kind_of(&root, judged_by).as_deref() {
         Some("human") => verdict,
         _ => PROPOSED,
     }
@@ -727,7 +678,7 @@ fn refuse_ai_judgment(path: &Path, judged_by: &str, what: &str) -> Result<(), Wr
     if !root.join(".tracking").join("actors.sysml").exists() {
         return Ok(());
     }
-    match crate::actor::kind_of(&root, judged_by).as_deref() {
+    match keel_actor::actor::kind_of(&root, judged_by).as_deref() {
         Some("human") => Ok(()),
         Some(_) => Err(WriteError::Parse(format!(
             "{what} records a HUMAN's judgment and `{judged_by}` is registered as an AI actor — refused (D0178/K6). Acceptance flows through channels the human holds."
@@ -1040,7 +991,7 @@ pub fn set_attr(root: &Path, item: &str, attr: &str, literal: &str) -> Result<St
 
 fn set_attr_locked(root: &Path, item: &str, attr: &str, literal: &str) -> Result<String, WriteError> {
     let decl_kw = ["part ", "requirement ", "use case ", "action ", "verification "];
-    for file in crate::collect_sysml(&root.join(".tracking")) {
+    for file in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         let content = std::fs::read_to_string(&file)?;
         // locate the item's declaration line: a keyword line naming `<item> :`
         let needle = format!("{item} :");
@@ -1346,8 +1297,8 @@ fn add_task_locked(
     // own when the file sits in a model tree - the write-path rule intake_write applies to its
     // vocabularies (`enum_members_union`); the embedded schema alone outside a tree.
     let accepted = model_root_of(path).map_or_else(
-        || crate::schema::enum_members("VerificationMethod"),
-        |root| crate::schema::enum_members_union(&root, "VerificationMethod"),
+        || keel_schema::schema::enum_members("VerificationMethod"),
+        |root| keel_schema::schema::enum_members_union(&root, "VerificationMethod"),
     );
     if !accepted.iter().any(|m| m == method) {
         return Err(WriteError::InvalidMethod(method.to_owned(), accepted));
@@ -1468,7 +1419,8 @@ pub fn sanitize_public(v: &str) -> String {
 /// them. It becomes a forward slash - the portable form of the one thing that carries backslashes
 /// in this corpus, a path - which is lossy for a regex and safe for a record; a field that needs a
 /// literal backslash is code and does not belong in prose.
-pub(crate) fn sanitize_field(v: &str) -> String {
+#[must_use]
+pub fn sanitize_field(v: &str) -> String {
     v.replace('"', "'").replace('\\', "/").split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
@@ -1739,7 +1691,7 @@ impl DecisionLinks {
             }
         }
         for t in &self.derived_from {
-            let ok = (t.starts_with("st") || t.starts_with("us")) && crate::view::item_exists(root, t).unwrap_or(false);
+            let ok = (t.starts_with("st") || t.starts_with("us")) && keel_model::queries::item_exists(root, t).unwrap_or(false);
             if !ok {
                 return Err(WriteError::Parse(format!("--derived-from {t}: not a declared Statement or UserStory (stNNN/usNNN) - the source of a Decision must be a recorded utterance or story (D0216)")));
             }
@@ -1766,7 +1718,7 @@ impl DecisionLinks {
 /// before a `#Supersede` edge is authored - not a read-modify-write, so it sits outside the lock.
 fn decision_on_disk(root: &Path, d: &str) -> bool {
     d.strip_prefix('d').is_some_and(|n| n.len() == 4 && n.chars().all(|c| c.is_ascii_digit()))
-        && crate::collect_sysml(&root.join(".engine").join("decisions"))
+        && keel_model::corpus::collect_sysml(&root.join(".engine").join("decisions"))
             .iter()
             .any(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains(&format!("part {d} : Decision"))))
 }
@@ -2308,7 +2260,7 @@ mod atomic_write_tests {
     /// `*_locked` sibling and do no reading themselves.
     #[test]
     fn no_public_write_reads_outside_the_lock() {
-        let full = std::fs::read_to_string("src/write.rs").expect("write.rs is readable");
+        let full = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/write.rs")).expect("write.rs is readable");
         let src = &full[..full.find("
 #[cfg(test)]").unwrap_or(full.len())];
         let mut offenders = Vec::new();
@@ -2341,7 +2293,7 @@ mod atomic_write_tests {
     /// sites each individually reasonable, so the property to pin is that no new one appears.
     #[test]
     fn no_model_write_bypasses_the_atomic_helper() {
-        let full = std::fs::read_to_string("src/write.rs").expect("write.rs is readable");
+        let full = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/write.rs")).expect("write.rs is readable");
         // PRODUCTION code only: a test's own seed write is not a model write, and scanning the test
         // module made this test report itself.
         let src = &full[..full.find("
@@ -2366,6 +2318,16 @@ mod atomic_write_tests {
 mod tests {
     use super::{gen_uuid, looks_like_tool_output, reject_injected_output, sanitize_field, WriteError};
     use std::collections::HashSet;
+
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
+    }
 
     fn k6_root(tag: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!("keel-k6-{tag}"));
@@ -2572,7 +2534,7 @@ mod tests {
         let mut seen = HashSet::new();
         for _ in 0..10_000 {
             let u = gen_uuid();
-            assert!(crate::ident::uuid_shaped(&u), "guard 38 rejects a minted id: {u}");
+            assert!(keel_model::ident::uuid_shaped(&u), "guard 38 rejects a minted id: {u}");
             assert!(seen.insert(u), "duplicate within 10000 mints");
         }
     }
@@ -2589,7 +2551,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("mkdir");
         let path = dir.join("backlog.sysml");
         std::fs::write(&path, "package B {\n    action def Work {\n    }\n}\n").expect("seed");
-        let members = crate::schema::enum_members("VerificationMethod");
+        let members = keel_schema::schema::enum_members("VerificationMethod");
         assert!(
             members.len() >= 6,
             "schema/core/element.sysml should declare at least the 6 known VerificationMethod members, found {}: {members:?}",
@@ -2855,7 +2817,7 @@ mod tests {
         //
         // The population is ASSERTED non-empty. A check that passes over zero items is the false
         // green this session already hit twice (issue250, and claude-surface-drift on zero skills).
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".engine").join("decisions");
+        let dir = repo_root().join(".engine").join("decisions");
         let mut checked = 0usize;
         for e in std::fs::read_dir(&dir).expect("the decisions corpus must be readable").flatten() {
             let text = std::fs::read_to_string(e.path()).unwrap_or_default();
@@ -3025,7 +2987,7 @@ fn record_issue_locked(root: &Path, n: &NewIssue) -> Result<(String, String), Wr
     // only skip numbers ahead, never collide - and the duplicate-identity guard backstops collisions
     // from offline clones exactly as before.
     let mut all_text = String::new();
-    for f in crate::collect_sysml(&root.join(".tracking")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         if let Ok(s) = std::fs::read_to_string(&f) {
             all_text.push_str(&s);
         }
@@ -3105,7 +3067,7 @@ mod issue_tests {
 ///
 /// # Errors
 /// `WriteError::Io` on filesystem errors.
-// @audit-hash ceRecordClaim
+// @audit-hash ceRecordClaimMember
 pub fn record_claim(root: &Path, item: &str, actor: &str) -> Result<(String, String), WriteError> {
     // issue185: lock the file this will read-modify-write, for its whole duration.
     with_file_lock(&root.join(".tracking").join("claims.sysml"), || record_claim_locked(root, item, actor))
@@ -3115,7 +3077,7 @@ fn record_claim_locked(root: &Path, item: &str, actor: &str) -> Result<(String, 
     let dir = root.join(".tracking").join("claims");
     std::fs::create_dir_all(&dir)?;
     let file = dir.join(format!("{}.sysml", sanitize_name(actor)));
-    let sha = crate::gitx::git()
+    let sha = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--short", "HEAD"])
@@ -3124,7 +3086,7 @@ fn record_claim_locked(root: &Path, item: &str, actor: &str) -> Result<(String, 
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_owned())
         .unwrap_or_default();
-    let at = crate::gitx::git()
+    let at = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["log", "-1", "--format=%cs"])
@@ -3191,13 +3153,24 @@ fn sanitize_name(v: &str) -> String {
 mod write_path_registry_tests {
     use super::{write_path_refusal, WRITE_PATH_REFUSALS};
 
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
+    }
+
     /// Every `refuses` token is in the source that owns it: a `WriteError::X` is a variant this module
     /// declares and returns; a bare name is a `fn` in main.rs whose body calls `ledger_refused` with
     /// exactly this check. A token found nowhere is a row with no refusal behind it (issue449).
     #[test]
     fn every_registered_refusal_has_a_site_in_the_source() {
-        let write_src = std::fs::read_to_string("src/write.rs").expect("write.rs is readable");
-        let main_src = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let write_src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/write.rs")).expect("write.rs is readable");
+        let main_src = std::fs::read_to_string(repo_root().join("keel-cli").join("src").join("main.rs"))
+            .expect("main.rs is readable");
         let mut missing = Vec::new();
         for r in WRITE_PATH_REFUSALS {
             let ok = r.refuses.strip_prefix("WriteError::").map_or_else(
@@ -3224,7 +3197,8 @@ mod write_path_registry_tests {
     /// Sites whose verb is a variable (`verb`) are covered by the entries naming their function.
     #[test]
     fn every_ledgered_refusal_in_main_is_registered() {
-        let main_src = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let main_src = std::fs::read_to_string(repo_root().join("keel-cli").join("src").join("main.rs"))
+            .expect("main.rs is readable");
         let mut unregistered = Vec::new();
         for (i, line) in main_src.lines().enumerate() {
             let Some(rest) = line.trim_start().strip_prefix("ledger_refused(") else { continue };

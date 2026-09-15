@@ -495,6 +495,25 @@ mod tests {
         );
     }
 
+    /// A `CodeElement` retired by `#Supersede` (its file moved, D0108) leaves the registry: this repo's
+    /// registry carries four such pairs from sprint 718. Positive: the retired names are absent.
+    /// Negative: their successors are present, so the filter removes the target and not the edge's source.
+    #[test]
+    fn a_superseded_element_leaves_the_registry_and_its_successor_stays() {
+        let root = repo_root();
+        let Ok(m) = crate::view::arch_model(&root) else { return };
+        if m.elements.is_empty() {
+            return;
+        }
+        let names: Vec<&str> = m.elements.iter().map(|e| e.name.as_str()).collect();
+        for retired in ["ceWriteApi", "ceRecordClaim", "ceOrient", "ceClaimHolderRule", "ceActorProvenance"] {
+            assert!(!names.contains(&retired), "{retired} is superseded and must not be in the arch registry: {names:?}");
+        }
+        for live in ["ceWriteApiMember", "ceRecordClaimMember", "ceOrientMember", "ceClaimHolderRuleMember"] {
+            assert!(names.contains(&live), "{live} supersedes and must stay in the arch registry");
+        }
+    }
+
     #[test]
     fn a_wrong_root_is_an_error_not_an_empty_registry() {
         let bogus = repo_root().join("definitely-not-a-repo-root");

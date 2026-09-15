@@ -1908,7 +1908,7 @@ fn with_status(body: &str, status: &str, extra: &str) -> String {
 const HOT_VIEWS: [(&str, ViewFn); 6] = [
     ("obligations", obligations_json),
     ("surfaces", crate::view::surfaces_json),
-    ("orient", |r| Ok(crate::orient::compute(r).to_json())),
+    ("orient", |r| Ok(crate::reports::orient(r).to_json())),
     ("computed:authority-queue", crate::view::authority_queue),
     ("computed:dispositions", crate::view::dispositions),
     ("review-queue", crate::view::review_queue_json),
@@ -2224,7 +2224,7 @@ type ComputedFn = fn(&Path) -> Result<String, crate::view::ViewError>;
 /// about the table and must be answerable without touching the model.
 fn computed_binding(cmd: &str) -> Option<ComputedFn> {
     Some(match cmd {
-        "orient" => |root: &Path| Ok(crate::orient::compute(root).to_json()),
+        "orient" => |root: &Path| Ok(crate::reports::orient(root).to_json()),
         // SIX VIEWPOINTS ADVERTISED A COMMAND THIS TABLE DID NOT BIND (issue285). The human clicked
         // `attestation-coverage` in the console and got "no computed view is bound"; five more —
         // critique-policy, decisions, reprocess-candidates, verification, whats-next — would have
@@ -2473,7 +2473,7 @@ async fn api_review_queue(State(s): State<AppState>) -> Response {
 }
 
 async fn api_orient(State(s): State<AppState>) -> Response {
-    cached(&s, "orient", |r| Ok(crate::orient::compute(r).to_json()))
+    cached(&s, "orient", |r| Ok(crate::reports::orient(r).to_json()))
 }
 
 async fn api_decisions(State(s): State<AppState>) -> Response {
@@ -3362,7 +3362,7 @@ mod view_status_tests {
         for (name, src) in [
             ("main.rs", include_str!("main.rs")),
             ("launcher.rs", include_str!("launcher.rs")),
-            ("orient.rs", include_str!("orient.rs")),
+            ("orient.rs", include_str!("../../members/keel-model/src/orient.rs")),
             ("deck.rs", include_str!("deck.rs")),
         ] {
             assert_eq!(src.matches(marker).count(), 0, "unexpected agent spawn path in {name}");

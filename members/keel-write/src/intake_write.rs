@@ -16,7 +16,7 @@
 //! by test.
 use std::path::{Path, PathBuf};
 
-use crate::ident::gen_uuid;
+use keel_model::ident::gen_uuid;
 use crate::write::{with_file_lock, write_atomic, WriteError};
 
 /// A human's words, verbatim.
@@ -78,7 +78,7 @@ pub struct NewStory<'a> {
 /// schema and never has to wait for a binary release, while no project can remove a member the engine
 /// ships (issue090/issue129).
 fn accepted(root: &Path, enum_name: &str) -> Vec<String> {
-    crate::schema::enum_members_union(root, enum_name)
+    keel_schema::schema::enum_members_union(root, enum_name)
 }
 
 /// Refuse an unrecognised member, naming the accepted set — never default it (the channel and the
@@ -120,7 +120,7 @@ fn next_number(all: &str, prefix: &str) -> u32 {
 
 fn all_tracking_text(root: &Path) -> String {
     let mut s = String::new();
-    for f in crate::collect_sysml(&root.join(".tracking")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         if let Ok(t) = std::fs::read_to_string(&f) {
             s.push_str(&t);
         }
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn every_schema_declared_member_of_both_intake_vocabularies_is_accepted() {
         let r = root("vocab");
-        let implications = crate::schema::enum_members("ImplicationKind");
+        let implications = keel_schema::schema::enum_members("ImplicationKind");
         assert!(
             implications.len() >= 15,
             "schema/core/intake.sysml should declare at least the 15 known ImplicationKind members, \
@@ -395,7 +395,7 @@ mod tests {
                 "ImplicationKind::{m} is declared in the schema but refused by the write path: {msg}"
             );
         }
-        for m in crate::schema::enum_members("StatementChannel") {
+        for m in keel_schema::schema::enum_members("StatementChannel") {
             let out = record_statement(&r, &NewStatement {
                 text: "x", source_trust: None, source_url: None, said_by: "w", said_at: "2026-08-26", channel: &m,
                 title: "t", author: "a", created_at: "2026-08-26",

@@ -11,7 +11,7 @@ in a session scratchpad. This is that census as a committed Sensor: anyone loose
 measurement first, and the D0388 pair below says whether the rule as configured still tells a command from a
 story.
 
-The three rules are applied exactly as `keel-cli/src/reverify.rs` `is_replayable_with` applies them, over the
+The three rules are applied exactly as `members/keel-write/src/reverify.rs` `is_replayable_with` applies them, over the
 same universe (every receipt that begins with a declared prefix):
 
   prefix-only        the trimmed receipt is one line and begins with a declared prefix

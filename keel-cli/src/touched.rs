@@ -1494,4 +1494,66 @@ mod tests {
         assert_eq!(embedded.self_reading, vec![LIB.to_string(), "scaffolds".to_string()], "the test naming the manifest dir is self-reading");
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// The anchors a unit test may not key on: each names this repository only while the crate sits
+    /// one level below it, so the test breaks the moment its module moves into `members/`. Returned
+    /// as (1-based line, the offending text). A `//` comment line is not an anchor.
+    fn cwd_relative_anchors(src: &str) -> Vec<(usize, String)> {
+        const ANCHORS: [&str; 4] = ["Path::new(\"..\")", "read_to_string(\"src/", "CARGO_MANIFEST_DIR\")).join(\"..\")", "read_to_string(\"../"];
+        src.lines()
+            .enumerate()
+            .filter(|(_, l)| !l.trim_start().starts_with("//"))
+            .filter_map(|(i, l)| ANCHORS.iter().find(|a| l.contains(**a)).map(|a| (i + 1, (*a).to_string())))
+            .collect()
+    }
+
+    /// Every `.rs` under `members/*/src`, walked from the workspace root.
+    fn member_sources(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for m in std::fs::read_dir(root.join("members")).into_iter().flatten().flatten() {
+            walk(&m.path().join("src"), &mut out);
+        }
+        out
+    }
+
+    /// Sprint 714 broke four member tests and sprint 718 eight on the same anchor class - a test keyed
+    /// on `..` or `src/...` from the crate directory, which names the repo only one level down. Each
+    /// was fixed by hand twice; this is the control (D0047). Negative: the four anchors are found in a
+    /// synthetic source and a commented one is not. Positive: no member source carries one.
+    #[test]
+    fn no_member_test_anchors_on_a_cwd_relative_path() {
+        let synthetic = "let root = Path::new(\"..\");\n// let x = Path::new(\"..\");\nlet s = read_to_string(\"src/main.rs\");\nlet d = Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"..\");\nlet t = read_to_string(\"../x\");\n";
+        let found = cwd_relative_anchors(synthetic);
+        assert_eq!(found.iter().map(|(l, _)| *l).collect::<Vec<_>>(), vec![1, 3, 4, 5], "the synthetic anchors are found and the comment is not: {found:?}");
+
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("keel-cli sits inside the keel repository")
+            .to_path_buf();
+        let files = member_sources(&root);
+        assert!(files.len() > 20, "the member sources are the population, asserted non-empty: {}", files.len());
+        let mut offenders = Vec::new();
+        for f in &files {
+            let src = std::fs::read_to_string(f).expect("a member source is readable");
+            for (line, anchor) in cwd_relative_anchors(&src) {
+                offenders.push(format!("{}:{line} {anchor}", f.strip_prefix(&root).unwrap_or(f).display()));
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "member tests keyed on a cwd-relative anchor break when the crate sits two levels down (sprints 714, 718); resolve the repo root from CARGO_MANIFEST_DIR's ancestors instead:\n{}",
+            offenders.join("\n")
+        );
+    }
 }

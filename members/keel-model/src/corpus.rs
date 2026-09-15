@@ -26,7 +26,7 @@
 //! have seen.
 //!
 //! WHAT DOES NOT GO THROUGH HERE. The change DETECTOR - `fingerprint::compute` - walks with
-//! [`crate::collect_sysml_uncached`]: the thing that detects change must not read a memo.
+//! [`crate::corpus::collect_sysml_uncached`]: the thing that detects change must not read a memo.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -34,7 +34,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::perf::{CORPUS_HITS, FILE_OPENS, PARSE_HITS, WALK_HITS};
+use keel_perf::perf::{CORPUS_HITS, FILE_OPENS, PARSE_HITS, WALK_HITS};
 use keel_parser::ast::Package;
 
 /// An mtime younger than this is not trusted to distinguish two writes (see the module doc).
@@ -181,7 +181,7 @@ pub fn collect_sysml(dir: &Path) -> Vec<PathBuf> {
             }
         }
     }
-    crate::perf::add(&crate::perf::TREES_WALKED, 1);
+    keel_perf::perf::add(&keel_perf::perf::TREES_WALKED, 1);
     let mut dirs = Vec::new();
     let mut files = Vec::new();
     walk(dir, &mut dirs, &mut files);
@@ -295,7 +295,7 @@ mod tests {
         let first = collect_sysml(&d);
         assert_eq!(first.len(), 1);
         std::fs::write(sub.join("two.sysml"), "package Two;").expect("write");
-        assert_eq!(crate::collect_sysml_uncached(&d).len(), 2, "the detector's walk is never memoized");
+        assert_eq!(crate::corpus::collect_sysml_uncached(&d).len(), 2, "the detector's walk is never memoized");
         assert_eq!(collect_sysml(&d).len(), 2, "a directory whose mtime moved is re-walked");
         let _ = std::fs::remove_dir_all(&d);
     }
@@ -311,4 +311,60 @@ mod tests {
         assert_eq!(collect_sysml(&later).len(), 1);
         let _ = std::fs::remove_dir_all(&d);
     }
+}
+
+// ── the parse report and the uncached walk (out of lib.rs, sprint 718) ──────
+
+/// A parse or I/O failure encountered while processing a single file.
+#[derive(Debug, Clone)]
+pub struct CheckError {
+    /// The file that caused the error.
+    pub file: PathBuf,
+    /// Human-readable description of the failure.
+    pub message: String,
+}
+
+/// Parse one `.sysml` file into its package, or say which file failed and why.
+///
+/// # Errors
+/// Returns [`CheckError`] for an unreadable file, a lexer error or a parse error.
+/// Read and parse one `.sysml` file into a [`Package`].
+///
+/// # Errors
+/// Returns [`CheckError`] if the file cannot be read, or if tokenizing/parsing fails.
+pub fn parse_pkg(path: &Path) -> Result<Package, CheckError> {
+    let src = std::fs::read_to_string(path).map_err(|e| CheckError {
+        file: path.to_path_buf(),
+        message: e.to_string(),
+    })?;
+    let name = path.to_string_lossy();
+    let tokens = keel_parser::tokenize(&src, &name).map_err(|e| CheckError {
+        file: path.to_path_buf(),
+        message: e.to_string(),
+    })?;
+    keel_parser::parse(tokens, &name).map_err(|e| CheckError {
+        file: path.to_path_buf(),
+        message: e.to_string(),
+    })
+}
+
+
+/// The walk itself, never memoized - what `fingerprint::compute` reads, because the thing that
+/// detects change must not read a memo (dcOneCorpusPerProcess).
+#[must_use]
+pub fn collect_sysml_uncached(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            out.extend(collect_sysml_uncached(&p));
+        } else if p.extension().and_then(|e| e.to_str()) == Some("sysml") {
+            out.push(p);
+        }
+    }
+    out.sort();
+    out
 }

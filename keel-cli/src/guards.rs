@@ -2548,7 +2548,7 @@ pub fn resolver_kind(root: &Path) -> GuardReport {
             let scanned = edges.len();
             let violations = edges
                 .into_iter()
-                .filter(|(from, _, ty)| !actions.contains(from) && ty != "Decision")
+                .filter(|(from, _, ty)| !resolver_kind_holds(&actions, from, ty))
                 .map(|(from, to, ty)| {
                     let what = if ty.is_empty() { "not a declared action and not a typed item".to_string() } else { format!("a {ty}") };
                     format!(
@@ -2658,8 +2658,20 @@ pub fn viewpoint_renderer(root: &Path) -> GuardReport {
 /// evidence is the Rust deliverable behaving correctly) — used for the unlisted-task WARNING.
 const DELIVERABLE_TASK_HINTS: &[&str] = &["rust", "Parser", "writeApi", "runtimeParser", "specVersion"];
 
+/// THE ONE PREDICATE behind `resolver-kind`: a `#Resolves` source is a declared action or a `Decision`.
+///
+/// An action is work that closes the issue; a Decision moots it. `record issue --resolver` reads this
+/// same function before it writes the edge, so the write refuses exactly what the commit gate would
+/// (issue558): the first triage of issue556 pointed at a Story, the write printed "triaged on
+/// arrival", and the pre-commit guard was the first thing to say otherwise.
+#[must_use]
+pub fn resolver_kind_holds<S: std::hash::BuildHasher>(actions: &HashSet<String, S>, from: &str, ty: &str) -> bool {
+    actions.contains(from) || ty == "Decision"
+}
+
 /// All `action <name>;` task names declared in .tracking/{backlog,delivery} (not `action def`).
-fn declared_task_names(root: &Path) -> HashSet<String> {
+#[must_use]
+pub fn declared_task_names(root: &Path) -> HashSet<String> {
     let mut names = HashSet::new();
     for sub in ["backlog.sysml", "delivery"] {
         let base = root.join(".tracking").join(sub);
@@ -5163,7 +5175,7 @@ pub fn scaffold_placeholder(root: &Path) -> GuardReport {
 #[cfg(test)]
 mod scaffold_placeholder_tests {
     use super::scaffold_placeholder;
-    use crate::scaffold::{sprint, tests::temp_root, PLACEHOLDER};
+    use crate::scaffold::{sprint, test_support::temp_root, PLACEHOLDER};
 
     /// Guard 40 rejects the scaffold until it is filled — the whole point of the marker.
     #[test]
@@ -6760,7 +6772,8 @@ fn activation_manifest(root: &Path) -> GuardReport {
             ));
         }
     }
-    let mut violations = act.errors;
+    let mut violations = act.errors.clone();
+    violations.extend(act.unknown_guard_refs(&GUARD_NAMES));
     // issue380 / GH#56: a `charteredBy` that names no Decision in THIS project's decisions is a
     // provenance claim the tree cannot back - the silent form of an engine resync writing another
     // project's charter. Loud, so the set is re-chartered rather than read as chartered.
