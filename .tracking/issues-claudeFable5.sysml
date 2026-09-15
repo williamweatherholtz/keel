@@ -1599,4 +1599,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcSprintNamesTheItemItDelivers to issue563;
+
+    part issue564 : Issue {
+        :>> id = "4f8b1eee-64f3-4a34-af40-c9453aab3f84";
+        :>> title = "A starved cat hangs the Bash tool for its timeout with no control firing; one-file replacements keep routing through the shell instead of the Edit tool";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A redirected cat with nothing feeding it hung the Bash tool for its whole two-minute timeout and left a zero-byte file at the filesystem root, and no control fired. The command: cat > '$SCRATCH/fix721.py' 2>/dev/null || ... with $SCRATCH unset - no heredoc, no operand, no producer, so cat waited on a stdin this harness never closes. The pre-bash hook's one deny (heredoc-backslash, D0309) did not apply: the heredoc in the command carried no backslash. The wider pattern the human named (st127): one-file string replacements keep being routed through the shell as Python scripts run by path, when the Edit tool is the byte-exact channel for exactly that and the Write tool for a new file; the D0309 deny's own remedy text (write a script, run it by path) reproduced the two-step. Sitting: sprint 721 architecture ceremony, 2026-09-15.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from d0491 to issue564;
 }

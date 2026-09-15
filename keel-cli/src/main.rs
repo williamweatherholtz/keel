@@ -987,9 +987,21 @@ fn hook_pre_bash(payload: &serde_json::Value, root: &Path, session: &str) -> i32
         hook_refuse(
             "heredoc-backslash",
             &serde_json::json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-                "permissionDecisionReason": format!("[keel] heredoc <<{tag} carries a backslash (`{line}`) - this harness collapses backslash pairs before bash runs, so source written this way is silently rewritten (D0309/issue372, recurred 8+ times). Write the file with the Write tool and run it by path; a heredoc is for prose without backslashes.")}}),
+                "permissionDecisionReason": format!("[keel] heredoc <<{tag} carries a backslash (`{line}`) - this harness collapses backslash pairs before bash runs, so source written this way is silently rewritten (D0309/issue372, recurred 8+ times). No shell path survives it: a string replacement in an existing file is the Edit tool (or python scripts/textpatch.py), a new file is the Write tool run by path; a heredoc is for prose without backslashes.")}}),
         );
         ledger_advisory(root, session, "heredoc-backslash denied");
+        return 0;
+    }
+    // D0491 / issue564: a `cat`/`tee` at the head of a pipeline with nothing feeding it - no heredoc,
+    // no `<`, no operand - waits on a stdin this harness never closes, for the whole tool timeout,
+    // and leaves the file it opened empty. Never useful, so it is the second pre-bash deny.
+    if let Some(seg) = keel_cli::shellcheck::stdin_starved_write(cmd) {
+        hook_refuse(
+            "stdin-starved-write",
+            &serde_json::json!({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                "permissionDecisionReason": format!("[keel] `{seg}` has nothing feeding it - no heredoc, no `<`, no file operand - so it waits on stdin for the whole tool timeout and the file it opened stays empty (D0491/issue564; met as a two-minute hang). A new file is the Write tool run by path; a string replacement is the Edit tool.")}}),
+        );
+        ledger_advisory(root, session, "stdin-starved-write denied");
         return 0;
     }
     // D0176/D0178 tiering first: unambiguous bypass patterns and the never-exempt set.

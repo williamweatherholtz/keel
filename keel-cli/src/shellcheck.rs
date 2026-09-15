@@ -226,6 +226,123 @@ pub fn heredoc_with_backslash(command: &str) -> Option<(String, String)> {
     None
 }
 
+/// Lines of a command with every heredoc BODY removed, so the segment scan below does not read
+/// prose or source as shell. The tag logic is `heredoc_with_backslash`'s.
+fn lines_outside_heredocs(command: &str) -> Vec<&str> {
+    let lines: Vec<&str> = command.lines().collect();
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while let Some(line) = lines.get(i) {
+        out.push(*line);
+        let Some(pos) = line.find("<<") else {
+            i += 1;
+            continue;
+        };
+        let after = line[pos + 2..].trim_start_matches('-').trim_start();
+        let tag: String = after.trim_start_matches(['\'', '"']).chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+        if tag.is_empty() {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while let Some(body) = lines.get(j) {
+            if body.trim() == tag {
+                break;
+            }
+            j += 1;
+        }
+        i = j + 1;
+    }
+    out
+}
+
+/// A `cat` or `tee` at the head of a pipeline with NOTHING feeding it (D0491 / issue564).
+///
+/// No heredoc, no `<` input, no file operand (`cat`). In this harness the tool's stdin never
+/// closes, so the command waits for the whole tool timeout and the file it opened stays empty -
+/// the one shape the D0309 deny let through, met 2026-09-15 as
+/// `cat > "$SCRATCH/x.py" 2>/dev/null || ...` with `$SCRATCH` unset (two minutes, a zero-byte
+/// `/x.py`). Returns the starved segment so the refusal can quote it.
+#[must_use]
+pub fn stdin_starved_write(command: &str) -> Option<String> {
+    for line in lines_outside_heredocs(command) {
+        // Statement separators first, then each statement's pipeline: only the HEAD of a pipeline
+        // has no producer, so `echo x | cat > f` and `... | tee f` are not the shape.
+        for stmt in line.split(';').flat_map(|s| s.split("&&")).flat_map(|s| s.split("||")) {
+            let Some(head) = stmt.split('|').next() else {
+                continue;
+            };
+            let toks: Vec<&str> = head.split_whitespace().collect();
+            let skip = ["do", "then", "else", "{", "(", "!", "time"];
+            let mut k = 0usize;
+            while toks.get(k).is_some_and(|t| skip.contains(t) || (t.contains('=') && !t.starts_with('-'))) {
+                k += 1;
+            }
+            let Some(verb) = toks.get(k) else {
+                continue;
+            };
+            if *verb != "cat" && *verb != "tee" {
+                continue;
+            }
+            let rest = toks.get(k + 1..).unwrap_or_default();
+            let fed = rest.iter().any(|t| t.starts_with('<'));
+            if fed {
+                continue;
+            }
+            let mut after_redirect = false;
+            let mut operand = false;
+            for t in rest {
+                if after_redirect {
+                    after_redirect = false;
+                    continue;
+                }
+                if t.trim_start_matches(|c: char| c.is_ascii_digit() || c == '&') == ">" || t.trim_start_matches(|c: char| c.is_ascii_digit() || c == '&') == ">>" {
+                    after_redirect = true;
+                    continue;
+                }
+                if t.contains('>') || t.starts_with('-') {
+                    continue;
+                }
+                operand = true;
+            }
+            // `tee` reads stdin whatever its operands; `cat` reads it only with none.
+            if *verb == "tee" || !operand {
+                return Some(head.trim().chars().take(90).collect());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod starved_tests {
+    use super::stdin_starved_write;
+
+    /// The command that hung for the tool timeout on 2026-09-15 is the positive; the sanctioned
+    /// heredoc-to-file, a cat with operands, and a fed tee are the negatives (D0388 pair).
+    #[test]
+    fn a_cat_with_nothing_feeding_it_is_named_and_fed_shapes_are_not() {
+        let hung = "cat > \"$SCRATCH/fix721.py\" 2>/dev/null || SCRATCH=\"C:/x\"; cat > \"$SCRATCH/fix721.py\" <<'EOF'\nprint(1)\nEOF\npython \"$SCRATCH/fix721.py\"";
+        let hit = stdin_starved_write(hung).expect("the first cat has no heredoc, no operand, no producer");
+        assert!(hit.starts_with("cat > \"$SCRATCH/fix721.py\""), "{hit}");
+        for ok in [
+            "cat > msg.txt <<'EOF'\nCR: prose\nEOF\ngit commit -F msg.txt",
+            "cat <<EOF > out.txt\nx\nEOF",
+            "cat a.txt b.txt > c.txt",
+            "echo x | cat > f.txt",
+            "keel show orient . | tee out.txt",
+            "cat < in.txt > out.txt",
+            "grep -n \"cat > file\" notes.md",
+            "K=./keel.exe; $K gate guard 2>&1 | tail -1",
+            "cat -n file.rs | head",
+        ] {
+            assert!(stdin_starved_write(ok).is_none(), "wrongly refused: {ok}");
+        }
+        assert!(stdin_starved_write("tee out.txt").is_some(), "a tee at the head of a pipeline always waits on stdin");
+        assert!(stdin_starved_write("cat >> log.txt").is_some(), "append is the same starvation");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::inspect;

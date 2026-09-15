@@ -185,7 +185,7 @@ keel record reverify --demos      # re-run replayable demo receipts (D0444)
   Same tool bare = conformance lane; tracked as `conformanceIndicator`, never gated (D0132).
 - Schema/workflow changes: `.engine/tools/validate/validate_schema.py` / `validate_workflows.py` via conda.
 - Hooks (D0128/D0130/D0296): `post-edit` fast tier + advisory; `stop` validate + guards, blocks while
-  dishonest, silent when green (D0359); `pre-bash` advisory, ONE deny: heredoc with a backslash (D0309);
+  dishonest, silent when green (D0359); `pre-bash` advisory, TWO denies: heredoc with a backslash (D0309), `cat`/`tee` with nothing feeding it (D0491);
   `pre-write` protects fact surfaces; `config-change` refuses `disableAllHooks`. Every fire = one ledger line
   (`.keel/metrics/hooks.jsonl`). `.claude/` is generated: `keel sync-claude` (`--check` is the drift guard).
   Launch via `keel claude`. Hooks resolve the binary by one probe: `KEEL_BIN` → `.keel/bin/keel` → pin cache
@@ -197,8 +197,10 @@ keel record reverify --demos      # re-run replayable demo receipts (D0444)
 ## 6. Host
 
 - Windows + PowerShell + git-bash. Adapt every command (issue065). Absolute paths; shells share one cwd.
-- Heredoc + backslash = DENIED (D0309). Syntax-bearing files: Write tool, run by path. Edits at an anchor:
-  `python scripts/textpatch.py replace|insert-after|insert-before|append` (D0386); `--probe` first.
+- The shell never writes code (D0309/D0491): a string replacement in an existing file is the **Edit tool**;
+  a new file is the **Write tool**, run by path. Heredoc + backslash = DENIED; a `cat`/`tee` with nothing feeding
+  it (no heredoc, no `<`, no operand) = DENIED — it hangs for the tool timeout. Anchored edits from a script:
+  `python scripts/textpatch.py replace|insert-after|insert-before|append --old/--new` (D0386); `--probe` first.
 - `conda` not on PATH: `C:\Users\WilliamWeatherholtz\miniforge3\Scripts\conda.exe run -n sysml --no-capture-output ...`
 - A running `target/release/keel.exe` blocks its own rebuild (issue150): run commands from a COPY
   (`keel-serve.exe`). `keel suite` refuses from the build image.
