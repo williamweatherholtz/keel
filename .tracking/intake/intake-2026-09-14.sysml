@@ -43,4 +43,52 @@ package ProjectIntake20260914 {
         :>> text = "totally agree on splitting the crate into workspace members.  give us lots of granularity - no need to couple code just to keep it in one place.  making it broad and uncoupled makes it modular and easy to rebuild.  i like the ''test binaries'' improvements and the Guards one also.  I think your identification of ''where the boundary sits'' is a bit naive.  What we're talking about here is the value of granularly splitting apart keel into disparate functions, which is a great idea and i expect will largely help the issues with recompiling, etc.  But the second implicit idea here is - use an issue tracker to enforce process and track/expose state.  I think that's fine, but I do think Keel does it better in many ways - we can read plain sysml processes, interpret them, add guards (really jsut CI/CD), etc.  This has become a more and more obvious need as this project goes forward - how to hook into custom processes that have absolute discipline?  You're proposing an issue tracker, which is fine.  I say let's just make keel-issues or something, which can manage the subset of processes related to items/issues (and not e.g. decisions about keel itself).  Big modularity pass incoming, I think.  Decouple the code wherever it's helpful, and let's divide and conquer to increase speed, reliability, and anchor points into our processes where possible.";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-14"; :>> channel = StatementChannel::chat;
     }
+
+    part us111 : UserStory {
+        :>> id = "7e8cd8e9-15b1-415c-b854-ccf43627507c";
+        :>> title = "keel split into granular workspace members";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> asA = "keel maintainer who rebuilds the binary after every edit";
+        :>> iWant = "keel split into many small workspace members, each one function of the engine with its dependencies declared in its own manifest, so that an edit rebuilds the member it touches and the members above it and nothing beside or below";
+        :>> soThat = "keel is 'modular and easy to rebuild' and 'lots of granularity' ends 'the issues with recompiling' (their words); the rebuild that follows a one-line edit stops relinking a 44k-line crate";
+        :>> implication = ImplicationKind::architecture;
+        :>> triageNote = "D0479 (accepted) already names the layering and sprints 714-718 extracted eleven members under it; this story is the elicited origin of that program and of the remaining extraction items (dcViewIsAMember, dcSuiteIsAMember, dcGuardsAreMembersPerFamily, dcTouchedSetDescendsTheWorkspace). Architecture worked ahead of the Story under D0064; the Needs below are the contract the remaining items satisfy";
+    }
+    #DerivedFrom dependency from us111 to st126;
+
+    part us112 : UserStory {
+        :>> id = "3ee4d299-b4bf-4e4b-a9c0-cd49b2bbf774";
+        :>> title = "keel-issues manages the item/issue process subset";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> asA = "downstream project lead who tracks items and issues and does not govern keel";
+        :>> iWant = "a member of keel - 'keel-issues or something' - that manages the subset of processes about items and issues (record, resolve, ready, blocked, done, what is next, what is open), and NOT the processes about keel itself (Decisions about the engine, Change Requests, the CR guards)";
+        :>> soThat = "the reasons keel was proposed over an external tracker hold for the item subset on its own: the process is enforced and the state exposed, and the member is small enough that a project which only tracks items carries none of the engine-governance surface";
+        :>> implication = ImplicationKind::architecture;
+        :>> triageNote = "The answer to 'why a self-authored tracker over an external one' in the same statement was: keel reads plain SysML processes and interprets them, enforcement via guards is CI/CD, state is computed - an external tracker gives none of those. The boundary named here (items/issues in; decisions about keel itself out) is theirs verbatim; where exactly Decisions about a PROJECT's own work fall is the read-back question";
+    }
+    #DerivedFrom dependency from us112 to st126;
+
+    part us113 : UserStory {
+        :>> id = "74805d01-f911-44a6-b9a7-b6281ad6db27";
+        :>> title = "a custom process hooked with absolute discipline";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> asA = "downstream project lead who authors a process in plain SysML";
+        :>> iWant = "to hook a custom process - plain SysML a project authors for its own work - into the engine so that it runs with 'absolute discipline': a step whose gate is red cannot be advanced past, and the refusal is the same in the editor hook, at the commit gate and in CI";
+        :>> soThat = "'This has become a more and more obvious need' (their words); the outcome it serves was not stated - the read-back asks for the last concrete process that could not be hooked";
+        :>> implication = ImplicationKind::need;
+        :>> triageNote = "Their question was 'how to hook into custom processes that have absolute discipline?' - a need, not yet a use case, because no concrete custom process was named. beAsk (pain, not features): what was the last process you wanted enforced and could not hook. Elicitation is open; the story records what was said";
+    }
+    #DerivedFrom dependency from us113 to st126;
+
+    part us114 : UserStory {
+        :>> id = "0d13dc42-73df-4c17-b122-6eb14ded750c";
+        :>> title = "divide and conquer: decouple wherever helpful, guards and test binaries first";
+        :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
+        :>> asA = "keel maintainer";
+        :>> iWant = "the code decoupled 'wherever it's helpful' and the work divided so that speed, reliability and 'anchor points into our processes' all increase; the test-binary and guard items ('the Guards one') worked first";
+        :>> soThat = "divide and conquer: several small members are built, tested and reasoned about apart, and each is a place a process can anchor a control";
+        :>> implication = ImplicationKind::priority;
+        :>> triageNote = "Priority implication: the ordering they asked for is already the frontier's (dcGuardsAreMembersPerFamily, dcTouchedSetDescendsTheWorkspace stand ahead of the rest under D0481/D0482/D0483). 'Anchor points into our processes' is read as: a member boundary is where a guard, a hook or a sensor can bind - carried into the Needs as nMemberIsAnAnchor, my reading, marked so";
+    }
+    #DerivedFrom dependency from us114 to st126;
 }
