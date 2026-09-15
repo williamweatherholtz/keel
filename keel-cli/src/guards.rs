@@ -965,8 +965,9 @@ pub fn control_defect_registry(root: &Path) -> GuardReport {
 // ── ceremony guard (gate ordering + retro-scan evidence) ───────────────────────────────────────
 // The gate order is `crate::orient::gate_order(root)`, read from the workflow chain the process steps
 // bind (D0435) - never a constant here.
+// The scan wording is `crate::write::RETRO_SCAN_EVIDENCE`, ONE home shared with the write that
+// refuses a retro result without it (issue566) - this guard reads a Retro already on the tree.
 const CEREMONY_GRANDFATHERED: &[&str] = &["sprint11_nativeSpikes"];
-const SCAN_EVIDENCE: &[&str] = &["avoidable", "improvement", "retro held", "no avoidable", "process improvement"];
 
 /// Gate names (of `order`) with a `verification <…{G}Gate>` declaration in the text.
 fn gates_defined(text: &str, order: &[String]) -> HashSet<String> {
@@ -1009,12 +1010,14 @@ fn ordering_violations(order: &[String], defined: &HashSet<String>, recorded: &H
     out
 }
 
-/// True if Retro is recorded but its gate text records no avoidable-issue scan evidence (issue011).
-/// Anchors on the `verification …RetroGate… : Test` declaration (not any `RetroGate` substring,
-/// which can appear in other gates' prose) — mirrors `_RETRO_TEXT`.
-fn retro_scan_missing(text: &str, recorded: &HashSet<String>) -> bool {
+/// The retro Test's NAME when Retro is recorded but that Test's `procedureText` records no
+/// avoidable-issue scan (issue011); `None` when it does, or when no Retro is recorded. Anchors on
+/// the `verification …RetroGate… : Test` declaration (not any `RetroGate` substring, which can
+/// appear in other gates' prose). The predicate is `crate::write::retro_scan_recorded`, the one the
+/// write refuses on (issue566) - the surface this reads is the Test, so the message names the Test.
+fn retro_scan_missing(text: &str, recorded: &HashSet<String>) -> Option<String> {
     if !recorded.contains("Retro") {
-        return false;
+        return None;
     }
     for (idx, _) in text.match_indices("verification ") {
         let after = &text[idx + "verification ".len()..];
@@ -1022,15 +1025,14 @@ fn retro_scan_missing(text: &str, recorded: &HashSet<String>) -> bool {
         if !name.contains("RetroGate") {
             continue;
         }
-        let Some(rest) = after.strip_prefix(name.as_str()) else { return false };
-        let Some(pt) = rest.find("procedureText") else { return false };
+        let rest = after.strip_prefix(name.as_str())?;
+        let pt = rest.find("procedureText")?;
         let after_pt = &rest[pt..];
-        let Some(q) = after_pt.find('"') else { return false };
+        let q = after_pt.find('"')?;
         let body: String = after_pt[q + 1..].chars().take_while(|c| *c != '"').collect();
-        let b = body.to_lowercase();
-        return !SCAN_EVIDENCE.iter().any(|k| b.contains(k));
+        return (!crate::write::retro_scan_recorded(&body)).then_some(name);
     }
-    false // no retro verification declaration found
+    None // no retro verification declaration found
 }
 
 /// Guard: ceremony gates are recorded in order, and a recorded Retro carries its scan evidence.
@@ -1070,8 +1072,12 @@ pub fn ceremony(root: &Path) -> GuardReport {
                 violations.push(format!("{stem}: {detail}"));
             }
         }
-        if retro_scan_missing(&text, &recorded) && !grandfathered.contains(stem.as_str()) {
-            violations.push(format!("{stem}: Retro gate recorded without avoidable-issue scan evidence (issue011)"));
+        if let Some(test) = retro_scan_missing(&text, &recorded).filter(|_| !grandfathered.contains(stem.as_str())) {
+            // issue566: the message names the surface read - the Test's procedureText - never the result.
+            violations.push(format!(
+                "{stem}: Retro Test {test} records no avoidable-issue scan in its procedureText (issue011; one of: {})",
+                crate::write::RETRO_SCAN_EVIDENCE.join(" | ")
+            ));
         }
     }
     GuardReport { name: "ceremony", scanned: files.len(), warnings, violations }
@@ -7918,7 +7924,7 @@ mod tests {
         let mut retro: HashSet<String> = HashSet::new();
         retro.insert("Retro".to_owned());
         let without = "verification xRetroGate : Test { :>> procedureText = \"rubber stamp\"; }";
-        assert!(retro_scan_missing(without, &retro));
+        assert_eq!(retro_scan_missing(without, &retro).as_deref(), Some("xRetroGate"));
     }
 
     /// issue544 (D0437's clause completed): a `CloseOut` recorded FAIL followed by a `Retro` recorded pass is
@@ -7972,13 +7978,16 @@ mod tests {
         passed.insert("Retro".to_owned());
         let with = "verification xRetroGate : Test { :>> procedureText = \"no avoidable issue found\"; }";
         let without = "verification xRetroGate : Test { :>> procedureText = \"rubber stamp\"; }";
-        assert!(!retro_scan_missing(with, &passed));
-        assert!(retro_scan_missing(without, &passed));
+        assert!(retro_scan_missing(with, &passed).is_none());
+        // issue566: the finding names the TEST read, so the violation line can name it and not the result.
+        assert_eq!(retro_scan_missing(without, &passed).as_deref(), Some("xRetroGate"));
+        let unrecorded: HashSet<String> = HashSet::new();
+        assert!(retro_scan_missing(without, &unrecorded).is_none(), "an unrecorded Retro owes nothing yet");
 
         // Regression: "RetroGate" mentioned in an EARLIER gate's prose must not be mistaken for
         // the retro verification (the bug the unified runner caught on sprint56).
         let prose_then_real = "verification xStandupGate : Test { :>> procedureText = \"approach: retro_scan_missing (RetroGate prose)\"; }\nverification xRetroGate : Test { :>> procedureText = \"no avoidable issue\"; }";
-        assert!(!retro_scan_missing(prose_then_real, &passed));
+        assert!(retro_scan_missing(prose_then_real, &passed).is_none());
     }
 
     // charter_selftest retired (D0107 CONTRACT): the charter guard now sources from charterRule; its

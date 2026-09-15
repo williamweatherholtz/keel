@@ -3085,6 +3085,12 @@ fn cmd_append_gate_result(args: &[String]) -> i32 {
             eprintln!("error: {e}");
             1
         }
+        Err(e @ w::WriteError::RetroScanMissing(..)) => {
+            // issue566: the retro scan wording is refused at the write, by the Test - the same ledger fact.
+            ledger_refused(&keel_cli::actor::root_for(&file), "append-gate-result", "retro-scan");
+            eprintln!("error: {e}");
+            1
+        }
         Err(e) => { eprintln!("error: {e}"); 1 }
     }
 }

@@ -233,6 +233,13 @@ const WRITE_PATH_CHECKS: &[(&str, Subject, &str, &str, &[&str])] = &[
         &["append-gate-result", "gate result with no receipt", "receiptless gate"],
     ),
     (
+        "append-gate-result:retro-scan",
+        Subject::Ai,
+        "active",
+        "a `…RetroGate` result whose Test's procedureText records no avoidable-issue scan (issue011): the act refused is the agent closing a Retro that scanned nothing, at the write where the Test's author can answer it (issue566 - the guard's red fell on the recorder one commit later)",
+        &["retro-scan", "retro Test", "no avoidable-issue scan", "RETRO_SCAN_EVIDENCE"],
+    ),
+    (
         "record:tool-output-prose",
         Subject::Ai,
         "active",

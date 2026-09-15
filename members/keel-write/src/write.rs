@@ -45,6 +45,22 @@ pub enum WriteError {
     /// issue448: an AI-judged `method=test` result with no `--evidence` - the receipt guard 52 reads
     /// at the turn boundary is owed at the WRITE. Carries the verb, so the caller can ledger it.
     ReceiptOwed(String, String),
+    /// issue566: a `…RetroGate` result whose Test's `procedureText` carries none of
+    /// [`RETRO_SCAN_EVIDENCE`] - the issue011 scan is owed by the actor who can write the Test, at
+    /// the write, not one commit later by the ceremony guard. Carries the gate name.
+    RetroScanMissing(String),
+}
+
+/// The words a retro Test's `procedureText` must carry (any one, case-insensitive) to record the
+/// issue011 avoidable-issue scan. ONE home (issue566): `append_gate_result` refuses a `…RetroGate`
+/// result without one, and the ceremony guard reads the same list for a Retro already on the tree.
+pub const RETRO_SCAN_EVIDENCE: &[&str] = &["avoidable", "improvement", "retro held", "no avoidable", "process improvement"];
+
+/// True when `procedure_text` carries a [`RETRO_SCAN_EVIDENCE`] term (case-insensitive).
+#[must_use]
+pub fn retro_scan_recorded(procedure_text: &str) -> bool {
+    let t = procedure_text.to_lowercase();
+    RETRO_SCAN_EVIDENCE.iter().any(|k| t.contains(k))
 }
 
 impl std::fmt::Display for WriteError {
@@ -65,6 +81,9 @@ impl std::fmt::Display for WriteError {
             Self::GateNotFound(n) => write!(f, "gate not found: {n}"),
             Self::ReceiptOwed(what, judge) => {
                 write!(f, "refusing to write: {what} is AI-judged (`{judge}`) and carries no --evidence.\n  An AI-judged method=test result records WHAT WAS RUN as its `// RAN:` receipt (D0232/issue266) -\n  pass --evidence '<the command you ran and what it printed>'. A human's word is the evidence and owes none.\n  Refused at the write (issue448): the turn-boundary guard used to be the only check, so the line landed.")
+            }
+            Self::RetroScanMissing(gate) => {
+                write!(f, "refusing to write: the retro Test {gate} records no avoidable-issue scan in its procedureText (issue011).\n  A Retro's Test says what was scanned; its procedureText must carry one of: {}.\n  Refused at the write (issue566): the ceremony guard used to find this one commit later, naming the result,\n  and the recorder cannot edit a Test - the actor who authored the sprint record can.", RETRO_SCAN_EVIDENCE.join(" | "))
             }
             Self::InjectedToolOutput(field, excerpt) => {
                 write!(f, "refusing to write: --{field} carries what looks like captured TOOL OUTPUT, not authored text.\n  near: {excerpt}\n  A governance record must state what someone actually wrote. This is how it gets in: a BACKTICK\n  inside a double-quoted shell argument is command substitution, so sh RUNS the command named in\n  your prose and substitutes its output into the field (issue255/D0223). Pass the text through a\n  file or a single-quoted heredoc rather than an interpolated shell argument.")
@@ -537,6 +556,36 @@ fn verification_declares_method(pkg: &Package, name: &str, member: &str) -> bool
     })
 }
 
+/// The `procedureText` a `verification <name>` declares, top-level or inside an action def; `None`
+/// for no such verification or no such attribute.
+fn verification_procedure_text(pkg: &Package, name: &str) -> Option<String> {
+    let text_of = |v: &keel_parser::ast::Verification| {
+        (v.name == name).then(|| {
+            v.attributes.iter().find(|a| a.name == "procedureText").and_then(|a| match &a.value {
+                keel_parser::ast::Value::Str(s) => Some(s.clone()),
+                _ => None,
+            })
+        })
+    };
+    pkg.items.iter().find_map(|item| match item {
+        Item::Verification(v) => text_of(v),
+        Item::ActionDef(def) => def.verifications.iter().find_map(text_of),
+        _ => None,
+    })?
+}
+
+/// issue566 write-layer check: a `…RetroGate` result is refused while its Test's `procedureText`
+/// carries no [`RETRO_SCAN_EVIDENCE`] term - the same predicate the ceremony guard reads.
+fn refuse_unscanned_retro(pkg: &Package, gate_name: &str) -> Result<(), WriteError> {
+    if !gate_name.contains("RetroGate") {
+        return Ok(());
+    }
+    if verification_procedure_text(pkg, gate_name).is_some_and(|t| retro_scan_recorded(&t)) {
+        return Ok(());
+    }
+    Err(WriteError::RetroScanMissing(gate_name.to_owned()))
+}
+
 /// True when `{task}DoD`'s declared method is `confirmation`.
 fn dod_method_is_confirmation(pkg: &Package, task_name: &str) -> bool {
     verification_declares_method(pkg, &format!("{task_name}DoD"), "confirmation")
@@ -660,6 +709,7 @@ pub const WRITE_PATH_REFUSALS: &[WritePathRefusal] = &[
     WritePathRefusal { verb: "judge-set", check: "no-delegation", refuses: "verdict_channel_refusal" },
     WritePathRefusal { verb: "append-result", check: "ran-receipt", refuses: "WriteError::ReceiptOwed" },
     WritePathRefusal { verb: "append-gate-result", check: "ran-receipt", refuses: "WriteError::ReceiptOwed" },
+    WritePathRefusal { verb: "append-gate-result", check: "retro-scan", refuses: "WriteError::RetroScanMissing" },
     WritePathRefusal { verb: "record", check: "tool-output-prose", refuses: "WriteError::InjectedToolOutput" },
 ];
 
@@ -1208,6 +1258,9 @@ fn append_gate_result_locked(
     if !gate_exists_in_pkg(&pkg, gate_name) {
         return Err(WriteError::GateNotFound(gate_name.to_owned()));
     }
+    // issue566: the Retro's scan wording is checked here, where the Test's author can answer it -
+    // not one commit later by the ceremony guard, whose red named the result and fell on the recorder.
+    refuse_unscanned_retro(&pkg, gate_name)?;
     // issue448: the Implement gate is method=test and is the one that landed receiptless - the
     // same write-layer refusal as append_result, before any line is built.
     if verification_declares_method(&pkg, gate_name, "test") {
@@ -2431,6 +2484,41 @@ mod tests {
         super::append_gate_result(&f, "gRefine", "abc1234", "pass", "2026-09-10", "bot", None, None).expect("method=inspect gate owes no receipt");
         let written = std::fs::read_to_string(&f).expect("read");
         assert_eq!(written.matches("gImplR").count(), 2, "exactly the two permitted gImpl results landed:\n{written}");
+    }
+
+    /// issue566, the D0388 pair chosen before the live tree is read. Known-positive: a `…RetroGate`
+    /// result on a Test whose procedureText carries none of `RETRO_SCAN_EVIDENCE` is refused at the
+    /// write, the message names the Test and the term list, and the file is unchanged byte-for-byte.
+    /// Known-negative: the same call on a Test that says "Avoidable issues scanned" lands. Around them:
+    /// a gate whose name is not a Retro owes no scan wording, a human judge is refused the same way
+    /// (the wording is the Test's, not the judge's), and the predicate is the one the guard reads.
+    #[test]
+    fn a_retro_gate_result_is_refused_while_its_test_records_no_scan() {
+        let root = k6_root("retroscan");
+        let f = root.join(".tracking").join("delivery").join("r.sysml");
+        let body = "package R {\n    verification xRetroGate : Test { :>> id = \"e2e00000-0000-4000-8000-00000000f101\"; :>> method = VerificationMethod::analyze; :>> procedureText = \"rubber stamp\"; }\n    verification yRetroGate : Test { :>> id = \"e2e00000-0000-4000-8000-00000000f102\"; :>> method = VerificationMethod::analyze; :>> procedureText = \"Avoidable issues scanned (issue011): none.\"; }\n    verification xReviewGate : Test { :>> id = \"e2e00000-0000-4000-8000-00000000f103\"; :>> method = VerificationMethod::inspect; :>> procedureText = \"rubber stamp\"; }\n}\n";
+        std::fs::write(&f, body).expect("write");
+        let before = std::fs::read(&f).expect("read");
+
+        let r = super::append_gate_result(&f, "xRetroGate", "abc1234", "pass", "2026-09-15", "bot", None, Some("scan: none"));
+        let Err(e @ WriteError::RetroScanMissing(_)) = r else { panic!("a retro Test without the wording is refused: {r:?}") };
+        let msg = e.to_string();
+        assert!(msg.contains("xRetroGate") && msg.contains("procedureText"), "the refusal names the Test and the surface: {msg}");
+        for term in super::RETRO_SCAN_EVIDENCE {
+            assert!(msg.contains(term), "the refusal lists every accepted term ({term}): {msg}");
+        }
+        let r = super::append_gate_result(&f, "xRetroGate", "abc1234", "pass", "2026-09-15", "hum", None, None);
+        assert!(matches!(r, Err(WriteError::RetroScanMissing(_))), "the wording is owed by the Test, whoever judges: {r:?}");
+        assert_eq!(std::fs::read(&f).expect("read"), before, "a refused write leaves the file byte-for-byte");
+
+        super::append_gate_result(&f, "yRetroGate", "abc1234", "pass", "2026-09-15", "bot", None, Some("scan: none")).expect("a retro Test that records its scan lands");
+        super::append_gate_result(&f, "xReviewGate", "abc1234", "pass", "2026-09-15", "bot", None, None).expect("a non-retro gate owes no scan wording");
+        assert!(std::fs::read_to_string(&f).expect("read").contains("part yRetroGateR1 : TestResult"));
+
+        assert!(super::retro_scan_recorded("No AVOIDABLE issue found"), "case-insensitive");
+        assert!(!super::retro_scan_recorded("rubber stamp"));
+        assert!(super::write_path_refusal("append-gate-result", "retro-scan").is_some(), "the refusal has its registry row (issue449)");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// D0312 option B, the PROPOSED tier - the issue400/D0388 probe pair named BEFORE the live tree
