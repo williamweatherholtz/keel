@@ -659,7 +659,7 @@ fn pid_alive_host(pid: u32) -> bool {
     if proc_dir.is_dir() {
         return proc_dir.join(pid.to_string()).is_dir();
     }
-    std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().map(|s| s.success()).unwrap_or(false)
+    std::process::Command::new("kill").args(["-0", &pid.to_string()]).status().is_ok_and(|s| s.success())
 }
 
 /// A run in flight as the receipt on disk states it.

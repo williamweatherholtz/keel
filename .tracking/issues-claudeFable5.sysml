@@ -1687,4 +1687,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcProbePairTravelsInAFile to issue571;
+
+    part issue572 : Issue {
+        :>> id = "c06a28dd-8115-4039-a153-07ccc2e6e9ff";
+        :>> title = "Local clippy cannot see cfg(not(windows)) code: sprint 725 landed green and CI's Linux clippy failed it";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 725 landed at eb82b52 with every local gate green - the D0476 ladder's clippy rung, the VERIFIER's `cargo clippy --release --all-targets -- -D warnings`, and keel land's 865-test touched set - and CI's `clippy (-D warnings)` step failed it: `error: called map(<f>).unwrap_or(false) on a Result value --> keel-cli/src/touched.rs:662:5` (clippy::map_unwrap_or, implied by the `#![deny(clippy::pedantic)]` at keel-cli/src/lib.rs:7). The line is the non-Windows `pid_alive_host` body added by D0493, under `#[cfg(not(windows))]`. The Windows host that ran every local clippy never compiles that branch, so no local lint could see it; ci.yml lints on ubuntu, which does. The class is every `#[cfg(not(windows))]` / `#[cfg(unix)]` body in the workspace: local clippy proves nothing about them, the ladder reports green, and the red arrives after the push - the exact gap the ladder exists to close (D0476), and a second instance of the local-gate-differs-from-CI class (issue453 was the first). Corrected at the root in the same commit (`.status().is_ok_and(|s| s.success())`, matching the Windows branch at touched.rs:653); the control is a clippy rung over CI's triple on the local host (dcClippyLintsTheOtherHostsCfg).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcClippyLintsTheOtherHostsCfg to issue572;
 }

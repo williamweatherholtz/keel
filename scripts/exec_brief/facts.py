@@ -3461,6 +3461,135 @@ fact("recorderOwedControl", {
      "sprint724 = results / outcomes / shas / charter from its delivery file. surfaces by literal search in the recorder brief (SKILL.md, "
      "and byte equality with its .claude copy) and in .engine/processes/delegated-ceremony.sysml.")
 
+# ================================================================ 32. the verifier's stems row names the embedded tree (D0494 / issue530)
+# The Decision's fields as the guard reads them; the corrected row in the test-verify skill and its .claude copy;
+# the binary's rule in touched.rs (embedded_stem and its own test) and that test run live; the two receipts on disk
+# (the sprint 725 verifier's ladder, the landing run over this commit) with the .engine paths each attributed `init`
+# from; the Issue whose procedure half this is; the two red-yield obligations the Decision triages; sprint 725.
+_d0494 = _dec_file("0494-")
+_f494 = _decision_facts(_d0494, "d0494")
+_tv94 = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
+_tv94_claude = read(os.path.join(REPO, ".claude", "skills", "test-verify", "SKILL.md")) or ""
+_stems94 = next((l for l in _tv94.splitlines() if l.startswith("| `stems` |")), "")
+_touched94 = read(os.path.join(REPO, "keel-cli", "src", "touched.rs")) or ""
+_emb94_m = re.search(r"^pub fn embedded_stem\(path: &str\) -> Option<String> \{.*?^\}", _touched94, re.S | re.M)
+_emb94 = _emb94_m.group(0) if _emb94_m else ""
+_emb94_line = (_touched94[: _emb94_m.start()].count("\n") + 1) if _emb94_m else None
+_emb94_test = re.search(r"^\s*fn a_change_under_the_embedded_tree_names_init\(\)", _touched94, re.M)
+_emb94_test_line = (_touched94[: _emb94_test.start()].count("\n") + 1) if _emb94_test else None
+
+
+def _receipt94(fname):
+    _t = read(os.path.join(REPO, ".keel", "metrics", fname)) or ""
+    if not _t:
+        return {"exists": False}
+    _stems_m = re.search(r'^stems = \[([^\]]*)\]', _t, re.M)
+    _stems = re.findall(r'"([^"]+)"', _stems_m.group(1)) if _stems_m else None
+    _head = (re.search(r'^head = "([^"]+)"', _t, re.M) or [None, None])[1]
+    _out = (re.search(r'^outcome = "([^"]+)"', _t, re.M) or [None, None])[1]
+    _r = {"exists": True, "head": _head, "outcome": _out, "stems": _stems, "stemsIncludeInit": bool(_stems and "init" in _stems),
+          "passed": (re.search(r"^passed = (\d+)", _t, re.M) or [None, None])[1],
+          "failed": (re.search(r"^failed = (\d+)", _t, re.M) or [None, None])[1]}
+    # a verify receipt (D0476) is a ladder: its [[rung]] blocks carry the verdicts, the touched receipt carries the run
+    _rungs = re.findall(r'^\[\[rung\]\]\nname = "(\w+)"\nverdict = "(\w+)"', _t, re.M)
+    if _rungs:
+        _r["rungs"] = {n: vd for n, vd in _rungs}
+        _r["rungsGreen"] = len([1 for _n, vd in _rungs if vd == "pass"])
+        _r["stoppedAt"] = (re.search(r'^stopped_at = "([^"]+)"', _t, re.M) or [None, None])[1]
+    return _r
+
+
+_vr94 = _receipt94("verify-receipt.toml")
+_tr94 = _receipt94("touched-receipt.toml")
+# the .engine paths in the commit each receipt is over (a landed run's change set is that commit against its parent);
+# `running` names a run in flight, so its attribution is not yet a verdict and is reported as such
+_eng94 = {}
+if _tr94.get("head"):
+    _ok94, _o94 = run(["git", "show", "--name-only", "--format=", _tr94["head"], "--", ".engine"])
+    _eng94["landing"] = sorted(l for l in _o94.splitlines() if l.strip()) if _ok94 else None
+else:
+    _eng94["landing"] = None
+_ok94s, _o94s = run(["git", "status", "--short", "--", ".engine"])
+_eng94["workingTree"] = sorted(l for l in _o94s.splitlines() if l.strip()) if _ok94s else None
+# the binary's own test for the rule, run live (the lib test binary is the one keel land just built; ~a minute cold)
+_t94_rc, _t94_out = run_rc(["cargo", "test", "--release", "--manifest-path", "keel-cli/Cargo.toml", "--lib", "--",
+                            "touched::tests::a_change_under_the_embedded_tree_names_init"], timeout=600)
+_t94_res = re.search(r"test result: (\w+)\. (\d+) passed; (\d+) failed", _t94_out or "")
+_i530 = _issue_facts("530", "dcTouchedReceiptStatesItsOwnAttribution")
+_i530_body = (re.search(r"part issue530 : Issue\s*\{(.*?)\n\s*\}", _iss, re.S) or [None, ""])[1]
+
+
+def _obligation94(hex8):
+    _p = os.path.join(REPO, ".tracking", "obligations", "red-yield-" + hex8 + ".sysml")
+    _t = read(_p) or ""
+    return {"exists": bool(_t),
+            "resolvesFromD0494": ("#Resolves dependency from d0494 to obligation" + hex8 + ";") in _t,
+            "namesLockedFile": ".engine/skills/test-verify/SKILL.md" in _t,
+            "namesProcessChangeGuard": "[process-change] locked file(s) changed" in _t,
+            "namedInConsequences": ("obligation" + hex8) in (_f494["consequences"] or "")}
+
+
+_nw94 = re.search(r"action def NextWork \{(.*?)^    \}", _bl, re.S | re.M)
+_nw94_actions = re.findall(r"^\s{8}action (\w+);", _nw94.group(1), re.M) if _nw94 else []
+_s725 = _sprint_facts("sprint725_touchedRunIsExclusive.sysml", "d0493")
+fact("verifierStemsRow", {
+    **_f494,
+    "namesIssue530": "issue530" in (_f494["context"] or ""),
+    "namesEmbeddedStem": "embedded_stem" in (_f494["context"] or ""),
+    "namesSprint725Mismatch": "MISMATCH" in (_f494["context"] or "") and "865 passed" in (_f494["context"] or ""),
+    "namesReceiptHalfRemains": "dcTouchedReceiptStatesItsOwnAttribution" in (_f494["rationale"] or ""),
+    "saysProcessChange": "This is a process-change" in (_f494["rationale"] or ""),
+    "decisionNamesGitStatus": "git status --short -- .engine" in (_f494["decision"] or ""),
+    "skill": {
+        "rowFound": bool(_stems94),
+        "rowNamesInit": "PLUS `init`" in _stems94,
+        "rowNamesEngineTree": "`.engine/`" in _stems94,
+        "rowNamesEmbeddedStem": "embedded_stem" in _stems94,
+        "rowNamesIssue530": "issue530" in _stems94,
+        "rowNamesGitStatus": "git status --short -- .engine" in _stems94,
+        "rowLength": len(_stems94),
+        "claudeCopyIdentical": bool(_tv94) and _tv94 == _tv94_claude,
+        "stemsRowsInSkill": len([l for l in _tv94.splitlines() if l.startswith("| `stems` |")]),
+    },
+    "binary": {
+        "embeddedStemFound": bool(_emb94), "embeddedStemLine": _emb94_line,
+        "stripsEnginePrefix": 'strip_prefix(".engine/")' in _emb94,
+        "returnsInit": 'Some("init".to_string())' in _emb94,
+        "bareTreeIsNone": "if rel.is_empty()" in _emb94 and "return None" in _emb94,
+        "ownTestFound": bool(_emb94_test), "ownTestLine": _emb94_test_line,
+    },
+    "live": {
+        "ownTest": {"exit": _t94_rc, "result": _t94_res.group(1) if _t94_res else None,
+                    "passed": int(_t94_res.group(2)) if _t94_res else None, "failed": int(_t94_res.group(3)) if _t94_res else None},
+        "verifierReceipt": _vr94,
+        "landingReceipt": _tr94, "landingCommitEnginePaths": _eng94["landing"],
+        "workingTreeEngineChanges": _eng94["workingTree"],
+    },
+    "issue530": {**_i530,
+                 # the resolver's DoD opens `issue530 is resolved - ...`, a phrasing the shared helper's `Resolves issueNNN` search misses
+                 "resolverDodNamesIssue": bool(re.search(r"dcTouchedReceiptStatesItsOwnAttributionDoD[^\n]*procedureText = \"issue530 is resolved", _bl)),
+                 "namesSkillTable": "test-verify skill's receipt-honesty table" in _i530_body,
+                 "namesMismatch": "MISMATCH" in _i530_body},
+    "resolverPosition": (_nw94_actions.index("dcTouchedReceiptStatesItsOwnAttribution") + 1) if "dcTouchedReceiptStatesItsOwnAttribution" in _nw94_actions else None,
+    "nextWorkItems": len(_nw94_actions),
+    "obligations": {"obligation1ab52489": _obligation94("1ab52489"), "obligation87f79374": _obligation94("87f79374")},
+    "sprint725": {k: v for k, v in _s725.items() if k != "text"},
+} if _d0494 and _tv94 else None, "the stems-row correction: Decision, skill row, binary rule, receipts live, Issue, obligations, sprint",
+     _DEC_HOW + " Names by literal search in the field named. skill: the one line of .engine/skills/test-verify/SKILL.md beginning "
+     "`| `stems` |`, searched for `PLUS `init``, `.engine/`, `embedded_stem`, `issue530`, `git status --short -- .engine`; "
+     "claudeCopyIdentical = byte equality with .claude/skills/test-verify/SKILL.md. binary: the `pub fn embedded_stem` body in "
+     "keel-cli/src/touched.rs (its 1-based line), searched for the strip_prefix, the `Some(\"init\")` return and the empty-rel None; "
+     "ownTestLine = the line of `fn a_change_under_the_embedded_tree_names_init`. live.ownTest = `cargo test --release --lib -- "
+     "touched::tests::a_change_under_the_embedded_tree_names_init` exit and its `test result:` line. verifierReceipt / landingReceipt "
+     "= head, outcome, stems, passed, failed read from .keel/metrics/verify-receipt.toml and touched-receipt.toml (a verify receipt "
+     "carries no run of its own: its [[rung]] name/verdict pairs, rungsGreen and stopped_at are read instead); landingCommitEnginePaths = `git show --name-only --format= <head> -- .engine`, "
+     "the .engine paths the commit that receipt names changed; workingTreeEngineChanges = `git status --short -- .engine` now. "
+     "issue530 from .tracking/issues-claudeFable5.sysml with its #Resolves edge, resolverDodNamesIssue = the resolver's DoD "
+     "procedureText opening `issue530 is resolved`, and two literal searches of its description. resolverPosition = the resolver's 1-based place among `action x;` lines in NextWork (declaration order IS "
+     "priority, D0052). obligations: each red-yield file's existence, its `#Resolves dependency from d0494 to obligationX;` edge, "
+     "the locked file and guard it names, and whether D0494's consequences name it. sprint725 = results / outcomes / shas / charter "
+     "from its delivery file.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
