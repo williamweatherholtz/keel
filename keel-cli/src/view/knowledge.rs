@@ -821,6 +821,17 @@ fn converge_bonus(model: &Model, seed_names: &[String], score: &HashMap<String, 
 /// near one and the rule refuses them. `DOM_HOP2` was indifferent on the deciding set (22/50 at 0.4,
 /// 0.7 and 1.0), so it keeps the middle value and nothing is claimed for it; `DOM_HOP1` below 1.0 cost
 /// top-3 placements (9/22 -> 4/22) and stays at the full share.
+///
+/// RE-CHOSEN 2026-09-14 UNDER D0464's WEIGHTED RULE READ AT 100 CASES (D0466 option B, the human's
+/// choice): the highest two-hop hit count subject to the one-hop arm's hits and mean rows holding and
+/// its median position moving by at most one, only where the two-hop arm gains at least three hits -
+/// read on `--cases 100`, because the bench's default 50 cases pick 1.1 and 100 pick 1.25 on the same
+/// tree, and a one-position median move at 50 is the size of the difference between two draws. Sweeps
+/// for THIS constant run `recall_bench.py --cases 100 --sweep DOMINANCE=...` on both arms. Measured at
+/// eda9647, 100 cases, one-hop then two-hop: off 89/100 median 2 top-3 57/89 rows 12, then 39/100 median 5;
+/// 1.1 -> 90/100 median 4 (two positions - REFUSED), then 53/100 median 3; 1.25 -> 90/100 median 3 top-3
+/// 51/90 rows 12, then 48/100 median 4 top-3 18/48 (STANDS: +9 far hits, near median moved one). The
+/// 50-case reading (1.1 admissible at 46/50 median 4, 24 against 23) is recorded in D0466 and not acted on.
 const DOMINANCE: f64 = 1.25;
 const DOM_HOP1: f64 = 1.0;
 const DOM_HOP2: f64 = 0.7;
