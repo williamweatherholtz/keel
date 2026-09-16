@@ -3616,8 +3616,11 @@ _tr95 = _receipt94("touched-receipt.toml")
 _i572, _i573 = _issue_facts("572", "dcClippyLintsTheOtherHostsCfg"), _issue_facts("573", "dcSprintPurposeIsNotPrefixed")
 _i574, _i575 = _issue_facts("574", "dcScriptProbesRunBeforeCommit"), _issue_facts("575", "dcVerifyWaitsForItsPid")
 _s726 = _sprint_facts("sprint726_clippyLintsTheTripleCiLints.sysml", "d0495")
-_nw95 = re.search(r"action def NextWork \{(.*?)^    \}", _bl, re.S | re.M)
-_nw95_actions = re.findall(r"^\s{8}action (\w+);", _nw95.group(1), re.M) if _nw95 else []
+_bl95_actions = re.findall(r"^\s{8}action (\w+);", _bl, re.M)          # every def, in declaration order (D0052)
+_bl95_defs = {}
+for _m95 in re.finditer(r"^    action def (\w+) \{(.*?)^    \}", _bl, re.S | re.M):
+    for _a95 in re.findall(r"^\s{8}action (\w+);", _m95.group(2), re.M):
+        _bl95_defs.setdefault(_a95, _m95.group(1))
 _ci95_ok, _ci95_out = run(["gh", "run", "list", "--limit", "6", "--json", "conclusion,status,headSha,event,databaseId,createdAt"], timeout=60)
 try:
     _ci95 = json.loads(_ci95_out) if _ci95_ok else None
@@ -3665,9 +3668,9 @@ fact("clippyLintsCiTriple", {
     },
     "issues": {"issue572": _i572, "issue573": _i573, "issue574": _i574, "issue575": _i575},
     "classMembers": [n for n, i in (("issue453", None), ("issue572", _i572), ("issue574", _i574)) if i is None or i["exists"]],
-    "resolverPositions": {a: (_nw95_actions.index(a) + 1 if a in _nw95_actions else None)
+    "resolverPositions": {a: ({"place": _bl95_actions.index(a) + 1, "def": _bl95_defs.get(a)} if a in _bl95_actions else None)
                           for a in ("dcClippyLintsTheOtherHostsCfg", "dcSprintPurposeIsNotPrefixed", "dcScriptProbesRunBeforeCommit", "dcVerifyWaitsForItsPid")},
-    "nextWorkItems": len(_nw95_actions),
+    "backlogItems": len(_bl95_actions),
     "sprint726": {k: v for k, v in _s726.items() if k != "text"},
     "ci": _ci95,
 } if _d0495 and _verify95 else None, "the other-host clippy: Decision, pure control and tests, hook branch, skill sentence, host, receipts, the class's Issues, sprint",
@@ -3680,8 +3683,8 @@ fact("clippyLintsCiTriple", {
      "[[rung]] row's verdict/exit/seconds/command (namesBothTriples = two `cargo clippy` and one `--target x86_64-unknown-linux-gnu`) and "
      "every rung's seconds; touched-receipt.toml likewise. issues: each from .tracking/issues-claudeFable5.sysml with its #Resolves edge "
      "and whether the resolver's DoD names it. classMembers = the local-gate-differs-from-CI Issues (issue453 by citation in D0495's "
-     "context, the others by existence). resolverPositions = 1-based place among `action x;` in NextWork (declaration order IS priority, "
-     "D0052). sprint726 from its delivery file. ci = `gh run list --limit 6 --json conclusion,status,headSha,event,databaseId,createdAt` "
+     "context, the others by existence). resolverPositions = 1-based place among every `action x;` in .tracking/backlog.sysml (declaration order IS "
+     "priority, D0052) and the `action def` that declares it; backlogItems = that count. sprint726 from its delivery file. ci = `gh run list --limit 6 --json conclusion,status,headSha,event,databaseId,createdAt` "
      "verbatim (D0420: the conclusion field, never a wrapper's exit); null when gh is unavailable.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
