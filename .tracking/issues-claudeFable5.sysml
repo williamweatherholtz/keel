@@ -1731,4 +1731,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcVerifyWaitsForItsPid to issue575;
+
+    part issue576 : Issue {
+        :>> id = "75d6ad5a-0632-412a-9df5-ee9a5b2431ab";
+        :>> title = "A stop hook that read the tree during sprint 727's in-flight commit reported d0496 absent from the commit that carried it - a failed git read inside a guard is indistinguishable from an empty diff";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The stop hook fired at epoch 1789576301 while `git commit` for sprint 727 was inside its pre-commit hook (commit stamp 1789576293, keel-land launched 1789576313) and blocked the turn on `[guard:process-change]`: locked file(s) changed (.githooks/pre-commit, .github/workflows/ci.yml) with NO co-committed process-change Decision. The Decision was there: .engine/decisions/0496-scriptProbesRunBeforeCommit.sysml, `#ProspectiveChange`-marked, staged as an `A` beside the two locked files. Reproduced afterwards in a worktree at 1fc06d2 with the nine paths of 13af66a staged: `keel gate guard process-change` -> PASS, 2 scanned, 0 violations. So the guard's logic holds and the red came from the read. The hook ledger shows that run made 63 git calls where each of the five preceding stop-hook runs made 66. `git_stdout` (keel-cli/src/guards.rs:1088-1098) maps a git call that exits non-zero, or fails to spawn, to the empty string, so inside `changed_paths` a read that FAILED is indistinguishable from a diff that is EMPTY: the first read (filter MDR) saw the locked files, a later one (filter ACMR, the population the authorising Decision is searched in) came back empty, and the guard computed a violation over a population it never actually read. Which git call failed, and why, is not established - the stderr was discarded with the failure. The class is D0098: a gate that cannot run must say GATE CANNOT RUN, never compute a verdict over the missing read; the same mapping sits under every guard that reads git through this helper.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGuardReadFailureIsNotAnEmptyDiff to issue576;
 }

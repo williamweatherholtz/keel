@@ -269,7 +269,7 @@ figC3 = downstream(
 
 
 figP1 = logic_lanes(
-    "Two judges read different lists",
+    "Two judges do not read one list",
     ("what happened", [
         ("probe list", "in CI's yaml only", "accent", ""),
         ("local gates", "green", "ok", ""),
@@ -315,8 +315,8 @@ ASKS = [
 panel_bodies = {
     "probes": f"""<h2>The probes CI runs must run before the commit</h2>
 {clause(PR)}
-<p><strong>What happened:</strong> two commits in a row landed green through every local gate; CI failed both on a script probe whose list lived only in CI's yaml.</p>
-<p><strong>What changes:</strong> one runner discovers every marked script; CI's step calls it, and the hook calls it whenever a script is staged. Python missing refuses and names the remedy.</p>
+<p><strong>What happened:</strong> two commits landed green locally; CI failed both on a script probe whose list lived only in its yaml.</p>
+<p><strong>What changes:</strong> one runner discovers every marked script; CI's step and the hook both call it. Python missing refuses, naming the remedy.</p>
 {figP1}
 {figP2}
 {figP3}
@@ -325,7 +325,7 @@ panel_bodies = {
     ("Run it on every commit", "the same runner, no staged-path test", f"{PROBES_S} s on every commit"),
     ("Do nothing", "nothing", "CI stays the first to run the probes"),
 ])}
-<p><strong>True:</strong> the runner's pair passes live; {N_PROBES} probes green in {PROBES_S} s; {N_RED_RUNS} CI runs red on the old step; {N_PY_BLOCKS} python-gated hook blocks. <strong>Mine:</strong> a script edit is the only change that can move the verdict. <strong>What decides it:</strong> may a gate exist on one surface only, or must the two judges read one list. <strong>Wrong if</strong> a probe fails on a change outside scripts.</p>
+<p><strong>True:</strong> the pair passes live; {N_PROBES} probes green in {PROBES_S} s; {N_RED_RUNS} CI runs red on the old step; {N_PY_BLOCKS} python-gated hook blocks. <strong>Mine:</strong> only a script edit can move the verdict. <strong>What decides it:</strong> may a gate exist on one surface only. <strong>Wrong if</strong> a probe fails on a change outside scripts.</p>
 {opts("ask-probes", "d0496", [
     ("Accept (recommended)", "Accept: the script probes CI runs run before the commit - one runner, scripts/script_probes.py, discovers every marked script for ci.yml and for the pre-commit hook whenever a staged path matches scripts/**/*.py; a red probe aborts the commit; python missing is GATE CANNOT RUN, never a skip (recommended)"),
     ("Run it on every commit", "Amend: keep the one runner but drop the staged-path test so the hook runs the probes on every commit"),
@@ -333,8 +333,8 @@ panel_bodies = {
 ])}""",
     "triple": f"""<h2>The lint before a push must see what CI compiles</h2>
 {clause(CT)}
-<p><strong>What happened:</strong> a delivery landed green through every local clippy; CI's Linux clippy failed it on a body the Windows host never compiles.</p>
-<p><strong>What changes:</strong> the clippy rung and the pre-commit hook lint once for the host and again for the Linux triple; a host without that std is red naming the remedy, never skipped.</p>
+<p><strong>What happened:</strong> a delivery landed green through local clippy; CI's Linux clippy failed it on a body the Windows host never compiles.</p>
+<p><strong>What changes:</strong> the clippy rung and the hook lint for the host and again for the Linux triple; a host without that std is red naming the remedy, never skipped.</p>
 {figC1}
 {figC2}
 {figC3}
@@ -376,7 +376,7 @@ def frame(panels_html, tabs_html, title, sub):
 <h1 data-digest="title">{title}</h1>
 <div class="topbar"><p class="sub" data-digest="subtitle">{sub}</p><button class="copy" data-copy type="button" aria-label="Copy this brief for AI">&#8681; Copy for AI</button></div>
 
-<div class="ask"><p class="verdict"><strong>Accept all three</strong>: the probes and the lint CI runs run before the commit and refuse when they cannot; the verifier's stems row says what the binary does.</p></div>
+<div class="ask"><p class="verdict"><strong>Accept all three</strong>: CI's probes and lint run before the commit, refusing when they cannot; the stems row says what the binary does.</p></div>
 <div class="chips"><span class="chip"><b>Decisions waiting</b> {pending}</span><span class="chip"><b>Forks</b> 0</span><span class="chip"><b>Probes before commit, seconds</b> {PROBES_S}</span><span class="chip"><b>CI-only reds, the class</b> {N_CLASS}</span></div>
 
 <div class="tabs" role="tablist" aria-label="The asks">{tabs_html}</div>
@@ -389,7 +389,7 @@ def frame(panels_html, tabs_html, title, sub):
 
 
 TITLE = "Accept the probe runner, the CI-triple lint and the stems row"
-SUB = "Three held process changes, none a fork; all committed under the process lock"
+SUB = "Three held process changes, none a fork, all under the process lock"
 
 
 def render(panel_bodies):
