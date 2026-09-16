@@ -245,7 +245,7 @@ pub fn own_args(args: &[String]) -> Vec<String> {
             skip = true;
             continue;
         }
-        if a == "--no-receipt" || a == "--help" || a == "-h" {
+        if a == "--no-receipt" || a == "--wait" || a == "--help" || a == "-h" {
             continue;
         }
         out.push(a.clone());
@@ -490,6 +490,90 @@ pub fn exclusive_refusal(text: &str, alive: impl Fn(u32) -> bool) -> Option<Stri
     })
 }
 
+/// What one read of the receipt tells `keel verify --wait` (issue575).
+///
+/// The sprint 726 verifier read the stub 17 s after launch, saw `running` with a pid it did not
+/// test, and reported a green 718 s ladder as killed: the wait was a sentence in a skill, so it was
+/// skipped. This is the wait as a control - the receipt text and one liveness answer decide, and
+/// nothing here is a verdict until the ladder has written one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WaitState {
+    /// No file, or text that is not a receipt: nothing to wait for and nothing to report.
+    NoReceipt,
+    /// A rung in flight and the process that wrote the stub alive: keep waiting.
+    InFlight { rung: Rung, pid: u32 },
+    /// A `running` stub whose writer is gone (or, from before the pid rode it, unnamed): the ladder
+    /// died mid-rung. Not a pass, not a fail - the rung it died in is the whole report.
+    Killed { rung: Rung, pid: u32 },
+    /// The ladder ended and wrote its verdict.
+    Finished(Ladder),
+}
+
+/// The pure control behind `--wait`: `text` is the receipt on disk, `alive` answers for its `pid`.
+#[must_use]
+pub fn wait_state(text: &str, alive: impl Fn(u32) -> bool) -> WaitState {
+    let Some(l) = parse_receipt(text) else {
+        return WaitState::NoReceipt;
+    };
+    match l.in_flight {
+        None => WaitState::Finished(l),
+        Some(rung) if l.pid != 0 && alive(l.pid) => WaitState::InFlight { rung, pid: l.pid },
+        Some(rung) => WaitState::Killed { rung, pid: l.pid },
+    }
+}
+
+/// The rung table and the summary line, exiting as the ladder did - what `keel verify` prints at the
+/// end of its own run and what `--wait` prints when the run it waited on ends.
+fn report(ladder: &Ladder) -> i32 {
+    for st in &ladder.steps {
+        println!("  {:<9} {:<12} {:>5} s", st.rung.name(), st.verdict.label(), st.seconds);
+    }
+    ladder.stopped_at.map_or_else(
+        || {
+            println!("keel verify: pass - every rung green in {} s; receipt {RECEIPT}", ladder.seconds);
+            0
+        },
+        |r| {
+            println!("keel verify: fail - stopped at {} after {} s; receipt {RECEIPT}", r.name(), ladder.seconds);
+            ladder.exit_code()
+        },
+    )
+}
+
+/// `keel verify --wait`: block on the receipt until its writer exits, then report what it wrote.
+///
+/// One line per rung change while in flight; the finished receipt's table and exit code when the
+/// ladder ends (0 green, the red rung's code otherwise); `KILLED during <rung>` and exit 2 for a
+/// stub whose writer is gone - never a verdict on either side (issue575). Exit 2 with no receipt.
+fn wait(repo: &Path) -> i32 {
+    let started = Instant::now();
+    let mut last: Option<Rung> = None;
+    loop {
+        let text = std::fs::read_to_string(repo.join(RECEIPT)).unwrap_or_default();
+        match wait_state(&text, crate::touched::pid_alive) {
+            WaitState::NoReceipt => {
+                eprintln!("keel verify --wait: no ladder receipt at {RECEIPT} - nothing is in flight and nothing has been judged; launch `keel verify` first");
+                return 2;
+            }
+            WaitState::InFlight { rung, pid } => {
+                if last != Some(rung) {
+                    println!("keel verify --wait: in flight: {}, pid {pid} alive, {} s", rung.name(), started.elapsed().as_secs());
+                    last = Some(rung);
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+            WaitState::Killed { rung, pid } => {
+                println!("keel verify --wait: KILLED during {} - {RECEIPT} says running and its writer (pid {pid}) is gone. Not a verdict on either side; the rungs before it are the ones the receipt holds. Relaunch `keel verify`.", rung.name());
+                return 2;
+            }
+            WaitState::Finished(l) => {
+                println!("keel verify --wait: the ladder that wrote {RECEIPT} has ended (head {}, at {})", l.head, l.at);
+                return report(&l);
+            }
+        }
+    }
+}
+
 /// Write the receipt, naming the failure on stderr; the ladder itself does not stop for it.
 fn write_receipt(repo: &Path, ladder: &Ladder) {
     let path = repo.join(RECEIPT);
@@ -506,7 +590,7 @@ fn now_secs() -> u64 {
 }
 
 fn print_help() {
-    println!("usage: keel verify [ROOT] [--probe POSITIVE,NEGATIVE] [--no-receipt]");
+    println!("usage: keel verify [ROOT] [--probe POSITIVE,NEGATIVE] [--no-receipt] | --wait [ROOT]");
     println!("  the pre-commit checks as one ladder in cost order, stopping at the first red (D0476):");
     println!("    1. keel gate validate       2. keel gate guard (from its receipt, D0371)");
     println!("    3. cargo clippy --release --workspace --all-targets -- -D warnings (then --target x86_64-unknown-linux-gnu, the triple CI lints, on any other host; D0495)");
@@ -518,6 +602,9 @@ fn print_help() {
     println!("  While a rung runs the receipt says outcome = \"running\" and names the rung (D0387): a reader");
     println!("  mid-run waits; it never sees the previous run's verdict. The stub names its writer (pid): a second");
     println!("  keel verify is refused (exit 2) while that process is alive; a dead writer's stub is replaced (issue569).");
+    println!("  --wait launches nothing: it blocks on the receipt while its writer's pid is alive, printing one line per rung");
+    println!("  change, then prints the finished table and exits as the ladder did; a running stub whose pid is gone is");
+    println!("  KILLED during <rung>, exit 2 - never a verdict on either side (issue575). Exit 2 with no receipt.");
 }
 
 /// `keel verify`.
@@ -526,6 +613,15 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print_help();
         return 0;
+    }
+    if args.iter().any(|a| a == "--wait") {
+        // issue575: a reader, not a launcher. A pair or --no-receipt beside it would be silently
+        // ignored, which is how a verifier comes to believe it ran something; refuse instead.
+        if let Some(extra) = args.iter().find(|a| *a == "--probe" || *a == "--no-receipt") {
+            eprintln!("keel verify: --wait reads the receipt of a ladder already launched; `{extra}` belongs to the launch, not the wait");
+            return 2;
+        }
+        return wait(repo);
     }
     let probe = match parse_probe(args) {
         Ok(p) => p,
@@ -574,24 +670,12 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     );
     let ladder = Ladder { head, at: now_secs(), seconds: started.elapsed().as_secs(), steps, stopped_at, in_flight: None, pid: std::process::id() };
     write_receipt(repo, &ladder);
-    for st in &ladder.steps {
-        println!("  {:<9} {:<12} {:>5} s", st.rung.name(), st.verdict.label(), st.seconds);
-    }
-    match ladder.stopped_at {
-        None => {
-            println!("keel verify: pass - every rung green in {} s; receipt {RECEIPT}", ladder.seconds);
-            0
-        }
-        Some(r) => {
-            println!("keel verify: fail - stopped at {} after {} s; receipt {RECEIPT}", r.name(), ladder.seconds);
-            ladder.exit_code()
-        }
-    }
+    report(&ladder)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{climb, exclusive_refusal, other_host_lint, own_args, parse_probe, parse_receipt, render_receipt, Ladder, OtherHostLint, Rung, Step, Verdict, CI_TRIPLE};
+    use super::{climb, exclusive_refusal, other_host_lint, own_args, parse_probe, parse_receipt, render_receipt, wait_state, Ladder, OtherHostLint, Rung, Step, Verdict, WaitState, CI_TRIPLE};
 
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_owned()).collect()
@@ -767,6 +851,38 @@ mod tests {
         let legacy = "head = \"1e2ed25\"\nat = 5\nseconds = 61\noutcome = \"running\"\nstopped_at = \"none\"\nrunning = \"guard\"\n";
         assert_eq!(exclusive_refusal(legacy, |_| true), None, "a stub from before the pid rode it names no writer");
         assert_eq!(exclusive_refusal("", |_| true), None, "no receipt, no refusal");
+    }
+
+    /// issue575 known-positive, chosen before the tree is read: a `running` stub whose writer is gone
+    /// is KILLED during that rung - not a pass, not a fail - through the real liveness read; a stub
+    /// from before the pid rode it names no writer and is the same report.
+    #[test]
+    fn a_running_stub_whose_writer_is_gone_is_killed_not_a_verdict() {
+        let mut child = if cfg!(windows) { std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn() } else { std::process::Command::new("true").spawn() }.expect("spawn a short-lived child");
+        let gone = child.id();
+        let _ = child.wait();
+        assert_eq!(wait_state(&stub_by(gone, Some(Rung::Clippy)), crate::touched::pid_alive), WaitState::Killed { rung: Rung::Clippy, pid: gone });
+        assert_eq!(wait_state(&stub_by(7, Some(Rung::Touched)), |_| false), WaitState::Killed { rung: Rung::Touched, pid: 7 });
+        let legacy = "head = \"1e2ed25\"\nat = 5\nseconds = 61\noutcome = \"running\"\nstopped_at = \"none\"\nrunning = \"guard\"\n";
+        assert_eq!(wait_state(legacy, |_| true), WaitState::Killed { rung: Rung::Guard, pid: 0 }, "no writer named, nothing to wait for");
+    }
+
+    /// issue575 known-negative: a finished receipt is the ladder's own verdict, red or green, and a
+    /// `running` stub whose writer is alive (this process) is in flight - the wait continues and
+    /// nothing is judged. The sprint 726 shape (in flight read as killed) is the case in the middle.
+    #[test]
+    fn a_finished_receipt_is_the_verdict_and_a_live_writer_is_in_flight() {
+        let me = std::process::id();
+        assert_eq!(wait_state(&stub_by(me, Some(Rung::Clippy)), crate::touched::pid_alive), WaitState::InFlight { rung: Rung::Clippy, pid: me });
+        let green = Ladder { head: "abc1234".into(), at: 9, seconds: 718, steps: vec![Step { rung: Rung::Validate, verdict: Verdict::Pass, seconds: 1, command: "v".into() }], stopped_at: None, in_flight: None, pid: me };
+        let WaitState::Finished(l) = wait_state(&render_receipt(&green), |_| true) else { panic!("a finished ladder is the verdict, whoever is alive") };
+        assert!(l.green());
+        assert_eq!(l.exit_code(), 0);
+        let red = Ladder { stopped_at: Some(Rung::Clippy), steps: vec![Step { rung: Rung::Clippy, verdict: Verdict::Fail(101), seconds: 40, command: "c".into() }], ..green };
+        let WaitState::Finished(l) = wait_state(&render_receipt(&red), |_| false) else { panic!("a red ladder is a verdict too") };
+        assert_eq!((l.green(), l.exit_code(), l.stopped_at), (false, 101, Some(Rung::Clippy)));
+        assert_eq!(wait_state("", |_| true), WaitState::NoReceipt);
+        assert_eq!(own_args(&args(&["--wait", "."])), args(&["."]), "--wait is the ladder's own flag; the root is what is left");
     }
 
     /// issue565's control, D0047: the running form was added per receipt three times (issue399 suite,

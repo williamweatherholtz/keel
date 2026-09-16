@@ -3778,6 +3778,90 @@ fact("scriptProbesOneRunner", {
      "ciRunsThatFailedOnTheHeredocStep = the rows of `gh run list --limit 12 --json ...` whose headSha begins eb82b52 or 6a493f4 "
      "(D0420: the conclusion field); ciRuns = that list verbatim; null when gh is unavailable. sprint727 from its delivery file.")
 
+# ================================================================ 35. the wait for a launched ladder is a command (D0497 / issue575)
+# The Decision's fields as the guard reads them; the control in source (the three-way WaitState, the pure wait_state,
+# the refusal of launch flags beside --wait, the two D0388 tests); the CLI fact and its mirror naming the flag; the
+# skill's steps 4 and 5 opening with the command and the .claude copy agreeing; CLAUDE.md's line; the command run
+# live twice (the refusal, which launches nothing; --help); issue575 and its resolver; the retro's new item; sprint 728.
+_d0497 = _dec_file("0497-")
+_f497 = _decision_facts(_d0497, "d0497")
+_vr97_path = _module_home("verify")                  # wherever the workspace holds it (issue559/560), never a path typed here
+_vr97 = read(_vr97_path or "") or ""
+_facts97 = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or ""
+_cmds97 = read(os.path.join(REPO, ".engine", "cli", "commands.sysml")) or ""
+_skill97 = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
+_skill97c = read(os.path.join(REPO, ".claude", "skills", "test-verify", "SKILL.md")) or ""
+_claude97 = read(os.path.join(REPO, "CLAUDE.md")) or ""
+_verify97 = re.search(r"^\s*part cliVerify : CliCommand \{.*$", _cmds97, re.M)
+_verify97_text = _verify97.group(0) if _verify97 else ""
+_mirror97 = re.search(r'^\s*CliFact \{ name: "verify",.*$', _facts97, re.M)
+_mirror97_text = _mirror97.group(0) if _mirror97 else ""
+def _step_opens_with(md, heading, cmd):
+    """True when the first fenced block after `heading` holds exactly `cmd`."""
+    m = re.search(re.escape(heading) + r".*?```\n(.*?)\n```", md, re.S)
+    return bool(m) and m.group(1).strip() == cmd
+_step4_97 = _step_opens_with(_skill97, "### 4. Read the ladder receipt", "KEEL verify --wait .")
+_step5_97 = _step_opens_with(_skill97, "### 5. Read the touched receipt", "KEEL verify --wait .")
+_ok97r, _out97r = run([KEEL, "verify", "--wait", "--probe", "a,b", "."], timeout=30)
+_ok97h, _out97h = run([KEEL, "verify", "--help"], timeout=30)
+_i575b = _issue_facts("575", "dcVerifyWaitsForItsPid")
+_s728 = _sprint_facts("sprint728_verifyWaitsForItsPid.sysml", "d0497")
+fact("verifyWaitsForItsPid", {
+    **_f497,
+    "namesIssue575": "issue575" in (_f497["context"] or ""),
+    "namesSeventeenSeconds": "17 seconds" in (_f497["context"] or ""),
+    "namesD0047": "D0047" in (_f497["context"] or ""),
+    "namesLaunchesNothing": "launches nothing" in (_f497["decision"] or ""),
+    "namesKilledNotAVerdict": "KILLED during <rung>, exit 2" in (_f497["decision"] or ""),
+    "saysProcessChange": "This is a process-change" in (_f497["rationale"] or ""),
+    "source": {
+        "waitStateFound": "pub enum WaitState {" in _vr97,
+        "threeStatesPlusFinished": all(s in _vr97 for s in ("NoReceipt,", "InFlight {", "Killed {", "Finished(Ladder)")),
+        "pureControlFound": "pub fn wait_state(text: &str, alive: impl Fn(u32) -> bool) -> WaitState {" in _vr97,
+        "livenessDecides": "Some(rung) if l.pid != 0 && alive(l.pid) => WaitState::InFlight" in _vr97,
+        "deadWriterIsKilled": "Some(rung) => WaitState::Killed" in _vr97,
+        "oneReportForBothSurfaces": _vr97.count("report(&ladder)") >= 1 and "fn report(ladder: &Ladder) -> i32" in _vr97,
+        "launchFlagsRefused": "belongs to the launch, not the wait" in _vr97,
+        "killedLine": "KILLED during {} - {RECEIPT} says running and its writer (pid {pid}) is gone. Not a verdict on either side" in _vr97,
+        "probeTests": [t for t in ("a_running_stub_whose_writer_is_gone_is_killed_not_a_verdict",
+                                    "a_finished_receipt_is_the_verdict_and_a_live_writer_is_in_flight") if f"fn {t}()" in _vr97],
+    },
+    "cliFact": {
+        "found": bool(_verify97_text),
+        "invocationNamesWait": "| --wait [ROOT]" in _verify97_text,
+        "synopsisNamesIssue575": "issue575" in _verify97_text,
+        "mirrorFound": bool(_mirror97_text),
+        "mirrorNamesWait": "| --wait [ROOT]" in _mirror97_text,
+        "mirrorNamesIssue575": "issue575" in _mirror97_text,
+    },
+    "skill": {
+        "step4OpensWithWait": _step4_97, "step5OpensWithWait": _step5_97,
+        "step5ProseWaitGone": "Wait until the process is gone" not in _skill97,
+        "claudeCopyAgrees": _skill97 == _skill97c,
+        "waitMentions": _skill97.count("verify --wait"),
+    },
+    "claudeMdLine": (re.search(r"^keel verify --wait \[ROOT\].*$", _claude97, re.M) or [None])[0],
+    "live": {
+        "refusal": {"exit0": _ok97r, "line": (_out97r or "").strip().splitlines()[-1] if (_out97r or "").strip() else None,
+                    "namesTheLaunch": "belongs to the launch, not the wait" in (_out97r or "")},
+        "help": {"exit0": _ok97h, "namesWait": "--wait launches nothing" in (_out97h or ""), "namesIssue575": "issue575" in (_out97h or "")},
+    },
+    "issue575": _i575b,
+    "resolverPositions": {a: ({"place": _bl95_actions.index(a) + 1, "def": _bl95_defs.get(a)} if a in _bl95_actions else None)
+                          for a in ("dcVerifyWaitsForItsPid", "dcWaitChecksTheLaunchEpoch", "dcGuardReadFailureIsNotAnEmptyDiff")},
+    "sprint728": {k: v for k, v in _s728.items() if k != "text"},
+} if _d0497 and _vr97 else None, "the wait as a command: Decision, control in source, CLI fact and mirror, skill steps, CLAUDE.md, live refusal and help, issue575, sprint",
+     _DEC_HOW + " Names by literal search in the field named. source: the verify module wherever module_home resolves it, searched for the enum, its four variants, the "
+     "wait_state signature, the two match arms that separate a live writer from a dead one, the shared report fn and its call, the "
+     "refusal text, the KILLED line and the two test fn names. cliFact: the one-line `part cliVerify : CliCommand {...}` of "
+     ".engine/cli/commands.sysml and the one-line `CliFact { name: \"verify\", ...}` of members/keel-schema/src/cli_facts.rs, each searched for the "
+     "invocation's `| --wait [ROOT]` and for `issue575`. skill: the first fenced block after each step heading in "
+     ".engine/skills/test-verify/SKILL.md must be exactly `KEEL verify --wait .`; the old prose opener searched for; claudeCopyAgrees = "
+     "byte equality with the .claude copy. claudeMdLine = the CLAUDE.md line beginning `keel verify --wait [ROOT]`. live.refusal = "
+     "`keel verify --wait --probe a,b .` (launches nothing, so it is safe at any time) exit and last line; live.help = `keel verify --help` "
+     "searched for the --wait sentence. issue575 from .tracking/issues-claudeFable5.sysml with its #Resolves edge and whether the resolver's "
+     "DoD names it. resolverPositions as section 34. sprint728 from its delivery file.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

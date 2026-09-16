@@ -174,6 +174,7 @@ keel gate validate .            # .tracking authority (kernel-free)
 keel gate check-engine .        # .engine instance gate
 keel gate guard [--no-receipt]  # all forward guards; catalogue .engine/docs/guards.md; count from `keel version`
 keel verify [ROOT] [--probe POS,NEG] [--no-receipt]  # the pre-commit ladder in cost order, stops at the first red (D0476)
+keel verify --wait [ROOT]       # block on a launched ladder's receipt while its pid lives; table + exit code, or KILLED during <rung> (exit 2)
 keel gate --fast           # per-edit tier
 keel gate --workspace      # commit tier, multi-project
 keel show enforcement-report    # hook fires, blocks, latency distribution, refusals (D0389/D0424)

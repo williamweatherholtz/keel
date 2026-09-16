@@ -120,6 +120,19 @@ named by the dispatch` — never invented.
 
 ### 4. Read the ladder receipt — ONLY after the process exits
 
+```
+KEEL verify --wait .
+```
+
+That command IS the wait (issue575): it blocks while the receipt says `running` and the pid that
+wrote it is alive, printing one line per rung change, then prints the finished table and exits as
+the ladder did - 0 green, the red rung's code otherwise. `KILLED during <rung>` with exit 2 is a
+ladder that died mid-rung: report that line, not a verdict on either side. Exit 2 with no receipt
+means nothing was launched. The sprint 726 verifier read the stub 17 s after launch and reported a
+green 718 s ladder as killed; a sentence saying "wait" was the control, and it was skipped. Run this
+in a foreground call only when the ladder is already past clippy; otherwise `run_in_background` it
+too, or call it again - every call reads the receipt fresh.
+
 `.keel/metrics/verify-receipt.toml` carries `head`, `at`, `seconds`, `outcome`, `stopped_at`
 (`none` on green, else the rung) and one `[[rung]]` row per rung (`name`, `verdict` = pass | fail |
 not-run | not-named, `exit`, `seconds`, `command`). A `not-run` rung was never asked - report it as
@@ -129,8 +142,13 @@ has no receipt newer than the launch epoch, and that is the line.
 
 ### 5. Read the touched receipt — when the ladder reached it
 
-Wait until the process is gone (`tasklist | grep -i cargo` is empty and `verify-touched.out` ends
-with the ladder's `keel verify:` summary line). When `stopped_at` is `none` or `touched`, read
+```
+KEEL verify --wait .
+```
+
+Step 4's command already returned, so this one returns at once with the same table; run it again
+here so the touched receipt is never read before the ladder that writes it has ended (sprint 661,
+sprint 726). When its table says `stopped_at` is `none` or `touched`, read
 `.keel/metrics/touched-receipt.toml` and check, in this order, each as its own receipt line:
 
 | Check | Honest when | Why (issue468 / D0387) |
