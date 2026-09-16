@@ -2,7 +2,7 @@
 name: test-verify
 description: |
   The D0425 VERIFIER's procedure: run the deliverable's gate set against the tree
-  as it is - keel verify . --probe POSITIVE,NEGATIVE (the D0476 ladder: validate, guard,
+  as it is - keel verify . --probe-from PAIR_FILE (the D0476 ladder: validate, guard,
   clippy, the sprint's D0388 probe pair, then suite --touched, in that order, stopping at
   the first red; detached, receipt read only after exit), plus check-engine and
   sync-claude --check outside it - and report every discrepancy naming the command. Use when dispatched
@@ -49,11 +49,11 @@ Run from the project root. `KEEL` below is the binary named in the dispatch (def
 
 ### 1. Launch the ladder DETACHED, record the launch time
 
-`keel verify . --probe POSITIVE,NEGATIVE` is the pre-commit ladder (D0476): `gate validate`,
+`keel verify . --probe-from PAIR_FILE` is the pre-commit ladder (D0476): `gate validate`,
 `gate guard` (from its receipt, D0371), `cargo clippy --release --all-targets -- -D warnings`
 (then the same with `--target x86_64-unknown-linux-gnu` - the triple CI lints - on any host that is
 not it; a host without that std is a RED rung naming `rustup target add`, D0495/issue572),
-the D0388 probe pair named by `--probe`, then `suite --touched` - in that order, STOPPING at the
+the D0388 probe pair read from `--probe-from`, then `suite --touched` - in that order, STOPPING at the
 first red, so a lint is reported in under a minute instead of after the twenty-minute run
 (sprint705). It writes `.keel/metrics/verify-receipt.toml` naming the rung it stopped at; a rung
 after the red is `not-run`, a pair not named is `not-named`. Its last rung is the run the land
@@ -69,7 +69,7 @@ is a receipt too - `--no-receipt` runs every binary when the dispatch asks for i
 
 ```
 python -c "import time; print(int(time.time()))" > .keel/metrics/verify-launch.epoch
-(nohup KEEL verify . --probe "<POSITIVE>,<NEGATIVE>" > .keel/metrics/verify-touched.out 2>&1 < /dev/null & disown)
+(nohup KEEL verify . --probe-from "<ABS PAIR FILE>" > .keel/metrics/verify-touched.out 2>&1 < /dev/null & disown)
 ```
 
 or the harness's `run_in_background` on the same command. Do NOT wait on it in a foreground call
@@ -108,15 +108,24 @@ proposed Decision's known red); report them as red and cite the dispatch's expec
 Note `keel gate guard` before staging reads NOTHING for the index-reading guards (`process-change` scans
 `git diff --cached`; issue464): say in the receipt that the commit tier was not exercised.
 
-### 3. The D0388 probe pair - on the ladder's command line
+### 3. The D0388 probe pair - a file the primary wrote, named on the ladder's command line
 
-The dispatch names the sprint's check and its two cases — one known-positive, one known-negative,
-chosen before the tree was read. Each side is one shell-free command line run from the project
-root (a `cargo test --release <name>` filter, a `python scripts/probes/<x>.py --probe`, or a `KEEL
-<lens>` over a fixture); pass them as `--probe "<POSITIVE>,<NEGATIVE>"` in step 1 - the rung is
-green only when both sides exit 0. A dispatch that names no pair launches the ladder without
-`--probe`; the receipt's probe rung reads `not-named` and the receipt line is `PROBE PAIR: not
-named by the dispatch` — never invented.
+The dispatch names the sprint's PAIR FILE: two lines, the known-positive command then the
+known-negative, chosen and written by the primary before the tree was read (D0388/D0500). Each
+line is one shell-free command line run from the project root (a `cargo test --release <name>`
+filter, a `python scripts/probes/<x>.py --probe`, or a `KEEL <lens>` over a fixture). Pass the
+file's absolute path as `--probe-from "<ABS PAIR FILE>"` in step 1 and transcribe NOTHING - do not
+read the file into the command line, do not retype its lines into `--probe POS,NEG`: three
+dispatches in six sprints retyped the pair wrong (issue571) and each cost an eighty-second climb to
+a red no check produced. The ladder refuses the file at parse, exit 2, before any rung runs, if it
+is not exactly two non-empty lines; that refusal is a `first red line` for the receipt, not a
+verdict on the tree. The rung is green only when both lines exit 0, and its `[[rung]]` row's
+command names the file and both lines - copy them into the `PROBE PAIR:` line from the receipt,
+never from the dispatch. A ladder that stopped below the probe rung still names the pair in that
+row with `verdict = "not-run"`: the receipt line is then `PROBE PAIR: <the row's command> -> not
+run (ladder stopped at <rung>)`. Only a dispatch that names no file launches the ladder without
+`--probe-from`; the receipt's probe rung then reads `not-named` and the receipt line is
+`PROBE PAIR: not named by the dispatch` — never invented, and never written over a named pair.
 
 ### 4. Read the ladder receipt — ONLY after the process exits
 
@@ -172,12 +181,12 @@ Plain text, this shape, in the scratchpad path the dispatch gives (never under t
 
 ```
 VERIFIER RECEIPT  <date>  head=<sha>  tree=<clean|N dirty paths>
-LADDER: KEEL verify . --probe ... -> outcome=<pass|fail> stopped_at=<none|rung> seconds=<n> at=<epoch> (<at>launch: ok|STALE)
+LADDER: KEEL verify . --probe-from <ABS PAIR FILE> -> outcome=<pass|fail> stopped_at=<none|rung> seconds=<n> at=<epoch> (<at>launch: ok|STALE)
   validate=<verdict> guard=<verdict> clippy=<verdict> probe=<verdict> touched=<verdict>   (from its [[rung]] rows)
   first red line: "<verbatim from verify-touched.out>" | none
 KEEL gate check-engine . -> <line>; exit=<n>
 KEEL sync-claude --check . -> <line>; exit=<n>
-PROBE PAIR: <check> -> positive <case>: <outcome>; negative <case>: <outcome> | not named by the dispatch
+PROBE PAIR: <check> -> positive <case>: <outcome>; negative <case>: <outcome> | <row command> -> not run (ladder stopped at <rung>) | not named by the dispatch
 TOUCHED RECEIPT: outcome=<..> passed=<n> failed=<n> seconds=<n> at=<epoch> launch=<epoch> (<at>launch: ok|STALE)
   stems=<[...]> changed=<[...]> (MATCH|MISMATCH) lib=<bool> head=<sha> log=<path>
   test result line: "<verbatim from verify-touched.out>"

@@ -20,10 +20,10 @@ package ProcessDelegatedCeremony {
 
     action dcyDispatchVerifier : ProcessStep {
         :>> id = "b6b1b157-2ebe-4d55-8661-6b8776511048";
-        :>> title = "Dispatch the verifier by pointing at its skill, the probe pair and a receipt path";
+        :>> title = "Dispatch the verifier by pointing at its skill, the probe pair file and a receipt path";
         :>> triggerCondition = "The primary's substantive change is on the tree and a DoD or gate result is owed.";
-        :>> actionText = "Dispatch a subagent of agent type verifier (haiku) with the verifier brief from the delegated-ceremony skill: it names the test-verify skill as the procedure, the binary copy to run, the sprint's D0388 pair (one known-positive, one known-negative, chosen before the tree is read) and the scratchpad path the receipt is written to. Nothing else - no restatement of the procedure (issue469) and no description of what the primary believes passed.";
-        :>> producedArtifact = "A dispatch that names a skill, a pair and a path.";
+        :>> actionText = "Write the sprint's D0388 pair as a file of two lines - the known-positive command then the known-negative, chosen before the tree is read - in the scratchpad. Dispatch a subagent of agent type verifier (haiku) with the verifier brief from the delegated-ceremony skill: it names the test-verify skill as the procedure, the binary copy to run, the pair file's absolute path (the verifier passes it as --probe-from and transcribes nothing, D0500) and the scratchpad path the receipt is written to. Nothing else - no restatement of the procedure (issue469) and no description of what the primary believes passed.";
+        :>> producedArtifact = "A pair file of two lines, and a dispatch that names a skill, that file and a receipt path.";
         :>> owner = Owner::ai;
     }
 

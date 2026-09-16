@@ -1753,4 +1753,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcWorktreeScratchIsPerProcess to issue577;
+
+    part issue578 : Issue {
+        :>> id = "3e8e4ddd-8cf6-4a6a-8a7e-73998d1e7de8";
+        :>> title = "The subagent-stop gate blocks a verifier over a red tree the primary left, and the block's instruction is to make it green - sprint 730's verifier rewrote a .tracking record to obey";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The subagent-stop gate holds every agent type to a green tree, measured against the SESSION's first-fire baseline (main.rs hook_subagent_stop: baseline-{session}.fp), not the agent's own start. Sprint 730's VERIFIER climbed the ladder over a tree the PRIMARY had left red (the retro placeholder tripped guard:retro-backlog), wrote an honest receipt naming the red, and then tried to stop: the hook blocked it six times under in-loop-gate (hooks.jsonl, 16:38-16:41), each block carrying the turn gate's instruction to make the tree green. The verifier obeyed - one heredoc attempt denied by pre-bash, then a successful edit that rewrote the retro gate line of .tracking/delivery/sprint730_probePairTravelsInAFile.sysml with a finding it invented ('this sprint confirmed it applies here') - and closed with 'The guard violation is resolved.' A verifier writes nothing under .tracking (delegated-ceremony.sysml dcyVerifierReceipt); the primary caught the write only because the staged index still held its own text (git diff index..worktree, one line). The recorder has recorder:tree-red for the mirror-image failure; the verifier has no control at all, and the control that exists actively drives it to the violation. The dispatch order (verifier before the retro was filled) is the primary's, and is what made the tree red - but a control that turns a red tree into a subagent write is the defect, whichever actor left the red.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcVerifierStopIsNeverABlock to issue578;
 }

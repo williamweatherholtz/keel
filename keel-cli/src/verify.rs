@@ -207,28 +207,92 @@ impl Ladder {
     }
 }
 
-/// The D0388 pair as named on the command line: `--probe POSITIVE,NEGATIVE`.
+/// The D0388 pair the probe rung runs, with where it came from.
+///
+/// `from` is the `--probe-from` file the pair was read from (D0500), or `None` for a pair typed on
+/// the command line. The receipt's probe rung row names it, so a reader can diff the file the
+/// verifier was handed against the two lines the rung actually ran.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Probe {
+    /// The known-positive command line.
+    pub pos: String,
+    /// The known-negative command line.
+    pub neg: String,
+    /// The file both lines were read from, when they were.
+    pub from: Option<PathBuf>,
+}
+
+impl Probe {
+    /// The rung's command text: both sides, prefixed by the file when there was one.
+    #[must_use]
+    pub fn text(&self) -> String {
+        self.from.as_ref().map_or_else(
+            || format!("{} ; {}", self.pos, self.neg),
+            |f| format!("--probe-from {}: {} ; {}", f.display(), self.pos, self.neg),
+        )
+    }
+}
+
+/// The D0388 pair as named on the command line: `--probe POSITIVE,NEGATIVE` or `--probe-from FILE`.
 ///
 /// Each side is a command line split on whitespace and run in the project root; both must exit 0.
-/// `None` when the flag is absent (the rung is then recorded `not-named`); an error when the flag is
-/// present but does not name exactly two non-empty sides - a pair with one side is not a pair, and
+/// `None` when neither flag is present (the rung is then recorded `not-named`); an error when a flag
+/// is present but does not name exactly two non-empty sides - a pair with one side is not a pair, and
 /// a check probed on one case is the D0388 defect this command exists to refuse.
+///
+/// `--probe-from FILE` (D0500, issue571): the file holds exactly two non-empty lines, the positive
+/// then the negative, written by the actor who chose them before reading the tree; the verifier
+/// names the path and transcribes nothing. Both flags together are refused - two sources for one
+/// pair is the ambiguity the file exists to remove.
 ///
 /// # Errors
 ///
-/// A `--probe` with no value, an empty side, or a side count other than two.
-pub fn parse_probe(args: &[String]) -> Result<Option<(String, String)>, String> {
-    let Some(i) = args.iter().position(|a| a == "--probe") else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(i + 1) else {
-        return Err("--probe takes POSITIVE,NEGATIVE - two command lines, comma-separated (D0388)".to_owned());
-    };
-    let sides: Vec<&str> = value.split(',').map(str::trim).collect();
-    match sides.as_slice() {
-        [pos, neg] if !pos.is_empty() && !neg.is_empty() => Ok(Some(((*pos).to_owned(), (*neg).to_owned()))),
-        _ => Err(format!("--probe names {} side(s); a D0388 pair is exactly two, POSITIVE,NEGATIVE, both non-empty: `{value}`", sides.iter().filter(|s| !s.is_empty()).count())),
+/// A flag with no value, an empty side, a side count other than two, an unreadable file, or both
+/// flags given.
+pub fn parse_probe(args: &[String]) -> Result<Option<Probe>, String> {
+    let typed = args.iter().position(|a| a == "--probe");
+    let from = args.iter().position(|a| a == "--probe-from");
+    match (typed, from) {
+        (Some(_), Some(_)) => Err("--probe and --probe-from name the same pair twice; give one (D0500)".to_owned()),
+        (None, None) => Ok(None),
+        (Some(i), None) => {
+            let Some(value) = args.get(i + 1) else {
+                return Err("--probe takes POSITIVE,NEGATIVE - two command lines, comma-separated (D0388)".to_owned());
+            };
+            let sides: Vec<&str> = value.split(',').map(str::trim).collect();
+            match sides.as_slice() {
+                [pos, neg] if !pos.is_empty() && !neg.is_empty() => Ok(Some(Probe { pos: (*pos).to_owned(), neg: (*neg).to_owned(), from: None })),
+                _ => Err(format!("--probe names {} side(s); a D0388 pair is exactly two, POSITIVE,NEGATIVE, both non-empty: `{value}`", sides.iter().filter(|s| !s.is_empty()).count())),
+            }
+        }
+        (None, Some(i)) => {
+            let Some(path) = args.get(i + 1) else {
+                return Err("--probe-from takes FILE - two lines, the known-positive command then the known-negative (D0500)".to_owned());
+            };
+            let text = std::fs::read_to_string(path).map_err(|e| format!("--probe-from {path}: cannot read it: {e}"))?;
+            parse_probe_text(&text, Path::new(path)).map(Some)
+        }
     }
+}
+
+/// The pair as a `--probe-from` file's text: exactly two lines, neither blank.
+///
+/// A trailing newline is not a third line; a blank line anywhere is - a file that a comment, a
+/// heading or an empty line has crept into is not the pair the primary wrote, and the rung would
+/// otherwise run `""` or the heading as a command.
+///
+/// # Errors
+///
+/// A line count other than two, or a line that is blank after trimming.
+pub fn parse_probe_text(text: &str, path: &Path) -> Result<Probe, String> {
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let [pos, neg] = lines[..] else {
+        return Err(format!("--probe-from {}: {} line(s); a D0388 pair file is exactly two, the known-positive command line then the known-negative", path.display(), lines.len()));
+    };
+    if let Some(n) = lines.iter().position(|l| l.is_empty()) {
+        return Err(format!("--probe-from {}: line {} is blank; both lines of a D0388 pair file are command lines", path.display(), n + 1));
+    }
+    Ok(Probe { pos: pos.to_owned(), neg: neg.to_owned(), from: Some(path.to_path_buf()) })
 }
 
 /// The arguments the ladder itself consumes, so a root can be found among what is left.
@@ -241,7 +305,7 @@ pub fn own_args(args: &[String]) -> Vec<String> {
             skip = false;
             continue;
         }
-        if a == "--probe" {
+        if a == "--probe" || a == "--probe-from" {
             skip = true;
             continue;
         }
@@ -257,14 +321,17 @@ pub fn own_args(args: &[String]) -> Vec<String> {
 ///
 /// `runner` returns the rung's verdict and the command line it ran. Rungs after a red are recorded
 /// `NotRun` with their command line and zero seconds, so the receipt says what was NOT measured as
-/// plainly as what was. The probe rung is asked of the runner only when a pair was named; otherwise
-/// it is `NotNamed` and the ladder continues - an unnamed pair is a fact about the invocation, not a
-/// red about the tree.
+/// plainly as what was. `probe` is the named pair's text (`Probe::text`): the probe rung is asked of
+/// the runner only when a pair was named, and a not-run probe row still carries that text, so a
+/// verifier reading a ladder that stopped below the pair copies the pair it was given, not the flag's
+/// usage (sprint 730's first receipt said `not named by the dispatch` over a named file). With no pair
+/// the rung is `NotNamed` and the ladder continues - an unnamed pair is a fact about the invocation,
+/// not a red about the tree.
 ///
 /// `progress` is called with the rungs finished so far BEFORE each rung runs - the hook that rewrites
 /// the receipt as a running stub (issue565), so the file on disk never holds a previous run's verdict
 /// while this one is in flight.
-pub fn climb<F, P>(probe_named: bool, mut runner: F, mut progress: P) -> (Vec<Step>, Option<Rung>)
+pub fn climb<F, P>(probe: Option<&str>, mut runner: F, mut progress: P) -> (Vec<Step>, Option<Rung>)
 where
     F: FnMut(Rung) -> (Verdict, String),
     P: FnMut(&[Step], Rung),
@@ -273,11 +340,15 @@ where
     let mut stopped_at = None;
     for rung in Rung::ORDER {
         if stopped_at.is_some() {
-            steps.push(Step { rung, verdict: Verdict::NotRun, seconds: 0, command: command_text(rung) });
+            let command = match (rung, probe) {
+                (Rung::Probe, Some(pair)) => pair.to_owned(),
+                _ => command_text(rung),
+            };
+            steps.push(Step { rung, verdict: Verdict::NotRun, seconds: 0, command });
             continue;
         }
-        if rung == Rung::Probe && !probe_named {
-            steps.push(Step { rung, verdict: Verdict::NotNamed, seconds: 0, command: "--probe POSITIVE,NEGATIVE not given".to_owned() });
+        if rung == Rung::Probe && probe.is_none() {
+            steps.push(Step { rung, verdict: Verdict::NotNamed, seconds: 0, command: "--probe POSITIVE,NEGATIVE / --probe-from FILE not given".to_owned() });
             continue;
         }
         progress(&steps, rung);
@@ -299,7 +370,7 @@ fn command_text(rung: Rung) -> String {
         Rung::Guard => "keel gate guard ROOT".to_owned(),
         Rung::Clippy if HOST_IS_CI_TRIPLE => "cargo clippy --release --workspace --all-targets -- -D warnings".to_owned(),
         Rung::Clippy => format!("cargo clippy --release --workspace --all-targets -- -D warnings ; cargo clippy --release --workspace --all-targets --target {CI_TRIPLE} -- -D warnings"),
-        Rung::Probe => "--probe POSITIVE,NEGATIVE".to_owned(),
+        Rung::Probe => "--probe POSITIVE,NEGATIVE / --probe-from FILE".to_owned(),
         Rung::Touched => "keel suite --touched ROOT".to_owned(),
     }
 }
@@ -332,7 +403,7 @@ fn scrub(cmd: &mut Command) -> &mut Command {
 }
 
 /// The real runner: each rung as a child process, the terminal inherited.
-fn run_rung(rung: Rung, repo: &Path, exe: &Path, probe: Option<&(String, String)>, forced: bool) -> (Verdict, String) {
+fn run_rung(rung: Rung, repo: &Path, exe: &Path, probe: Option<&Probe>, forced: bool) -> (Verdict, String) {
     let keel = |args: &[&str]| -> (Verdict, String) {
         let mut cmd = Command::new(exe);
         cmd.args(args).arg(repo);
@@ -381,11 +452,11 @@ fn run_rung(rung: Rung, repo: &Path, exe: &Path, probe: Option<&(String, String)
             }
         }
         Rung::Probe => {
-            let Some((pos, neg)) = probe else {
+            let Some(pair) = probe else {
                 return (Verdict::NotNamed, command_text(Rung::Probe));
             };
-            let text = format!("{pos} ; {neg}");
-            for side in [pos, neg] {
+            let text = pair.text();
+            for side in [&pair.pos, &pair.neg] {
                 let Some(mut cmd) = shell_free(side, repo) else {
                     eprintln!("keel verify: probe side is empty");
                     return (Verdict::Fail(2), text);
@@ -590,11 +661,13 @@ fn now_secs() -> u64 {
 }
 
 fn print_help() {
-    println!("usage: keel verify [ROOT] [--probe POSITIVE,NEGATIVE] [--no-receipt] | --wait [ROOT]");
+    println!("usage: keel verify [ROOT] [--probe POSITIVE,NEGATIVE | --probe-from FILE] [--no-receipt] | --wait [ROOT]");
     println!("  the pre-commit checks as one ladder in cost order, stopping at the first red (D0476):");
     println!("    1. keel gate validate       2. keel gate guard (from its receipt, D0371)");
     println!("    3. cargo clippy --release --workspace --all-targets -- -D warnings (then --target x86_64-unknown-linux-gnu, the triple CI lints, on any other host; D0495)");
-    println!("    4. the D0388 probe pair named by --probe: two command lines, both must exit 0");
+    println!("    4. the D0388 probe pair: --probe POSITIVE,NEGATIVE, or --probe-from FILE whose two lines are the known-positive");
+    println!("       command then the known-negative, written by the actor who chose them (D0500) - both must exit 0;");
+    println!("       any other line count, a blank line, or both flags together is refused before a rung runs");
     println!("    5. keel suite --touched (binaries observed green at this content are skipped, D0474)");
     println!("  Writes {RECEIPT} naming the rung it stopped at; a rung after the red is not-run, a probe rung");
     println!("  with no pair is not-named. Exits as the failing rung did. --no-receipt forces guard and the");
@@ -617,7 +690,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     if args.iter().any(|a| a == "--wait") {
         // issue575: a reader, not a launcher. A pair or --no-receipt beside it would be silently
         // ignored, which is how a verifier comes to believe it ran something; refuse instead.
-        if let Some(extra) = args.iter().find(|a| *a == "--probe" || *a == "--no-receipt") {
+        if let Some(extra) = args.iter().find(|a| *a == "--probe" || *a == "--probe-from" || *a == "--no-receipt") {
             eprintln!("keel verify: --wait reads the receipt of a ladder already launched; `{extra}` belongs to the launch, not the wait");
             return 2;
         }
@@ -656,8 +729,9 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     let forced = crate::receipt::forced(args);
     let head = crate::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
     let started = Instant::now();
+    let probe_text = probe.as_ref().map(Probe::text);
     let (steps, stopped_at) = climb(
-        probe.is_some(),
+        probe_text.as_deref(),
         |rung| {
             println!("keel verify: rung {} - {}", rung.name(), command_text(rung));
             run_rung(rung, repo, &exe, probe.as_ref(), forced)
@@ -675,7 +749,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{climb, exclusive_refusal, other_host_lint, own_args, parse_probe, parse_receipt, render_receipt, wait_state, Ladder, OtherHostLint, Rung, Step, Verdict, WaitState, CI_TRIPLE};
+    use super::{climb, exclusive_refusal, other_host_lint, own_args, parse_probe, parse_probe_text, parse_receipt, render_receipt, wait_state, Ladder, OtherHostLint, Probe, Rung, Step, Verdict, WaitState, CI_TRIPLE};
 
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_owned()).collect()
@@ -683,11 +757,12 @@ mod tests {
 
     /// D0388 known-positive: a red clippy stops the ladder BEFORE the touched run - the runner is never
     /// asked for the touched rung, and the receipt records probe and touched as not-run. This is the
-    /// sprint705 shape (a lint found after a twenty-minute run) refused by construction.
+    /// sprint705 shape (a lint found after a twenty-minute run) refused by construction. The not-run
+    /// probe row names the pair it was given, not the flag's usage (sprint 730's first receipt).
     #[test]
     fn a_red_rung_stops_the_ladder_before_the_test_binaries_compile() {
         let mut asked = Vec::new();
-        let (steps, stopped) = climb(true, |r| {
+        let (steps, stopped) = climb(Some("--probe-from pair.txt: cargo test a ; cargo test b"), |r| {
             asked.push(r);
             let v = if r == Rung::Clippy { Verdict::Fail(101) } else { Verdict::Pass };
             (v, format!("cmd {}", r.name()))
@@ -696,6 +771,7 @@ mod tests {
         assert_eq!(asked, vec![Rung::Validate, Rung::Guard, Rung::Clippy], "nothing after the red is run");
         let verdicts: Vec<_> = steps.iter().map(|s| s.verdict.clone()).collect();
         assert_eq!(verdicts, vec![Verdict::Pass, Verdict::Pass, Verdict::Fail(101), Verdict::NotRun, Verdict::NotRun]);
+        assert_eq!(steps[3].command, "--probe-from pair.txt: cargo test a ; cargo test b", "the not-run probe row names the pair the dispatch gave");
         assert_eq!(steps[4].command, "keel suite --touched ROOT", "the not-run rung still names what it would have run");
     }
 
@@ -703,7 +779,7 @@ mod tests {
     #[test]
     fn a_green_ladder_reaches_the_touched_run_last() {
         let mut asked = Vec::new();
-        let (steps, stopped) = climb(true, |r| {
+        let (steps, stopped) = climb(Some("a ; b"), |r| {
             asked.push(r);
             (Verdict::Pass, r.name().to_owned())
         }, |_, _| {});
@@ -741,7 +817,7 @@ mod tests {
     #[test]
     fn an_unnamed_probe_pair_is_recorded_not_invented() {
         let mut asked = Vec::new();
-        let (steps, stopped) = climb(false, |r| {
+        let (steps, stopped) = climb(None, |r| {
             asked.push(r);
             (Verdict::Pass, String::new())
         }, |_, _| {});
@@ -754,11 +830,56 @@ mod tests {
     /// `--probe` takes exactly a pair: two sides pass, one side is refused, absent is `None`.
     #[test]
     fn probe_flag_takes_exactly_a_pair() {
-        assert_eq!(parse_probe(&args(&["--probe", "cargo test a, cargo test b"])).unwrap(), Some(("cargo test a".into(), "cargo test b".into())));
+        assert_eq!(parse_probe(&args(&["--probe", "cargo test a, cargo test b"])).unwrap(), Some(Probe { pos: "cargo test a".into(), neg: "cargo test b".into(), from: None }));
         assert_eq!(parse_probe(&args(&["."])).unwrap(), None);
         assert!(parse_probe(&args(&["--probe", "cargo test a"])).unwrap_err().contains("1 side(s)"));
         assert!(parse_probe(&args(&["--probe", "a,"])).is_err());
         assert!(parse_probe(&args(&["--probe"])).is_err());
+    }
+
+    /// D0500 known-positive (issue571): a two-line file IS the pair - the positive first, the
+    /// negative second, the source kept - and the rung's text names the file and both lines, so the
+    /// receipt says where the pair came from. A trailing newline is not a third line, and a comma
+    /// inside a command line survives, which `--probe POS,NEG` could never carry.
+    #[test]
+    fn a_probe_file_names_the_pair() {
+        let dir = keel_fs::scratch("keel-verify-pair");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("pair.txt");
+        std::fs::write(&file, "cargo test --release -p keel-cli --lib -- a::pos\ncargo test --release -p keel-cli --lib -- a::neg -- --exact,--nocapture\n").unwrap();
+        let path = file.to_string_lossy().into_owned();
+        let pair = parse_probe(&args(&["--probe-from", &path, "."])).unwrap().unwrap();
+        assert_eq!(pair.pos, "cargo test --release -p keel-cli --lib -- a::pos");
+        assert_eq!(pair.neg, "cargo test --release -p keel-cli --lib -- a::neg -- --exact,--nocapture");
+        assert_eq!(pair.from.as_deref(), Some(file.as_path()));
+        let text = pair.text();
+        assert!(text.starts_with(&format!("--probe-from {}: ", file.display())), "{text}");
+        assert!(text.contains("a::pos ; cargo test"), "{text}");
+        // the typed form has no source and no prefix
+        assert_eq!(Probe { pos: "a".into(), neg: "b".into(), from: None }.text(), "a ; b");
+        // the path is the flag's value, never the root
+        assert_eq!(own_args(&args(&["--probe-from", &path, "."])), vec![".".to_owned()]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// D0500 known-negative: one line, three lines, a blank second line, an unreadable path, a flag
+    /// with no value, and `--probe` beside `--probe-from` are each refused at parse naming the shape -
+    /// before any rung runs, instead of eighty seconds later as `program not found` at the rung.
+    #[test]
+    fn a_probe_file_that_is_not_a_pair_is_refused() {
+        let here = std::path::Path::new("pair.txt");
+        assert!(parse_probe_text("cargo test a\n", here).unwrap_err().contains("1 line(s)"));
+        assert!(parse_probe_text("a\nb\nc\n", here).unwrap_err().contains("3 line(s)"));
+        assert!(parse_probe_text("a\n\n", here).unwrap_err().contains("line 2 is blank"));
+        assert!(parse_probe_text("\nb\n", here).unwrap_err().contains("line 1 is blank"));
+        assert!(parse_probe_text("a\n   \n", here).unwrap_err().contains("line 2 is blank"));
+        assert!(parse_probe_text("a\nb\n\n", here).unwrap_err().contains("3 line(s)"));
+        let dir = keel_fs::scratch("keel-verify-nopair");
+        let missing = dir.join("absent.txt").to_string_lossy().into_owned();
+        assert!(parse_probe(&args(&["--probe-from", &missing])).unwrap_err().contains("cannot read"));
+        assert!(parse_probe(&args(&["--probe-from"])).unwrap_err().contains("takes FILE"));
+        let both = parse_probe(&args(&["--probe", "a,b", "--probe-from", &missing])).unwrap_err();
+        assert!(both.contains("twice"), "{both}");
     }
 
     /// The root is found among what the ladder does not consume: the probe value is never a path.
@@ -766,6 +887,7 @@ mod tests {
     fn the_probe_value_is_not_mistaken_for_a_root() {
         assert_eq!(own_args(&args(&["--probe", "cargo test a,cargo test b", ".", "--no-receipt"])), vec![".".to_owned()]);
         assert!(own_args(&args(&["--probe", "x,y"])).is_empty());
+        assert!(own_args(&args(&["--probe-from", "pair.txt"])).is_empty());
     }
 
     /// The receipt round-trips: the rung stopped at, every rung's verdict, exit and seconds.

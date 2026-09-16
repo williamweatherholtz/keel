@@ -28,7 +28,7 @@ and it reported "All issues resolved ... ready for commit" over a tree whose gua
 | Role | Agent type | Reads | Writes |
 |---|---|---|---|
 | PRIMARY | the session | everything | the substance: code, design, analysis; the dispatches below |
-| VERIFIER | `verifier` (haiku) | the tree; the commands' output (`keel verify . --probe POS,NEG` - the D0476 ladder: validate, guard, clippy, the probe pair, suite --touched, stopping at the first red - plus check-engine and sync-claude --check) | ONE receipt file in the scratchpad. Nothing under `.tracking/`, `.engine/`, `keel-cli/`, `.claude/`, `CLAUDE.md`; no `keel record`; no git |
+| VERIFIER | `verifier` (haiku) | the tree; the commands' output (`keel verify . --probe-from <PAIR FILE>` - the D0476 ladder: validate, guard, clippy, the probe pair, suite --touched, stopping at the first red - plus check-engine and sync-claude --check) | ONE receipt file in the scratchpad. Nothing under `.tracking/`, `.engine/`, `keel-cli/`, `.claude/`, `CLAUDE.md`; no `keel record`; no git |
 | RECORDER | `recorder` (haiku) | the verifier's receipt file ONLY - never the primary's account of the work | `keel record ...` calls ONLY. No Write/Edit on any tree file (the agent has neither tool); no git |
 
 The agent types are `.claude/agents/verifier.md` and `.claude/agents/recorder.md`. They carry the
@@ -40,15 +40,20 @@ tree becomes a `recorder:tree-red` refusal in the fire ledger (process step dcyR
 ```
 You are the D0425 VERIFIER. Follow the test-verify skill (.claude/skills/test-verify/SKILL.md)
 verbatim - it is your whole procedure. Binary: <KEEL, a copy such as ./target/release/keel-serve.exe>.
-Project root: <ABS ROOT>. D0388 probe pair for this sprint: <CHECK> - known-positive <CASE>,
-known-negative <CASE> (run exactly this; if none is named say PROBE PAIR: not named by the dispatch).
-Write the receipt to <ABS SCRATCH PATH>/verifier-receipt.txt in the skill's shape and return only
-its path and its DISCREPANCIES line. You write nothing else anywhere.
+Project root: <ABS ROOT>. D0388 probe pair for this sprint: the pair file at <ABS PAIR FILE> - two
+lines, the known-positive command then the known-negative, written by the primary; pass its path as
+`--probe-from <ABS PAIR FILE>` and transcribe nothing (if no file is named, launch without it and say
+PROBE PAIR: not named by the dispatch). Write the receipt to <ABS SCRATCH PATH>/verifier-receipt.txt
+in the skill's shape and return only its path and its DISCREPANCIES line. You write nothing else anywhere.
 ```
 
-The primary fills `<KEEL>`, `<ABS ROOT>`, the pair and the scratch path. It adds no description of
-what it believes passed: a verifier that inherits the primary's belief is the testimony problem
-(issue266) in another form.
+The primary fills `<KEEL>`, `<ABS ROOT>`, the pair file's path and the scratch path. The pair file
+is the primary's (D0500, issue571): it chose the check and both cases before reading the tree
+(D0388) and wrote them as the file's two lines; the verifier NAMES the path and retypes nothing,
+because three dispatches in six sprints retyped the pair wrong into `--probe POS,NEG` and each
+cost an eighty-second climb to a red no check produced. The primary adds no description of what it
+believes passed: a verifier that inherits the primary's belief is the testimony problem (issue266)
+in another form.
 
 ## Recorder brief — dispatch verbatim, filling the slots
 
@@ -110,9 +115,9 @@ report as returned, refused naming the textpatch line), `fixtures/positive-sprin
 (sprint 723's first report as returned, refused naming zero writes), `fixtures/negative-sprint723-seven-owed.txt`
 (the second recorder's seven writes under `--owed 7`; passes) and `fixtures/positive-sprint723-six-of-seven.txt`
 (one gate line removed under `--owed 7`; refused naming the shortfall). `--probe <FIXTURE>` runs one row and
-exits 0 when that side holds - the form a verifier's `keel verify --probe POS,NEG` dispatch names, since the
-ladder needs both sides to exit 0 (sprint 724's first dispatch named the bare checker runs, and the positive's
-exit 1 stopped the ladder at the probe rung).
+exits 0 when that side holds - the form each line of a pair file takes, since the ladder needs both sides
+to exit 0 (sprint 724's first dispatch named the bare checker runs, and the positive's exit 1 stopped the
+ladder at the probe rung).
 
 ## What the primary does with the report
 
