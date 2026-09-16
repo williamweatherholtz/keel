@@ -869,7 +869,7 @@ mod tests {
     /// solicited and wasted). Pinned to D0192's actual text shape.
     #[test]
     fn fork_options_parse_the_d0192_shape() {
-        let dir = std::env::temp_dir().join("keel-deck-forkcheck");
+        let dir = keel_fs::scratch("keel-deck-forkcheck");
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(
             dir.join("d.sysml"),
@@ -899,7 +899,7 @@ mod tests {
     /// false-green rule).
     #[test]
     fn the_emitted_script_parses() {
-        let dir = std::env::temp_dir().join("keel-deck-jscheck");
+        let dir = keel_fs::scratch("keel-deck-jscheck");
         let _ = std::fs::create_dir_all(&dir);
         let js_path = dir.join("deck.js");
         std::fs::write(&js_path, format!("var HUMAN=\"t\";\nvar HEAD=\"x\";\nvar INBOX=null;\n{JS}"))
@@ -954,7 +954,7 @@ mod tests {
     /// `null` — the page must claim no transport rather than half of one.
     #[test]
     fn inbox_config_all_or_nothing() {
-        let dir = std::env::temp_dir().join("keel-deck-inbox-cfg");
+        let dir = keel_fs::scratch("keel-deck-inbox-cfg");
         let contracts = dir.join(".engine").join("contracts");
         let _ = std::fs::create_dir_all(&contracts);
         let _ = std::fs::remove_file(contracts.join("deck-inbox.toml"));

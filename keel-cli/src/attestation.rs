@@ -422,7 +422,7 @@ mod tests {
     /// as passed, so a proposed sprint is not done by construction (no reader was taught the word).
     #[test]
     fn a_proposed_result_is_counted_and_is_not_a_passed_gate() {
-        let root = std::env::temp_dir().join("keel-attest-proposed");
+        let root = keel_fs::scratch("keel-attest-proposed");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".tracking").join("delivery")).expect("mkdir");
         let f = root.join(".tracking").join("delivery").join("s.sysml");

@@ -10,7 +10,7 @@ static DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn unique_dir() -> PathBuf {
     let n = DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("write_bdd_{n}"))
+    keel_fs::scratch(&format!("write_bdd_{n}"))
 }
 
 // ── file builders ─────────────────────────────────────────────────────────────

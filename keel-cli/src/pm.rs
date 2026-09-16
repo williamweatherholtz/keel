@@ -369,7 +369,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn ledger_schema_is_frozen_and_malformed_lines_are_visible() {
-        let root = std::env::temp_dir().join("keel-pm-report");
+        let root = keel_fs::scratch("keel-pm-report");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn refusals_are_read_back_per_event_control_and_actor_kind() {
-        let root = std::env::temp_dir().join("keel-pm-refusals");
+        let root = keel_fs::scratch("keel-pm-refusals");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn successful_override_consumptions_are_counted() {
-        let root = std::env::temp_dir().join("keel-pm-overrides");
+        let root = keel_fs::scratch("keel-pm-overrides");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -478,7 +478,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn recall_skips_are_counted_with_the_turns_they_cost() {
-        let root = std::env::temp_dir().join("keel-pm-recall");
+        let root = keel_fs::scratch("keel-pm-recall");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -508,7 +508,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn recall_slow_is_counted_beside_the_pre_d0390_skipped() {
-        let root = std::env::temp_dir().join("keel-pm-recall-slow");
+        let root = keel_fs::scratch("keel-pm-recall-slow");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn a_slow_fire_is_a_row_with_its_phases_and_a_fast_one_is_not() {
-        let root = std::env::temp_dir().join("keel-pm-slow-fires");
+        let root = keel_fs::scratch("keel-pm-slow-fires");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -562,7 +562,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup
     fn the_recent_sample_is_the_last_n_fires_of_one_event() {
-        let root = std::env::temp_dir().join("keel-pm-recent-event-ms");
+        let root = keel_fs::scratch("keel-pm-recent-event-ms");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".keel").join("metrics")).expect("mkdir");
         let mut lines: Vec<String> = (1..=30u64)
@@ -578,7 +578,7 @@ mod tests {
         assert!(!sample.contains(&99999), "another event's fire is not in the stop sample");
         assert_eq!(latency(&sample).1, 28000, "p90 by nearest rank over the window: the 23rd of 25");
         assert!(recent_event_ms(&root, "stop", 0).is_empty());
-        assert!(recent_event_ms(&std::env::temp_dir().join("keel-pm-no-ledger-here"), "stop", 25).is_empty(), "no ledger = empty sample");
+        assert!(recent_event_ms(&keel_fs::scratch("keel-pm-no-ledger-here"), "stop", 25).is_empty(), "no ledger = empty sample");
     }
 
     /// The ledger emitter's decision: below the threshold no field is written at all (the

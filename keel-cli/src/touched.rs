@@ -1644,6 +1644,113 @@ mod tests {
         out
     }
 
+    /// Every `.rs` under `keel-cli/src`, `keel-cli/tests` and `members/*/src`: the population the
+    /// scratch census (D0498) reads. `(path, always_test)` - a file under `tests/` is test code whole.
+    fn test_bearing_sources(root: &std::path::Path) -> Vec<(std::path::PathBuf, bool)> {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let mut src = Vec::new();
+        walk(&root.join("keel-cli").join("src"), &mut src);
+        let mut out: Vec<(std::path::PathBuf, bool)> = src.into_iter().chain(member_sources(root)).map(|p| (p, false)).collect();
+        let mut tests = Vec::new();
+        walk(&root.join("keel-cli").join("tests"), &mut tests);
+        out.extend(tests.into_iter().map(|p| (p, true)));
+        out
+    }
+
+    /// The `(line, join text)` pairs the D0498 scratch census names in one source: a
+    /// `temp_dir().join(` in TEST CODE whose argument carries no per-process token. Test code is the
+    /// region from the first bare `#[cfg(test)]` line, or the first `pub mod test_support` line (a
+    /// fixture module shared across the crate boundary, scaffold.rs), to the end of the file - or the
+    /// whole file when `always_test` (a `tests/` binary). `process::id()` and `gen_uuid()` are the
+    /// tokens; `keel_fs::scratch` never matches because it is not a `temp_dir().join(`.
+    fn fixed_scratch_joins(src: &str, always_test: bool) -> Vec<(usize, String)> {
+        const NEEDLE: &str = "temp_dir().join(";
+        let mut in_test = always_test;
+        let mut out = Vec::new();
+        for (i, line) in src.lines().enumerate() {
+            let t = line.trim();
+            if !in_test && (t == "#[cfg(test)]" || t.starts_with("pub mod test_support")) {
+                in_test = true;
+                continue;
+            }
+            if !in_test || t.starts_with("//") {
+                continue;
+            }
+            let Some(at) = line.find(NEEDLE) else { continue };
+            let call = line.get(at..).unwrap_or("");
+            // A needle quoted whole, or a call carrying an escaped quote, is a string literal - this
+            // census's own fixtures - not a scratch directory anyone opens.
+            let quoted = line.get(..at).is_some_and(|before| before.ends_with('"')) || call.contains("\\\"");
+            if quoted || call.contains("process::id()") || call.contains("gen_uuid()") {
+                continue;
+            }
+            out.push((i + 1, call.trim_end().to_string()));
+        }
+        out
+    }
+
+    /// D0388 known-positive, stated before the tree is read: a fixed literal and a `format!` with no
+    /// per-process token below the `#[cfg(test)]` line are both named; under `tests/` the fixed join is
+    /// named with no `#[cfg(test)]` line at all; the fixture module's own line counts as test code.
+    #[test]
+    fn the_scratch_census_names_a_fixed_join_in_test_code() {
+        let lib = "fn prod() { let _ = std::env::temp_dir().join(\"keel-audit\"); }\n#[cfg(test)]\nmod tests {\n    let a = std::env::temp_dir().join(\"keel-x\");\n    let b = std::env::temp_dir().join(format!(\"keel-k6-{tag}\"));\n}\n";
+        let named = fixed_scratch_joins(lib, false);
+        assert_eq!(named.iter().map(|(l, _)| *l).collect::<Vec<_>>(), vec![4, 5], "the two test-code joins, not the production one: {named:?}");
+        assert!(named[0].1.starts_with("temp_dir().join(\"keel-x\")"), "the census quotes the call: {}", named[0].1);
+
+        let bin = "fn unique_dir() -> PathBuf { std::env::temp_dir().join(format!(\"write_bdd_{n}\")) }\n";
+        assert_eq!(fixed_scratch_joins(bin, true).len(), 1, "a tests/ binary is test code whole");
+
+        let fixture = "pub mod test_support {\n    pub fn temp_root(tag: &str) -> PathBuf { std::env::temp_dir().join(format!(\"keel-scaffold-{tag}\")) }\n}\n";
+        assert_eq!(fixed_scratch_joins(fixture, false).iter().map(|(l, _)| *l).collect::<Vec<_>>(), vec![2], "a shared fixture module is test code");
+    }
+
+    /// D0388 known-negative: the helper, a hand-interpolated process id, a per-call uuid and a fixed
+    /// join ABOVE the `#[cfg(test)]` line (the production worktree sites) all pass; so do a comment, a
+    /// call inside a string literal and a quoted needle (this census's own fixtures).
+    #[test]
+    fn the_scratch_census_passes_per_process_joins_and_production_sites() {
+        let src = "let scratch = std::env::temp_dir().join(\"keel-audit\");\n#[cfg(test)]\nmod tests {\n    let a = keel_fs::scratch(\"keel-x\");\n    let b = std::env::temp_dir().join(format!(\"keel-x-{}\", std::process::id()));\n    let c = std::env::temp_dir().join(format!(\"keel-eol-{tag}-{}\", crate::ident::gen_uuid()));\n    // let d = std::env::temp_dir().join(\"keel-commented\");\n    let e = \"let x = std::env::temp_dir().join(\\\"keel-in-a-literal\\\");\";\n    const N: &str = \"temp_dir().join(\";\n}\n";
+        let named = fixed_scratch_joins(src, false);
+        assert!(named.is_empty(), "nothing to name: {named:?}");
+    }
+
+    /// Two overlapping lib runs during sprint 724's ceremony produced two different failing sets from
+    /// unit tests sharing fixed-name scratch trees (issue570); the fix was thirty-six sites and this is
+    /// the control (D0047, D0498): no test-code `temp_dir().join(` names a tree two processes could share.
+    #[test]
+    fn no_test_names_a_scratch_directory_two_processes_could_share() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("keel-cli sits inside the keel repository")
+            .to_path_buf();
+        let files = test_bearing_sources(&root);
+        assert!(files.len() > 100, "the three trees are the population, asserted non-empty: {}", files.len());
+        let mut offenders = Vec::new();
+        for (f, always_test) in &files {
+            let src = std::fs::read_to_string(f).expect("a source is readable");
+            for (line, call) in fixed_scratch_joins(&src, *always_test) {
+                offenders.push(format!("{}:{line} {call}", f.strip_prefix(&root).unwrap_or(f).display()));
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "a test scratch directory two processes could share (issue570); name it through keel_fs::scratch(tag) instead:\n{}",
+            offenders.join("\n")
+        );
+    }
+
     /// Sprint 714 broke four member tests and sprint 718 eight on the same anchor class - a test keyed
     /// on `..` or `src/...` from the crate directory, which names the repo only one level down. Each
     /// was fixed by hand twice; this is the control (D0047). Negative: the four anchors are found in a

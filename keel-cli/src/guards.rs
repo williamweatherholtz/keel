@@ -4588,7 +4588,7 @@ mod cli_reference_tests {
     /// binary no longer dispatches fails naming the line. Known negative: the current spellings pass.
     #[test]
     fn a_retired_verb_in_code_fails_naming_its_line_and_the_current_spelling_passes() {
-        let root = std::env::temp_dir().join("keel-cliref-guard");
+        let root = keel_fs::scratch("keel-cliref-guard");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".engine").join("skills")).expect("mkdir");
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
@@ -7593,7 +7593,7 @@ mod identity_form_tests {
     /// existing tool and a bare directory mention are not; `.tracking` (history) is out of scope.
     #[test]
     fn tool_reference_flags_only_missing_files_on_the_living_surface() {
-        let root = std::env::temp_dir().join("keel-toolref-guard");
+        let root = keel_fs::scratch("keel-toolref-guard");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".engine").join("skills")).expect("mkdir");
         std::fs::create_dir_all(root.join(".engine").join("tools")).expect("mkdir");
@@ -7626,7 +7626,7 @@ mod tests {
         // word IS the evidence. Tested in four directions, because a guard that only ever passes is
         // indistinguishable from one aimed at nothing, and one that fires on the human would point
         // the whole control at the wrong party.
-        let root = std::env::temp_dir().join("keel-evidence-cited-test");
+        let root = keel_fs::scratch("keel-evidence-cited-test");
         let _ = std::fs::remove_dir_all(&root);
         let tr = root.join(".tracking");
         std::fs::create_dir_all(&tr).unwrap();
@@ -7682,7 +7682,7 @@ mod tests {
         // D0225. Both directions, because a guard that only ever passes is indistinguishable from a
         // guard that does nothing - and this codebase has already shipped two checks that passed on
         // an empty population (issue250, claude-surface-drift on zero skills).
-        let root = std::env::temp_dir().join("keel-guard-applicability");
+        let root = keel_fs::scratch("keel-guard-applicability");
         let _ = std::fs::remove_dir_all(&root);
         let dir = root.join(".engine").join("processes");
         std::fs::create_dir_all(&dir).unwrap();
@@ -8293,7 +8293,7 @@ mod attribute_vocabulary_tests {
     use super::*;
 
     fn probe(body: &str) -> GuardReport {
-        let dir = std::env::temp_dir().join(format!("keel-attrvocab-{}", body.len()));
+        let dir = keel_fs::scratch(&format!("keel-attrvocab-{}", body.len()));
         let tracking = dir.join(".tracking");
         std::fs::create_dir_all(&tracking).expect("scratch dir");
         std::fs::write(tracking.join("probe.sysml"), body).expect("write probe");
@@ -8350,7 +8350,7 @@ mod viewpoint_enumeration_tests {
     /// asserts the FAILING direction, because a guard only ever tested green is a guard nobody tested.
     #[test]
     fn a_viewpoint_outside_the_registry_file_is_still_judged() {
-        let dir = std::env::temp_dir().join("keel_vp_enum_test");
+        let dir = keel_fs::scratch("keel_vp_enum_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".engine/views")).unwrap();
         std::fs::create_dir_all(dir.join(".tracking")).unwrap();
@@ -8390,7 +8390,7 @@ mod claim_ancestry_tests {
     /// intro-commit lookup is real, not mocked.
     #[test]
     fn backdated_claim_is_refused_and_honest_claim_passes() {
-        let dir = std::env::temp_dir().join("keel-claim-ancestry-test");
+        let dir = keel_fs::scratch("keel-claim-ancestry-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".tracking").join("claims")).expect("mkdir");
         let run = |args: &[&str]| {

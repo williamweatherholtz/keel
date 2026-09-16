@@ -10,3 +10,7 @@ description = "Who is acting: actor resolution and enrolment (D0129), and the de
 serde_json = "1"
 sha2 = "0.10"
 getrandom = "0.3"
+
+[dev-dependencies]
+# keel_fs::scratch, the per-process test scratch directory (D0498); a leaf depending on a leaf, downward.
+keel-fs = { path = "../keel-fs" }

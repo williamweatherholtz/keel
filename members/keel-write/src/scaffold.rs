@@ -298,7 +298,7 @@ pub mod test_support {
     /// Test fixture: panics when the temp tree cannot be created.
     #[must_use]
     pub fn temp_root(tag: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!("keel-scaffold-{tag}"));
+        let root = keel_fs::scratch(&format!("keel-scaffold-{tag}"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".tracking").join("delivery")).expect("mkdir");
         std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");

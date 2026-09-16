@@ -334,7 +334,7 @@ mod tests {
         // Kind matters, not just the id: `actor set` must be able to tell a Person from an AI Actor,
         // because that distinction is what protects human-only attestation authority (issue073).
         // Synthetic registry in the exact authored format — no coupling to this repo's own data.
-        let dir = std::env::temp_dir().join("keel-actor-test-registry");
+        let dir = keel_fs::scratch("keel-actor-test-registry");
         let tracking = dir.join(".tracking");
         std::fs::create_dir_all(&tracking).expect("temp dir");
         std::fs::write(

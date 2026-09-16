@@ -4244,7 +4244,7 @@ mod tests {
         // D0155: the obligation surface must OVERSTATE rather than understate when it cannot resolve its
         // own boundary. A non-repo root has no D0155 introduction commit, so nothing may be grandfathered
         // — the opposite of the gate stance (D0050), because "nothing owed" must never be a guess.
-        let dir = std::env::temp_dir().join("keel_sitting_gf_test");
+        let dir = keel_fs::scratch("keel_sitting_gf_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".tracking/delivery")).unwrap();
         std::fs::create_dir_all(dir.join(".engine")).unwrap();

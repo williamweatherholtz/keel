@@ -1431,7 +1431,7 @@ mod tests {
     /// unplugged is a state, never a defect).
     #[test]
     fn knowledge_wellformedness_flags_malformed_and_passes_absent() {
-        let dir = std::env::temp_dir().join("keel-knowledge-wf-test");
+        let dir = keel_fs::scratch("keel-knowledge-wf-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".knowledge")).expect("mkdir");
         std::fs::write(

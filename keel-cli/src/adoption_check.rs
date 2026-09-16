@@ -482,7 +482,7 @@ mod tests {
         // The file list comes from the BUNDLE, not from a second computation over the source tree -
         // two lists would drift, and the fixture would then strip something the importer never
         // restores (or miss something it does), which is the same-fact-in-two-places class.
-        let root = std::env::temp_dir().join("keel-adoption-unit-test");
+        let root = keel_fs::scratch("keel-adoption-unit-test");
         let _ = std::fs::remove_dir_all(&root);
         let b = root.join("bundle");
         std::fs::create_dir_all(b.join("processes")).unwrap();

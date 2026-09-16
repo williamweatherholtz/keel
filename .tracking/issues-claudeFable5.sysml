@@ -1742,4 +1742,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcGuardReadFailureIsNotAnEmptyDiff to issue576;
+
+    part issue577 : Issue {
+        :>> id = "5a1708f7-1082-44de-8b7b-d00e83069287";
+        :>> title = "Production worktree scratch paths are shared across concurrent keel runs";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Three PRODUCTION scratch worktrees are named without a per-process token, so two concurrent keel runs share them: history.rs:115 joins keel-audit, view/reports.rs:330 joins keel-trend-{short}, view/mod.rs:558 joins keel-bl-{tag}-{commit}. Each site first runs git worktree remove --force on that path (history.rs:64/83, reports.rs:332/337, view/mod.rs:560/569) and then checks out into it - so a second run starting while the first reads its checkout removes the tree from under it, and audit history / the trend report / the baseline view read a half-present or foreign tree without any error naming the cause. The D0498 census excludes these sites by design (its region rule starts at the first cfg(test) line) - the same defect class as issue570, on the production side. Found in sprint 729's retro while enumerating every temp_dir().join in the workspace.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcWorktreeScratchIsPerProcess to issue577;
 }

@@ -185,7 +185,7 @@ mod tests {
     fn a_project_that_never_chartered_reports_so_rather_than_failing() {
         // D0098: onboarding REPORTS, never gates. An unchartered project is not a dishonest one, and
         // refusing to work until someone answers questions is the friction this exists to remove.
-        let root = std::env::temp_dir().join("keel-onboard-unchartered");
+        let root = keel_fs::scratch("keel-onboard-unchartered");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".engine").join("processes")).unwrap();
         assert_eq!(chartered_by(&root), None);

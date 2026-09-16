@@ -1026,6 +1026,7 @@ name = "keel-actor"
 version = "0.4.1"
 dependencies = [
  "getrandom 0.3.4",
+ "keel-fs",
  "serde_json",
  "sha2",
 ]

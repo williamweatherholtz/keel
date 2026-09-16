@@ -313,7 +313,7 @@ mod tests {
     use super::{finish, prepare};
 
     fn git_root(tag: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!("keel-launcher-{tag}"));
+        let root = keel_fs::scratch(&format!("keel-launcher-{tag}"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
         std::fs::write(

@@ -2083,7 +2083,7 @@ mod judge_set_tests {
 
     #[test]
     fn a_judged_set_writes_one_result_and_one_quote_receipt_per_item() {
-        let dir = std::env::temp_dir().join("keel-judge-set");
+        let dir = keel_fs::scratch("keel-judge-set");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
         let f = dir.join("s.sysml");
@@ -2288,7 +2288,7 @@ mod atomic_write_tests {
     /// truncate, and that it cleans up after itself.
     #[test]
     fn a_write_replaces_the_target_and_leaves_no_temp_file() {
-        let dir = std::env::temp_dir().join("keel-atomic-write-test");
+        let dir = keel_fs::scratch("keel-atomic-write-test");
         let _ = std::fs::create_dir_all(&dir);
         let target = dir.join("model.sysml");
         std::fs::write(&target, "old").expect("seed");
@@ -2383,7 +2383,7 @@ mod tests {
     }
 
     fn k6_root(tag: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!("keel-k6-{tag}"));
+        let root = keel_fs::scratch(&format!("keel-k6-{tag}"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".tracking").join("delivery")).expect("mkdir");
         std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");

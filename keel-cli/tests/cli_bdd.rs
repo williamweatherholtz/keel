@@ -30,7 +30,7 @@ pub struct CliWorld {
 
 #[given(expr = "a SysML file with content {string}")]
 fn given_sysml_file(world: &mut CliWorld, content: String) {
-    let dir = std::env::temp_dir().join("keel_cli_bdd");
+    let dir = keel_fs::scratch("keel_cli_bdd");
     std::fs::create_dir_all(&dir).expect("create temp dir");
     let idx = FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let path = dir.join(format!("test_{idx}.sysml"));
@@ -41,7 +41,7 @@ fn given_sysml_file(world: &mut CliWorld, content: String) {
 #[given(expr = "a temporary directory containing {int} SysML files")]
 fn given_dir_with_files(world: &mut CliWorld, count: usize) {
     let run = FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("keel_cli_bdd_collect_{run}"));
+    let dir = keel_fs::scratch(&format!("keel_cli_bdd_collect_{run}"));
     std::fs::create_dir_all(&dir).expect("create temp dir");
     for i in 0..count {
         let path = dir.join(format!("collect_{i}.sysml"));

@@ -55,3 +55,30 @@ pub fn write_atomic(path: &std::path::Path, content: impl AsRef<str>) -> std::io
     }
 }
 
+/// The scratch directory a test writes under: `temp_dir()/<tag>-<process id>` (D0498).
+///
+/// Two lib runs overlapping on one host shared every fixed-name `temp_dir().join("keel-x")` tree and
+/// produced two different failing sets from one source (issue570). The process id is what separates
+/// them; putting it in one helper makes the correct call the shortest one to write, and the census in
+/// `keel-cli/src/touched.rs` fails any test-code join that names a tree without it. The directory is
+/// NOT created here: callers decide whether they want it fresh.
+#[must_use]
+pub fn scratch(tag: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{tag}-{}", std::process::id()))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn scratch_is_per_tag_and_per_process() {
+        let pid = std::process::id().to_string();
+        let a = super::scratch("keel-scratch-a");
+        let b = super::scratch("keel-scratch-b");
+        assert_ne!(a, b, "two tags are two trees");
+        assert_eq!(a, super::scratch("keel-scratch-a"), "one tag is one tree within a process");
+        let name = a.file_name().expect("a name").to_string_lossy().into_owned();
+        assert_eq!(name, format!("keel-scratch-a-{pid}"), "the process id closes the name");
+        assert_eq!(a.parent(), Some(std::env::temp_dir().as_path()), "under the system temp dir");
+    }
+}
+

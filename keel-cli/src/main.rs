@@ -5874,7 +5874,7 @@ mod tests {
     #[test]
     #[allow(clippy::expect_used)] // test setup: a failed mkdir should abort the test loudly
     fn bash_matcher_is_argv_level_and_carves_out_human_judgment() {
-        let root = std::env::temp_dir().join("keel-bash-classify");
+        let root = keel_fs::scratch("keel-bash-classify");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
         std::fs::write(

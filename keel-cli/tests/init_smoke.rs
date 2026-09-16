@@ -13,8 +13,7 @@ static DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn unique_dir() -> PathBuf {
     let n = DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let pid = std::process::id();
-    std::env::temp_dir().join(format!("keel_init_smoke_{pid}_{n}"))
+    keel_fs::scratch(&format!("keel_init_smoke_{n}"))
 }
 
 fn keel() -> Command {
