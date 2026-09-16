@@ -3687,6 +3687,97 @@ fact("clippyLintsCiTriple", {
      "priority, D0052) and the `action def` that declares it; backlogItems = that count. sprint726 from its delivery file. ci = `gh run list --limit 6 --json conclusion,status,headSha,event,databaseId,createdAt` "
      "verbatim (D0420: the conclusion field, never a wrapper's exit); null when gh is unavailable.")
 
+# ================================================================ 34. one script-probe runner for both surfaces (D0496 / issue574)
+# The Decision's fields as the guard reads them; the runner in source (its marker, functions and the pair's two
+# temp-tree cases); ci.yml's step as one line with no heredoc; the hook block with its staged-path test and its
+# GATE CANNOT RUN branch; the runner run live twice (--probe, then the real tree: every probe it discovered and the
+# wall-clock); the two CI runs that failed on the heredoc step; the class Issues and their resolvers; sprint 727.
+_d0496 = _dec_file("0496-")
+_f496 = _decision_facts(_d0496, "d0496")
+_runner96_path = os.path.join(REPO, "scripts", "script_probes.py")
+_runner96 = read(_runner96_path) or ""
+_ci96 = read(os.path.join(REPO, ".github", "workflows", "ci.yml")) or ""
+_ci96_step = re.search(r"^      - name: script probes.*?^      - name: |^      # Layer 3", _ci96, re.S | re.M)
+_ci96_step_text = _ci96_step.group(0) if _ci96_step else ""
+_hook96 = read(os.path.join(REPO, ".githooks", "pre-commit")) or ""
+_hook96_block = re.search(r"^# SCRIPT PROBES \(D0496/issue574\).*?^fi\n", _hook96, re.S | re.M)
+_hook96_text = _hook96_block.group(0) if _hook96_block else ""
+_t96 = time.time()
+_ok96p, _out96p = run([sys.executable, "scripts/script_probes.py", "--probe"], timeout=120)
+_probe96_secs = round(time.time() - _t96, 1)
+_t96 = time.time()
+_ok96r, _out96r = run([sys.executable, "scripts/script_probes.py", "."], timeout=300)
+_run96_secs = round(time.time() - _t96, 1)
+_run96_probes = re.findall(r"^== (\S+) (\S+)$", _out96r or "", re.M)
+_run96_verdict = (re.search(r"^(\d+ script probe\(s\) passed|SCRIPT PROBES FAILED:.*)$", _out96r or "", re.M) or [None, None])[1]
+_i574b = _issue_facts("574", "dcScriptProbesRunBeforeCommit")
+_s727 = _sprint_facts("sprint727_scriptProbesRunBeforeCommit.sysml", "d0496")
+_ci96_ok, _ci96_out = run(["gh", "run", "list", "--limit", "12", "--json", "conclusion,status,headSha,event,databaseId,createdAt"], timeout=60)
+try:
+    _ci96_runs = json.loads(_ci96_out) if _ci96_ok else None
+except ValueError:
+    _ci96_runs = None
+_ci96_failed_on_heredoc = [r for r in (_ci96_runs or []) if r.get("headSha", "")[:7] in ("eb82b52", "6a493f4")]
+fact("scriptProbesOneRunner", {
+    **_f496,
+    "namesIssue574": "issue574" in (_f496["context"] or ""),
+    "namesBothRedCommits": "eb82b52" in (_f496["context"] or "") and "6a493f4" in (_f496["context"] or ""),
+    "namesThirdMember": "third member" in (_f496["context"] or ""),
+    "namesD0098": "D0098" in (_f496["decision"] or ""),
+    "namesNoHeredoc": "no heredoc" in (_f496["decision"] or ""),
+    "saysProcessChange": "This is a process-change" in (_f496["rationale"] or ""),
+    "runner": {
+        "exists": bool(_runner96), "lines": _runner96.count("\n"),
+        "carriesOwnMarker": "\n# ci-probe: --probe\n" in _runner96,
+        "discoverFound": "def discover(root):" in _runner96 and 'glob.glob(os.path.join(root, "scripts", "**", "*.py"), recursive=True)' in _runner96,
+        "runFound": "def run_probes(root, out=print):" in _runner96 and '"target", "release"' in _runner96,
+        "reportFound": "def report(ran, failed, out=print):" in _runner96 and "SCRIPT PROBES FAILED:" in _runner96,
+        "pairFound": "def probe():" in _runner96 and "scripts/failing.py" in _runner96 and "scripts/unmarked.py" in _runner96,
+        "noScriptsDirExits2": "the runner cannot run" in _runner96,
+    },
+    "ci": {
+        "stepFound": bool(_ci96_step_text),
+        "stepCallsRunner": "run: python3 scripts/script_probes.py" in _ci96_step_text,
+        "stepHasHeredoc": "run: |" in _ci96_step_text,
+        "stepLines": _ci96_step_text.count("\n"),
+        "stepNamesD0496": "D0496" in _ci96_step_text,
+        "fileHasScriptProbeDiscovery": "ci-probe" in _ci96.replace(_ci96_step_text, ""),
+    },
+    "hook": {
+        "blockFound": bool(_hook96_text),
+        "stagedPattern": (re.search(r"grep -E '([^']+)'", _hook96_text) or [None, None])[1],
+        "callsRunner": "python scripts/script_probes.py" in _hook96_text,
+        "abortsNamingIssue": "SCRIPT PROBES FAILED" in _hook96_text and "issue574" in _hook96_text,
+        "cannotRunBranch": "GATE CANNOT RUN" in _hook96_text and "python not found" in _hook96_text,
+        "pythonGatedBlocks": _hook96.count("command -v python"),
+    },
+    "live": {
+        "pair": {"exit0": _ok96p, "seconds": _probe96_secs,
+                 "line": (re.search(r"^PROBE (PASS|FAILED).*$", _out96p or "", re.M) or [None, None])[0]},
+        "realTree": {"exit0": _ok96r, "seconds": _run96_secs, "verdict": _run96_verdict,
+                     "probes": [{"path": p, "flag": f} for p, f in _run96_probes], "count": len(_run96_probes)},
+    },
+    "issue574": _i574b,
+    "classMembers": [n for n, i in (("issue453", None), ("issue572", _i572), ("issue574", _i574b)) if i is None or i["exists"]],
+    "classResolverPositions": {a: ({"place": _bl95_actions.index(a) + 1, "def": _bl95_defs.get(a)} if a in _bl95_actions else None)
+                               for a in ("dcScriptProbesRunBeforeCommit", "dcVerifyWaitsForItsPid")},
+    "ciRunsThatFailedOnTheHeredocStep": _ci96_failed_on_heredoc,
+    "sprint727": {k: v for k, v in _s727.items() if k != "text"},
+    "ciRuns": _ci96_runs,
+} if _d0496 and _runner96 else None, "the one script-probe runner: Decision, runner source and pair, ci.yml step, hook block, both surfaces run live, the class, sprint",
+     _DEC_HOW + " Names by literal search in the field named. runner: scripts/script_probes.py searched for its own `# ci-probe: --probe` "
+     "line, the four def lines and their distinguishing literals (the recursive glob, the target/release PATH entry, the FAILED banner, the "
+     "two temp-tree fixture names) and the exit-2 sentence. ci: .github/workflows/ci.yml's `script probes` step cut from its `- name:` to "
+     "the next step or the Layer-3 comment; stepCallsRunner / stepHasHeredoc / stepNamesD0496 are literal searches of that cut; "
+     "fileHasScriptProbeDiscovery = `ci-probe` anywhere else in the file (a second copy of the discovery). hook: the block between the "
+     "`# SCRIPT PROBES (D0496/issue574)` comment and its closing `fi`; stagedPattern = the grep -E argument; pythonGatedBlocks = count of "
+     "`command -v python` in the whole hook. live.pair = `python scripts/script_probes.py --probe` exit, seconds and its PROBE line; "
+     "live.realTree = `python scripts/script_probes.py .` exit, seconds, verdict line and every `== path flag` line it printed. issue574 "
+     "from .tracking/issues-claudeFable5.sysml with its #Resolves edge and whether the resolver's DoD names it. classMembers as section 33. "
+     "classResolverPositions = 1-based place among every `action x;` in .tracking/backlog.sysml and the declaring def (D0052). "
+     "ciRunsThatFailedOnTheHeredocStep = the rows of `gh run list --limit 12 --json ...` whose headSha begins eb82b52 or 6a493f4 "
+     "(D0420: the conclusion field); ciRuns = that list verbatim; null when gh is unavailable. sprint727 from its delivery file.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

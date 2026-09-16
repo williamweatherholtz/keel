@@ -158,4 +158,23 @@ if [ -n "$templates_staged" ]; then
     fi
 fi
 
+# SCRIPT PROBES (D0496/issue574). CI's `script probes` step runs every scripts/**/*.py carrying a
+# `# ci-probe: <flag>` line; until scripts/script_probes.py existed that discovery lived only in a heredoc
+# in ci.yml, so two commits reached main red on `scripts/module_home.py --probe` with every local gate
+# green - the third local-gate-differs-from-CI defect (issue453, issue572). One runner, both surfaces:
+# a staged script runs the whole set here (about 4 s); a red probe aborts naming the script and its flag.
+# Missing python BLOCKS, never skips (D0098).
+scripts_staged=$(echo "$all_staged" | grep -E '^scripts/.*\.py$' || true)
+if [ -n "$scripts_staged" ]; then
+    if command -v python >/dev/null 2>&1; then
+        echo "pre-commit: python scripts/script_probes.py (the set CI runs, D0496)"
+        python scripts/script_probes.py || {
+            echo "pre-commit: SCRIPT PROBES FAILED — CI would fail this commit on the same probe (issue574). Commit aborted (SKIP_VALIDATE=1 to bypass)"; exit 1; }
+    else
+        echo "pre-commit: GATE CANNOT RUN — scripts/*.py staged but python not found; CI runs their probes and would be the first to."
+        echo "pre-commit:   REMEDY: install python 3. Explicit bypass: SKIP_VALIDATE=1"
+        exit 1
+    fi
+fi
+
 exit 0
