@@ -3862,6 +3862,82 @@ fact("verifyWaitsForItsPid", {
      "searched for the --wait sentence. issue575 from .tracking/issues-claudeFable5.sysml with its #Resolves edge and whether the resolver's "
      "DoD names it. resolverPositions as section 34. sprint728 from its delivery file.")
 
+
+# ================================================================ 36. D0499 - the guard source's own tests follow D0498 (sprint 729, brief 36)
+_d0499 = _dec_file("0499-")
+_f499 = _decision_facts(_d0499, "d0499")
+_d0498 = _dec_file("0498-")
+_gd99_path = _module_home("guards")                  # wherever the workspace holds them (issue559/560), never a path typed here
+_td99_path = _module_home("touched")
+_gd99 = read(_gd99_path or "") or ""
+_td99 = read(_td99_path or "") or ""
+_gd99_rel = os.path.relpath(_gd99_path, REPO).replace(os.sep, "/") if _gd99_path else None
+_fs99 = read(os.path.join(REPO, "members", "keel-fs", "src", "fsx.rs")) or ""
+_ob99 = read(os.path.join(REPO, ".tracking", "obligations", "red-yield-637916a4.sysml")) or ""
+_first_cfg99 = next((i + 1 for i, l in enumerate(_gd99.splitlines()) if l.strip() == "#[cfg(test)]"), None)
+_test99 = "\n".join(_gd99.splitlines()[_first_cfg99 - 1:]) if _first_cfg99 else ""
+_prod99 = "\n".join(_gd99.splitlines()[:_first_cfg99 - 1]) if _first_cfg99 else _gd99
+# the diff the Decision describes: sprint 729's landed commit against the commit before it, this file only
+_ok99d, _out99d = run(["git", "diff", "--numstat", "1ecbef0", "50e171a", "--", _gd99_rel or "."])
+_ok99h, _out99h = run(["git", "diff", "-U0", "1ecbef0", "50e171a", "--", _gd99_rel or "."])
+_hunks99 = [int(m) for m in re.findall(r"^@@ -(\d+)", _out99h or "", re.M)]
+_numstat99 = (_out99d or "").split()
+_tag_re99 = r"temp_dir\(\)\.join\("
+_i577b = _issue_facts("577", "dcWorktreeScratchIsPerProcess")
+_s729 = _sprint_facts("sprint729_unitTestScratchIsPerProcess.sysml", "d0498")
+_sites99 = 0
+for _sub in (("keel-cli", "src"), ("keel-cli", "tests")) + tuple(("members", m, "src") for m in sorted(os.listdir(os.path.join(REPO, "members"))) if os.path.isdir(os.path.join(REPO, "members", m, "src"))):
+    for _dp, _, _fns in os.walk(os.path.join(REPO, *_sub)):
+        for _fn in _fns:
+            if _fn.endswith(".rs"):
+                _sites99 += len(re.findall(r"(?<![\w:])(?:keel_fs::|fsx::)?scratch\(", read(os.path.join(_dp, _fn)) or ""))
+fact("guardTestsNameScratchPerProcess", {
+    **_f499,
+    "dependsOnD0498": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0499\s+to\s+d0498\s*;", _d0499)),
+    "d0498Status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0498) or [None, None])[1],
+    "namesSevenSites": "Seven of the thirty-six sites" in (_f499["context"] or ""),
+    "namesTheLockReadsThePath": "The lock reads the path, not the region" in (_f499["context"] or ""),
+    "namesNoPredicateChange": "no guard predicate" in (_f499["decision"] or ""),
+    "namesCarveOutRejected": "not a carve-out for test regions" in (_f499["rationale"] or ""),
+    "namesLaterDecisionMayNarrow": "a later Decision may narrow the lock" in (_f499["consequences"] or ""),
+    "namesObligation": "obligation637916a4" in (_f499["consequences"] or ""),
+    "guardsRs": {
+        "firstCfgTestLine": _first_cfg99,
+        "scratchCallsInTestRegion": len(re.findall(r"keel_fs::scratch\(", _test99)),
+        "scratchCallsAboveIt": len(re.findall(r"keel_fs::scratch\(", _prod99)),
+        "fixedJoinsInTestRegion": len([m for m in re.finditer(_tag_re99 + r"([^\n]*)", _test99)
+                                       if "process::id()" not in m.group(1) and "gen_uuid()" not in m.group(1)]),
+        "lockedByName": _gd99_rel is not None and f'"{_gd99_rel}"' in (re.search(r"const GUARD_SOURCE_FILES: &\[&str\] = &\[(.*?)\];", _gd99) or [None, ""])[1],
+        "lockMessageFound": "HARD LOCK: process definitions (D0070) AND the enforcement surface" in _gd99,
+        "diff": {"insertions": int(_numstat99[0]) if _ok99d and len(_numstat99) >= 2 and _numstat99[0].isdigit() else None,
+                 "deletions": int(_numstat99[1]) if _ok99d and len(_numstat99) >= 2 and _numstat99[1].isdigit() else None,
+                 "hunkStartLines": _hunks99,
+                 "allHunksBelowFirstCfgTest": bool(_hunks99) and _first_cfg99 is not None and min(_hunks99) > _first_cfg99},
+    },
+    "control": {
+        "helperFound": "pub fn scratch(tag: &str) -> std::path::PathBuf {" in _fs99,
+        "helperCarriesPid": bool(re.search(r"pub fn scratch\(tag: &str\) -> std::path::PathBuf \{\n[^\n]*std::process::id\(\)[^\n]*\n\}", _fs99)),
+        "censusFound": "fn no_test_names_a_scratch_directory_two_processes_could_share()" in _td99,
+        "probePair": [t for t in ("the_scratch_census_names_a_fixed_join_in_test_code",
+                                   "the_scratch_census_passes_per_process_joins_and_production_sites") if f"fn {t}()" in _td99],
+        "scratchSitesInTree": _sites99,
+    },
+    "obligation": {"exists": bool(_ob99), "resolvedByD0499": bool(re.search(r"#Resolves\s+dependency\s+from\s+d0499\s+to\s+obligation637916a4\s*;", _ob99)),
+                   "firstRedWasTheLock": "First problem at yield: keel gate guard: [process-change] locked file(s) changed (keel-cli/src/guards.rs)" in _ob99},
+    "issue577": _i577b,
+    "resolverPositions": {a: ({"place": _bl95_actions.index(a) + 1, "def": _bl95_defs.get(a)} if a in _bl95_actions else None)
+                          for a in ("dcWorktreeScratchIsPerProcess",)},
+    "sprint729": {k: v for k, v in _s729.items() if k != "text"},
+} if _d0499 and _gd99 else None, "the held record for the guards.rs test-site rewrite: Decision, the file's regions and diff, the D0498 control, the obligation it discharges, issue577, sprint 729",
+     _DEC_HOW + " Names by literal search in the field named; dependsOnD0498 = the `#DependsOn dependency from d0499 to d0498;` line. guardsRs: firstCfgTestLine = the "
+     "first line that is exactly `#[cfg(test)]`; the test region is that line to EOF and the production region is above it; scratch calls = "
+     "`keel_fs::scratch(` in each region; fixedJoinsInTestRegion = `temp_dir().join(` lines in the test region whose rest of line has neither "
+     "`process::id()` nor `gen_uuid()` (the census's own rule, touched.rs fixed_scratch_joins); lockedByName = the resolved path, repo-relative, inside GUARD_SOURCE_FILES; "
+     "diff = `git diff --numstat 1ecbef0 50e171a -- <the guards module as module_home resolves it>` and the `@@ -N` starts of `git diff -U0` over the same range, every one "
+     "compared against firstCfgTestLine. control: fsx.rs searched for the scratch signature and the pid inside its body; touched.rs for the census and "
+     "the two probe fn names (helperCarriesPid = the one-line body between the signature and its closing brace holds `std::process::id()`); scratchSitesInTree = `scratch(` calls (bare, keel_fs:: or fsx::) over every .rs file under keel-cli/src, keel-cli/tests "
+     "and members/*/src. obligation from .tracking/obligations/red-yield-637916a4.sysml: its #Resolves edge and whether its description opens on the "
+     "process-change lock. issue577 and resolverPositions as section 35. sprint729 from its delivery file, charter d0498.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

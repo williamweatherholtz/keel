@@ -1,4 +1,4 @@
-// D0499 (PROPOSED — NOT YET ACCEPTED) — The guard source's own tests follow D0498 - the seven fixed-name scratch joins in guards.rs test code are named through keel_fs::scratch, and no guard predicate changes
+// D0499 (PROPOSED — NOT YET ACCEPTED) — The guard source's own tests follow the scratch rule - the seven fixed-name scratch joins in guards.rs test code are named through keel_fs::scratch, and no guard predicate changes
 // Recorded via `keel record decision` (D0105 RMWX axis; issue054). Acceptance is a separate explicit
 // human gate (method=confirmation, D0106): flip status + add the d0499Accept event on sign-off.
 package Decision0499 {
@@ -11,7 +11,7 @@ package Decision0499 {
     // change rides the process-change guard's hard lock.
     #ProspectiveChange part d0499 : Decision {
         :>> id = "7c63d245-e6e1-4270-8dde-29bbc343b621";
-        :>> title = "The guard source's own tests follow D0498 - the seven fixed-name scratch joins in guards.rs test code are named through keel_fs::scratch, and no guard predicate changes";
+        :>> title = "The guard source's own tests follow the scratch rule - the seven fixed-name scratch joins in guards.rs test code are named through keel_fs::scratch, and no guard predicate changes";
         :>> createdAt = "2026-09-16";
         :>> createdBy = "claudeFable5";
         :>> status = DecisionStatus::proposed;
