@@ -77,7 +77,28 @@ pub fn sprint_filled(
             FILL_KEYS.join(", ")
         ));
     }
+    if let Some(purpose) = fill.get("purpose").filter(|p| purpose_is_prefixed(p)) {
+        return Err(format!(
+            "fill's purpose begins with `Sprint <N>:` - the scaffold (members/keel-write/src/scaffold.rs) adds that prefix to the Story title and the file header itself, so the record would read `Sprint {number}: {}` (issue573: seventeen records did). Start the purpose with the work, not the sprint number.",
+            purpose.split_whitespace().take(4).collect::<Vec<_>>().join(" ")
+        ));
+    }
     sprint_with(root, number, slug, charter, points, actor, Some(fill))
+}
+
+/// The pure control for issue573: does the fill's `purpose` restate a `Sprint <N>:` prefix (any
+/// number - a fill copied from another sprint doubles the title just as wrongly; any spacing, any
+/// case)? A purpose that merely CONTAINS the words is not prefixed.
+#[must_use]
+pub fn purpose_is_prefixed(purpose: &str) -> bool {
+    let rest = purpose.trim_start();
+    let Some(word) = rest.get(..6) else { return false };
+    if !word.eq_ignore_ascii_case("sprint") {
+        return false;
+    }
+    let after = rest[6..].trim_start();
+    let digits = after.chars().take_while(char::is_ascii_digit).count();
+    digits > 0 && after[digits..].trim_start().starts_with(':')
 }
 
 /// Scaffold a sprint's ceremony record with placeholders (see `sprint_filled` for the filled form).
@@ -293,7 +314,7 @@ pub mod test_support {
 
 #[cfg(test)]
 pub mod tests {
-    use super::{sprint, sprint_filled, PLACEHOLDER};
+    use super::{purpose_is_prefixed, sprint, sprint_filled, PLACEHOLDER};
     use super::test_support::{declare_ceremony, temp_root};
 
     /// issue267: the filled scaffold carries every section's prose, no placeholder, and ZERO
@@ -323,6 +344,54 @@ pub mod tests {
         assert!(text.contains("no new item - already tracked: d0001"));
         let tokens = keel_parser::tokenize(&text, "sprint.sysml").expect("lex");
         assert!(keel_parser::parse(tokens, "sprint.sysml").is_ok(), "the filled record parses");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// issue573 known-positive: a purpose that restates the `Sprint N:` prefix the scaffold adds is
+    /// refused before any write, naming this file and the doubled title - seventeen records read
+    /// `Sprint 725: Sprint 725: ...` because nothing did.
+    #[test]
+    fn a_purpose_restating_the_sprint_prefix_is_refused_before_the_write() {
+        let root = std::env::temp_dir().join(format!("keel-fill-prefix-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");
+        std::fs::write(root.join(".engine").join("decisions").join("0001-x.sysml"), "package D1 {\n    part d0001 : Decision { }\n}\n").expect("decision");
+        declare_ceremony(&root);
+        let mut fill: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        for k in super::FILL_KEYS {
+            fill.insert(k.to_string(), format!("{k} prose"));
+        }
+        fill.insert("purpose".to_string(), "Sprint 726: clippy lints CI's triple".to_string());
+        let err = sprint_filled(&root, 726, "prefix", "d0001", 1, "claudeFable5", &fill).expect_err("prefixed purpose refused");
+        assert!(err.contains("scaffold.rs") && err.contains("issue573") && err.contains("Sprint 726: Sprint 726:"), "{err}");
+        assert_eq!(std::fs::read_dir(root.join(".tracking").join("delivery")).map_or(0, Iterator::count), 0, "nothing was written");
+        for p in ["sprint 726: x", "  SPRINT 726 : x", "Sprint 726:x", "Sprint 725: a fill copied from the last sprint"] {
+            assert!(purpose_is_prefixed(p), "{p:?} is the prefix in another spacing, case or number");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// issue573 known-negative: a purpose that starts with the work - even one that CONTAINS the words
+    /// `Sprint 726:` later - is written, and the Story title carries the prefix once.
+    #[test]
+    fn a_purpose_starting_with_the_work_is_written_with_the_prefix_once() {
+        for p in ["clippy lints CI's triple", "the correction for Sprint 726: nothing", "Sprinter 726: x", "Sprint planning: x", "Sprint 726 was", ""] {
+            assert!(!purpose_is_prefixed(p), "{p:?} is not the prefix");
+        }
+        let root = std::env::temp_dir().join(format!("keel-fill-once-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");
+        std::fs::write(root.join(".engine").join("decisions").join("0001-x.sysml"), "package D1 {\n    part d0001 : Decision { }\n}\n").expect("decision");
+        declare_ceremony(&root);
+        let mut fill: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        for k in super::FILL_KEYS {
+            fill.insert(k.to_string(), format!("{k} prose"));
+        }
+        fill.insert("purpose".to_string(), "clippy lints CI's triple".to_string());
+        let path = sprint_filled(&root, 726, "once", "d0001", 3, "claudeFable5", &fill).expect("written");
+        let text = std::fs::read_to_string(&path).expect("read");
+        assert!(text.contains(":>> title = \"Sprint 726: clippy lints CI's triple (3 pts)\";"), "{text}");
+        assert_eq!(text.matches("Sprint 726: Sprint 726:").count(), 0);
         let _ = std::fs::remove_dir_all(&root);
     }
 

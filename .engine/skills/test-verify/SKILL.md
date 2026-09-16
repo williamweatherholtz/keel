@@ -50,7 +50,9 @@ Run from the project root. `KEEL` below is the binary named in the dispatch (def
 ### 1. Launch the ladder DETACHED, record the launch time
 
 `keel verify . --probe POSITIVE,NEGATIVE` is the pre-commit ladder (D0476): `gate validate`,
-`gate guard` (from its receipt, D0371), `cargo clippy --release --all-targets -- -D warnings`,
+`gate guard` (from its receipt, D0371), `cargo clippy --release --all-targets -- -D warnings`
+(then the same with `--target x86_64-unknown-linux-gnu` - the triple CI lints - on any host that is
+not it; a host without that std is a RED rung naming `rustup target add`, D0495/issue572),
 the D0388 probe pair named by `--probe`, then `suite --touched` - in that order, STOPPING at the
 first red, so a lint is reported in under a minute instead of after the twenty-minute run
 (sprint705). It writes `.keel/metrics/verify-receipt.toml` naming the rung it stopped at; a rung

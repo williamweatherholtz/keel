@@ -1698,4 +1698,37 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcClippyLintsTheOtherHostsCfg to issue572;
+
+    part issue573 : Issue {
+        :>> id = "6bb7f7d4-a7d4-4024-a92f-381f7a140007";
+        :>> title = "Seventeen sprint titles read Sprint N: Sprint N: because the fill's purpose restates the prefix the scaffold adds and nothing refuses it";
+        :>> createdAt = "2026-09-15";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Seventeen sprint files under .tracking/delivery carry a Story title of the shape `Sprint 725: Sprint 725: ...` (`grep -l 'title = 'Sprint [0-9]*: Sprint [0-9]*:' .tracking/delivery/*.sysml | wc -l` -> 17 at 6a493f4). `keel record sprint --fill` prefixes the fill's `purpose` field with `Sprint {number}: ` when it writes the Story title (members/keel-write/src/scaffold.rs:159) and the file's header comment (:149), and the fills I have written since D0301 begin with the same prefix, so the record says it twice. Every sprint's displayed name in orient, whats-next and the reports doubles the sprint number, and the defect has recurred across seventeen records without any control noticing: the fill path accepts a purpose that restates what the scaffold adds. Corrected at the root by the scaffold, not by editing seventeen records: a `purpose` beginning with `Sprint <N>:` (any spacing, case-insensitive) is refused at the write naming the line and the prefix the scaffold adds; the seventeen existing titles are history and stay.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcSprintPurposeIsNotPrefixed to issue573;
+
+    part issue574 : Issue {
+        :>> id = "6d4e436b-1e9b-463b-b9d1-eb8af75a2ba4";
+        :>> title = "Two commits reached main red on scripts/module_home.py --probe because the six CI script probes have no local runner";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "CI run 35025189550 on 6a493f4 is red in the step `script probes` (ci.yml:55): `scripts/module_home.py --probe -> exit 1`, its last row `FAIL this tree: no script anchors a .rs file under keel-cli/src - scripts/exec_brief/facts.py:3474`. The D0494 brief section added at eb82b52 read touched.rs by a literal `os.path.join(REPO, 'keel-cli', 'src', 'touched.rs')` in a file that already imports the resolver for exactly this (facts.py:28, `_module_home` at :3134, issue559). Two commits reached main red on it (eb82b52 and its fix 6a493f4) because the six `# ci-probe:` scripts run in CI only: `.githooks/pre-commit` runs validate, guard, check-engine, rules, clippy and the template contract, never the script probes, and the D0476 ladder has no rung for them either, so `keel land` pushed a tree whose CI verdict was already computable here. This is the third commit of the local-gate-differs-from-CI class (issue453 the touched set, issue572 the Linux clippy, now the script probes), each fixed after CI reported it. The anchor is corrected at the line (`_module_home('touched')`; `python scripts/module_home.py --probe` exits 0 at the fix). The class correction is a local runner for the same six probes: one discovery script that ci.yml and the pre-commit hook both call, so the two cannot drift, run before a commit that stages any `scripts/**/*.py`.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcScriptProbesRunBeforeCommit to issue574;
+
+    part issue575 : Issue {
+        :>> id = "3d337aa8-0c00-481e-b6e0-30d5ca91089b";
+        :>> title = "The sprint 726 verifier read the ladder's running stub 17 s after launch and reported a green 718 s ladder as killed - the wait is a sentence, not a control";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 726's VERIFIER (D0425, skill test-verify) launched `keel verify . --probe POS,NEG` detached at epoch 1789570609, read .keel/metrics/verify-receipt.toml 17 seconds later while it read `outcome = 'running'`, `running = 'clippy'`, `pid = 41212`, and wrote a receipt whose ladder line says `clippy=INCOMPLETE probe=not-run touched=not-run` and whose DISCREPANCIES line says the ladder `was killed while executing clippy rung`. Nothing was killed: `tasklist //FI 'PID eq 41212'` listed keel-serve.exe alive at that moment and the ladder finished 718 seconds after launch with `outcome = 'pass'`, `stopped_at = 'none'`, five rungs pass (clippy 61 s over both triples, probe 67 s, touched 585 s: 854 passed, 0 failed under cargo-nextest 0.9.144). The skill's step 4 heading reads `Read the ladder receipt - ONLY after the process exits` and step 5 reads `Wait until the process is gone`; the verifier returned after 145 seconds, so the wait is a sentence the agent may or may not obey, not a control (D0047). The receipt written at launch names its writer's pid (D0493), so the honest read is computable: a `running` receipt whose pid is alive is in flight, one whose pid is dead was killed, and neither is a verdict. The control is a command that blocks until that pid exits and then prints the receipt, so the verifier's steps 4 and 5 become one invocation that cannot return a running stub: `keel verify --wait .`. This is the fourth verifier misread of a receipt in flight or stale (issue468, issue472, issue565 the previous three).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcVerifyWaitsForItsPid to issue575;
 }

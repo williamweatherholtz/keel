@@ -24,6 +24,57 @@ use std::time::Instant;
 /// The ladder's receipt, machine-local beside the suite's and the touched run's.
 pub const RECEIPT: &str = ".keel/metrics/verify-receipt.toml";
 
+/// The triple CI lints (ci.yml runs clippy on ubuntu-latest).
+///
+/// A host that is not it never compiles a `#[cfg(not(windows))]` body, so its clippy proves nothing
+/// about that body: sprint 725 landed green through every local clippy and CI failed it on
+/// touched.rs:662 (issue572, D0495). The clippy rung therefore lints this triple a second time on any
+/// other host.
+pub const CI_TRIPLE: &str = "x86_64-unknown-linux-gnu";
+
+/// Whether the binary running the ladder was built for [`CI_TRIPLE`] - keel runs on the host it was
+/// built for, so the compile-time answer is the host's.
+const HOST_IS_CI_TRIPLE: bool = cfg!(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"));
+
+/// What the clippy rung does after the host's own clippy is green.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OtherHostLint {
+    /// The host IS the CI triple: one clippy is CI's clippy.
+    Once,
+    /// Lint again with `--target CI_TRIPLE`.
+    Again,
+    /// The host is not the CI triple and lacks that target's std: the rung is RED with this remedy,
+    /// never skipped (D0098 - a check that cannot run must never pass silently).
+    Refused(String),
+}
+
+/// The pure control (D0495): given whether the host is the CI triple and the toolchain's installed
+/// targets, say whether the rung lints once, again, or cannot.
+#[must_use]
+pub fn other_host_lint(host_is_ci: bool, installed: &[&str]) -> OtherHostLint {
+    if host_is_ci {
+        OtherHostLint::Once
+    } else if installed.iter().any(|t| t.trim() == CI_TRIPLE) {
+        OtherHostLint::Again
+    } else {
+        OtherHostLint::Refused(format!(
+            "clippy cannot lint {CI_TRIPLE} - the triple CI lints - because its std is not installed on this host, so every #[cfg(not(windows))] body would reach CI unlinted (issue572). REMEDY: rustup target add {CI_TRIPLE}"
+        ))
+    }
+}
+
+/// The toolchain's installed targets, one per line from `rustup target list --installed`; a toolchain
+/// without rustup answers nothing, and nothing means the other-host lint is refused, not skipped.
+fn installed_targets() -> Vec<String> {
+    Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(str::to_owned).collect())
+        .unwrap_or_default()
+}
+
 /// One rung of the ladder. Declaration order IS cost order IS run order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rung {
@@ -31,7 +82,8 @@ pub enum Rung {
     Validate,
     /// `keel gate guard ROOT` - every forward guard, answering from its receipt when inputs are equal (D0371).
     Guard,
-    /// `cargo clippy --release --all-targets -- -D warnings` over `keel-cli`.
+    /// `cargo clippy --release --workspace --all-targets -- -D warnings`, as ci.yml runs it, then again with
+    /// `--target x86_64-unknown-linux-gnu` when this host is not that triple (D0495, issue572).
     Clippy,
     /// The D0388 pair named by `--probe POSITIVE,NEGATIVE`: two commands, both must exit 0.
     Probe,
@@ -245,7 +297,8 @@ fn command_text(rung: Rung) -> String {
     match rung {
         Rung::Validate => "keel gate validate ROOT".to_owned(),
         Rung::Guard => "keel gate guard ROOT".to_owned(),
-        Rung::Clippy => "cargo clippy --release --all-targets -- -D warnings".to_owned(),
+        Rung::Clippy if HOST_IS_CI_TRIPLE => "cargo clippy --release --workspace --all-targets -- -D warnings".to_owned(),
+        Rung::Clippy => format!("cargo clippy --release --workspace --all-targets -- -D warnings ; cargo clippy --release --workspace --all-targets --target {CI_TRIPLE} -- -D warnings"),
         Rung::Probe => "--probe POSITIVE,NEGATIVE".to_owned(),
         Rung::Touched => "keel suite --touched ROOT".to_owned(),
     }
@@ -296,9 +349,36 @@ fn run_rung(rung: Rung, repo: &Path, exe: &Path, probe: Option<&(String, String)
             }
         }
         Rung::Clippy => {
-            let mut cmd = Command::new("cargo");
-            cmd.args(["clippy", "--release", "--all-targets", "--manifest-path"]).arg(repo.join("keel-cli").join("Cargo.toml")).args(["--", "-D", "warnings"]).current_dir(repo);
-            (status_of(scrub(&mut cmd)), "cargo clippy --release --all-targets --manifest-path keel-cli/Cargo.toml -- -D warnings".to_owned())
+            let clippy = |target: Option<&str>| -> Command {
+                let mut cmd = Command::new("cargo");
+                // `--workspace`, as ci.yml runs it: a member's own test target (keel-write's scaffold
+                // tests, say) is linted by CI and was not by a run over keel-cli's manifest alone.
+                cmd.args(["clippy", "--release", "--workspace", "--all-targets", "--manifest-path"]).arg(repo.join("Cargo.toml"));
+                if let Some(t) = target {
+                    cmd.args(["--target", t]);
+                }
+                cmd.args(["--", "-D", "warnings"]).current_dir(repo);
+                cmd
+            };
+            let host_line = "cargo clippy --release --workspace --all-targets -- -D warnings";
+            let v = status_of(scrub(&mut clippy(None)));
+            if v.is_red() {
+                return (v, host_line.to_owned());
+            }
+            // D0495: the host's clippy is green; now the triple CI lints, unless this host is it.
+            let installed = installed_targets();
+            let installed: Vec<&str> = installed.iter().map(String::as_str).collect();
+            match other_host_lint(HOST_IS_CI_TRIPLE, &installed) {
+                OtherHostLint::Once => (v, host_line.to_owned()),
+                OtherHostLint::Again => {
+                    println!("keel verify: clippy again for {CI_TRIPLE}, the triple CI lints (D0495)");
+                    (status_of(scrub(&mut clippy(Some(CI_TRIPLE)))), command_text(Rung::Clippy))
+                }
+                OtherHostLint::Refused(remedy) => {
+                    eprintln!("keel verify: {remedy}");
+                    (Verdict::Fail(2), command_text(Rung::Clippy))
+                }
+            }
         }
         Rung::Probe => {
             let Some((pos, neg)) = probe else {
@@ -429,7 +509,7 @@ fn print_help() {
     println!("usage: keel verify [ROOT] [--probe POSITIVE,NEGATIVE] [--no-receipt]");
     println!("  the pre-commit checks as one ladder in cost order, stopping at the first red (D0476):");
     println!("    1. keel gate validate       2. keel gate guard (from its receipt, D0371)");
-    println!("    3. cargo clippy --release --all-targets -- -D warnings");
+    println!("    3. cargo clippy --release --workspace --all-targets -- -D warnings (then --target x86_64-unknown-linux-gnu, the triple CI lints, on any other host; D0495)");
     println!("    4. the D0388 probe pair named by --probe: two command lines, both must exit 0");
     println!("    5. keel suite --touched (binaries observed green at this content are skipped, D0474)");
     println!("  Writes {RECEIPT} naming the rung it stopped at; a rung after the red is not-run, a probe rung");
@@ -511,7 +591,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{climb, exclusive_refusal, own_args, parse_probe, parse_receipt, render_receipt, Ladder, Rung, Step, Verdict};
+    use super::{climb, exclusive_refusal, other_host_lint, own_args, parse_probe, parse_receipt, render_receipt, Ladder, OtherHostLint, Rung, Step, Verdict, CI_TRIPLE};
 
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_owned()).collect()
@@ -547,6 +627,29 @@ mod tests {
         assert_eq!(asked, Rung::ORDER.to_vec());
         assert_eq!(asked.iter().filter(|r| **r == Rung::Touched).count(), 1);
         assert!(steps.iter().all(|s| s.verdict == Verdict::Pass));
+    }
+
+    /// D0388 known-positive (D0495, issue572): a host that is not the CI triple and lacks its std is
+    /// REFUSED naming the rustup remedy - the sprint 725 shape (a `#[cfg(not(windows))]` lint reaching
+    /// CI unlinted) is red here, never a skipped check.
+    #[test]
+    fn a_host_without_the_ci_triples_std_is_refused_with_the_remedy() {
+        let OtherHostLint::Refused(remedy) = other_host_lint(false, &["x86_64-pc-windows-msvc", "wasm32-unknown-unknown"]) else {
+            panic!("a missing std must refuse, not skip");
+        };
+        assert!(remedy.contains(&format!("rustup target add {CI_TRIPLE}")), "{remedy}");
+        assert!(remedy.contains("issue572"), "{remedy}");
+        assert_eq!(other_host_lint(false, &[]), OtherHostLint::Refused(remedy), "no rustup at all is the same refusal");
+    }
+
+    /// D0388 known-negative: a host that is not the CI triple but has its std lints AGAIN; the CI triple
+    /// itself lints once - its clippy already is CI's.
+    #[test]
+    fn a_host_with_the_ci_triples_std_lints_again_and_the_ci_triple_once() {
+        assert_eq!(other_host_lint(false, &["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]), OtherHostLint::Again);
+        assert_eq!(other_host_lint(false, &["  x86_64-unknown-linux-gnu\r"]), OtherHostLint::Again, "rustup's line endings are trimmed");
+        assert_eq!(other_host_lint(true, &[]), OtherHostLint::Once);
+        assert_eq!(other_host_lint(true, &["x86_64-unknown-linux-gnu"]), OtherHostLint::Once);
     }
 
     /// An unnamed pair is recorded, not invented (D0388): the probe rung is `not-named`, the runner is

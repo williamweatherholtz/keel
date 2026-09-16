@@ -3471,7 +3471,7 @@ _f494 = _decision_facts(_d0494, "d0494")
 _tv94 = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
 _tv94_claude = read(os.path.join(REPO, ".claude", "skills", "test-verify", "SKILL.md")) or ""
 _stems94 = next((l for l in _tv94.splitlines() if l.startswith("| `stems` |")), "")
-_touched94 = read(os.path.join(REPO, "keel-cli", "src", "touched.rs")) or ""
+_touched94 = read(_module_home("touched") or "") or ""  # issue559/issue574: resolved, never anchored
 _emb94_m = re.search(r"^pub fn embedded_stem\(path: &str\) -> Option<String> \{.*?^\}", _touched94, re.S | re.M)
 _emb94 = _emb94_m.group(0) if _emb94_m else ""
 _emb94_line = (_touched94[: _emb94_m.start()].count("\n") + 1) if _emb94_m else None
@@ -3589,6 +3589,100 @@ fact("verifierStemsRow", {
      "priority, D0052). obligations: each red-yield file's existence, its `#Resolves dependency from d0494 to obligationX;` edge, "
      "the locked file and guard it names, and whether D0494's consequences name it. sprint725 = results / outcomes / shas / charter "
      "from its delivery file.")
+
+# ================================================================ 33. clippy lints the triple CI lints (D0495 / issue572)
+# The Decision's fields as the guard reads them; the pure control in verify.rs and its two tests; the hook's second
+# clippy and its GATE CANNOT RUN branch; the skill sentence and its .claude copy; this host's triple and installed
+# targets; the ladder receipt's clippy rung (both command lines, its seconds) and the probe/touched rungs; the four
+# Issues of the local-gate-differs-from-CI class and their resolvers; sprint 726.
+_d0495 = _dec_file("0495-")
+_f495 = _decision_facts(_d0495, "d0495")
+_verify95 = read(_module_home("verify") or "") or ""
+_ohl95_m = re.search(r"^pub fn other_host_lint\(host_is_ci: bool, installed: &\[&str\]\) -> OtherHostLint \{.*?^\}", _verify95, re.S | re.M)
+_ohl95 = _ohl95_m.group(0) if _ohl95_m else ""
+_ohl95_line = (_verify95[: _ohl95_m.start()].count("\n") + 1) if _ohl95_m else None
+_hook95 = read(os.path.join(REPO, ".githooks", "pre-commit")) or ""
+_tv95 = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
+_tv95_claude = read(os.path.join(REPO, ".claude", "skills", "test-verify", "SKILL.md")) or ""
+_ok95h, _rustc95 = run(["rustc", "-vV"])
+_host95 = (re.search(r"^host: (\S+)", _rustc95 or "", re.M) or [None, None])[1] if _ok95h else None
+_ok95t, _targets95 = run(["rustup", "target", "list", "--installed"])
+_installed95 = sorted(l.strip() for l in (_targets95 or "").splitlines() if l.strip()) if _ok95t else None
+_vr95 = _receipt94("verify-receipt.toml")
+_vr95_text = read(os.path.join(REPO, ".keel", "metrics", "verify-receipt.toml")) or ""
+_clippy95 = re.search(r'^\[\[rung\]\]\nname = "clippy"\nverdict = "(\w+)"\nexit = (\d+)\nseconds = (\d+)\ncommand = "([^"]*)"', _vr95_text, re.M)
+_rung95_secs = {n: int(s) for n, s in re.findall(r'^\[\[rung\]\]\nname = "(\w+)"\nverdict = "\w+"\nexit = \d+\nseconds = (\d+)', _vr95_text, re.M)}
+_tr95 = _receipt94("touched-receipt.toml")
+_i572, _i573 = _issue_facts("572", "dcClippyLintsTheOtherHostsCfg"), _issue_facts("573", "dcSprintPurposeIsNotPrefixed")
+_i574, _i575 = _issue_facts("574", "dcScriptProbesRunBeforeCommit"), _issue_facts("575", "dcVerifyWaitsForItsPid")
+_s726 = _sprint_facts("sprint726_clippyLintsTheTripleCiLints.sysml", "d0495")
+_nw95 = re.search(r"action def NextWork \{(.*?)^    \}", _bl, re.S | re.M)
+_nw95_actions = re.findall(r"^\s{8}action (\w+);", _nw95.group(1), re.M) if _nw95 else []
+_ci95_ok, _ci95_out = run(["gh", "run", "list", "--limit", "6", "--json", "conclusion,status,headSha,event,databaseId,createdAt"], timeout=60)
+try:
+    _ci95 = json.loads(_ci95_out) if _ci95_ok else None
+except ValueError:
+    _ci95 = None
+fact("clippyLintsCiTriple", {
+    **_f495,
+    "namesIssue572": "issue572" in (_f495["context"] or ""),
+    "namesTouchedLine": "touched.rs:662" in (_f495["context"] or ""),
+    "namesSecondInstance": "this is the second" in (_f495["context"] or ""),
+    "namesD0098": "D0098" in (_f495["decision"] or ""),
+    "namesRemedy": "rustup target add x86_64-unknown-linux-gnu" in (_f495["decision"] or ""),
+    "saysProcessChange": "This is a process-change" in (_f495["rationale"] or ""),
+    "binary": {
+        "constFound": 'pub const CI_TRIPLE: &str = "x86_64-unknown-linux-gnu";' in _verify95,
+        "controlFound": bool(_ohl95), "controlLine": _ohl95_line,
+        "controlOnceForCi": "if host_is_ci" in _ohl95 and "OtherHostLint::Once" in _ohl95,
+        "controlAgainWhenInstalled": "OtherHostLint::Again" in _ohl95,
+        "controlRefusesWithRemedy": "OtherHostLint::Refused" in _ohl95 and "rustup target add" in _ohl95 and "issue572" in _ohl95,
+        "positiveTestFound": "fn a_host_without_the_ci_triples_std_is_refused_with_the_remedy()" in _verify95,
+        "negativeTestFound": "fn a_host_with_the_ci_triples_std_lints_again_and_the_ci_triple_once()" in _verify95,
+        "rungRunsWorkspace": "--workspace" in _verify95 and "--all-targets" in _verify95,
+    },
+    "hook": {
+        "secondClippyFound": 'cargo clippy --workspace --all-targets --target "$ci_triple" -- -D warnings' in _hook95,
+        "hostFromRustc": "rustc -vV" in _hook95,
+        "installedTest": 'rustup target list --installed' in _hook95,
+        "cannotRunBranch": "GATE CANNOT RUN" in _hook95 and "rustup target add $ci_triple" in _hook95,
+        "namesD0495": "D0495" in _hook95,
+    },
+    "skill": {
+        "namesSecondCommand": "--target x86_64-unknown-linux-gnu" in _tv95,
+        "namesRedRung": "RED rung naming `rustup target add`" in _tv95,
+        "claudeCopyIdentical": bool(_tv95) and _tv95 == _tv95_claude,
+    },
+    "host": {"triple": _host95, "isCiTriple": _host95 == "x86_64-unknown-linux-gnu",
+             "installedTargets": _installed95, "ciStdInstalled": bool(_installed95 and "x86_64-unknown-linux-gnu" in _installed95)},
+    "live": {
+        "verifierReceipt": _vr95,
+        "clippyRung": {"verdict": _clippy95.group(1), "exit": int(_clippy95.group(2)), "seconds": int(_clippy95.group(3)),
+                       "command": _clippy95.group(4),
+                       "namesBothTriples": _clippy95.group(4).count("cargo clippy") == 2 and "--target x86_64-unknown-linux-gnu" in _clippy95.group(4)} if _clippy95 else None,
+        "rungSeconds": _rung95_secs,
+        "touchedReceipt": _tr95,
+    },
+    "issues": {"issue572": _i572, "issue573": _i573, "issue574": _i574, "issue575": _i575},
+    "classMembers": [n for n, i in (("issue453", None), ("issue572", _i572), ("issue574", _i574)) if i is None or i["exists"]],
+    "resolverPositions": {a: (_nw95_actions.index(a) + 1 if a in _nw95_actions else None)
+                          for a in ("dcClippyLintsTheOtherHostsCfg", "dcSprintPurposeIsNotPrefixed", "dcScriptProbesRunBeforeCommit", "dcVerifyWaitsForItsPid")},
+    "nextWorkItems": len(_nw95_actions),
+    "sprint726": {k: v for k, v in _s726.items() if k != "text"},
+    "ci": _ci95,
+} if _d0495 and _verify95 else None, "the other-host clippy: Decision, pure control and tests, hook branch, skill sentence, host, receipts, the class's Issues, sprint",
+     _DEC_HOW + " Names by literal search in the field named. binary: keel-cli/src/verify.rs (resolved by scripts/module_home.py) searched for the "
+     "CI_TRIPLE const, the `pub fn other_host_lint` body (its 1-based line) and its three arms, the two test fns and `--workspace`. hook: "
+     ".githooks/pre-commit searched for the `--target \"$ci_triple\"` clippy, `rustc -vV`, `rustup target list --installed`, the GATE "
+     "CANNOT RUN branch naming `rustup target add`, and `D0495`. skill: .engine/skills/test-verify/SKILL.md searched for the `--target` "
+     "command and the RED-rung sentence; claudeCopyIdentical = byte equality with the .claude copy. host: `rustc -vV` host line; "
+     "`rustup target list --installed` sorted. live: .keel/metrics/verify-receipt.toml as the D0494 reader parses it, plus the clippy "
+     "[[rung]] row's verdict/exit/seconds/command (namesBothTriples = two `cargo clippy` and one `--target x86_64-unknown-linux-gnu`) and "
+     "every rung's seconds; touched-receipt.toml likewise. issues: each from .tracking/issues-claudeFable5.sysml with its #Resolves edge "
+     "and whether the resolver's DoD names it. classMembers = the local-gate-differs-from-CI Issues (issue453 by citation in D0495's "
+     "context, the others by existence). resolverPositions = 1-based place among `action x;` in NextWork (declaration order IS priority, "
+     "D0052). sprint726 from its delivery file. ci = `gh run list --limit 6 --json conclusion,status,headSha,event,databaseId,createdAt` "
+     "verbatim (D0420: the conclusion field, never a wrapper's exit); null when gh is unavailable.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "

@@ -116,6 +116,23 @@ if [ -n "$rust_staged" ] && [ -f "Cargo.toml" ]; then
         echo "pre-commit: cargo clippy"
         cargo clippy --workspace --all-targets -- -D warnings || {
             echo "pre-commit: CARGO CLIPPY FAILED — commit aborted (SKIP_VALIDATE=1 to bypass)"; exit 1; }
+        # D0495/issue572: CI lints x86_64-unknown-linux-gnu (ci.yml, ubuntu-latest). A host that is not
+        # that triple never compiles a #[cfg(not(windows))] body, so the clippy above proves nothing
+        # about it - sprint 725 landed green here and CI failed it on touched.rs:662. Lint CI's triple
+        # too; a host without its std is a gate that cannot run, which blocks (D0098), never skips.
+        ci_triple="x86_64-unknown-linux-gnu"
+        host_triple=$(rustc -vV 2>/dev/null | sed -n 's/^host: //p')
+        if [ "$host_triple" != "$ci_triple" ]; then
+            if rustup target list --installed 2>/dev/null | grep -qx "$ci_triple"; then
+                echo "pre-commit: cargo clippy --target $ci_triple (the triple CI lints, D0495)"
+                cargo clippy --workspace --all-targets --target "$ci_triple" -- -D warnings || {
+                    echo "pre-commit: CARGO CLIPPY FAILED for $ci_triple — a lint in a cfg body this host never compiles; CI would fail it (issue572). Commit aborted (SKIP_VALIDATE=1 to bypass)"; exit 1; }
+            else
+                echo "pre-commit: GATE CANNOT RUN — CI lints $ci_triple and this host ($host_triple) has no std for it, so #[cfg(not(windows))] code would reach CI unlinted (issue572)."
+                echo "pre-commit:   REMEDY: rustup target add $ci_triple. Explicit bypass: SKIP_VALIDATE=1"
+                exit 1
+            fi
+        fi
     else
         echo "pre-commit: GATE CANNOT RUN — rust files staged but cargo not found."
         echo "pre-commit:   REMEDY: install the rust toolchain. Explicit bypass: SKIP_VALIDATE=1"
