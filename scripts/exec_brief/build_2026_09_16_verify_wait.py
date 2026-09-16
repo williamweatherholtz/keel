@@ -382,17 +382,17 @@ ASKS = [
 panel_bodies = {
     "wait": f"""<h2>The wait for a launched ladder must be a command</h2>
 {clause(WF)}
-<p><strong>What happened:</strong> a verifier launched the ladder detached, read its running stub seconds later, and reported a green ladder as killed. The wait was a sentence in its procedure.</p>
-<p><strong>What changes:</strong> <q>verify --wait</q> blocks while the stub's writer is alive, prints the finished table, and calls a dead writer KILLED - never a verdict. The procedure's two read steps open with it.</p>
+<p><strong>What happened:</strong> a verifier read the running stub seconds after launch and called a green ladder killed. The wait was a sentence.</p>
+<p><strong>What changes:</strong> <q>verify --wait</q> blocks while the writer lives, prints the finished table, calls a dead writer KILLED, never a verdict. Both read steps open with it.</p>
 {figW1}
 {figW2}
 {figW3}
 {courses([
     ("Accept (recommended)", "an early read is impossible, not forbidden", "one command per read step"),
-    ("Refuse at the recorder instead", "the wait stays a sentence; a running stub is refused when recorded", "the ladder is still misread, later"),
+    ("Refuse at the recorder instead", "the wait stays a sentence; a running stub is refused at recording", "misread later"),
     ("Do nothing", "nothing", "the next early read is the next false KILLED"),
 ])}
-<p><strong>True:</strong> the control is pure over the receipt and a liveness answer; {N_PROBE_TESTS} tests hold its three answers; the refusal and the help ran live; {N_WAIT_STEPS} steps open with it. <strong>Mine:</strong> liveness, not age, separates in-flight from killed. <strong>What decides it:</strong> may a subagent's wait be a sentence it can skip. <strong>Wrong if</strong> a live pid ever outlives a finished ladder on this host.</p>
+<p><strong>True:</strong> the control is pure over receipt text and a liveness answer; {N_PROBE_TESTS} tests hold its answers; the refusal ran live; {N_WAIT_STEPS} steps open with it. <strong>Mine:</strong> liveness, not age, separates in flight from killed. <strong>What decides it:</strong> may a subagent's wait be a skippable sentence. <strong>Wrong if</strong> a live pid outlives a finished ladder.</p>
 {opts("ask-wait", "d0497", [
     ("Accept (recommended)", "Accept: the wait for a launched ladder is a command, keel verify --wait - it blocks while the receipt's writer pid is alive, prints the finished table and exits as the ladder did, reports a dead writer as KILLED during <rung> with exit 2 and never a verdict, and the test-verify skill's steps 4 and 5 open with it (recommended)"),
     ("Refuse at the recorder instead", "Reject the command: keep the wait as a skill sentence and have the recorder refuse a receipt whose outcome is running"),
@@ -461,20 +461,20 @@ def frame(panels_html, tabs_html, title, sub):
 <h1 data-digest="title">{title}</h1>
 <div class="topbar"><p class="sub" data-digest="subtitle">{sub}</p><button class="copy" data-copy type="button" aria-label="Copy this brief for AI">&#8681; Copy for AI</button></div>
 
-<div class="ask"><p class="verdict"><strong>Accept all four</strong>: the verifier's wait is a command it cannot skip; CI's probes and lint run before the commit, refusing when they cannot; the stems row says what the binary does.</p></div>
-<div class="chips"><span class="chip"><b>Decisions waiting</b> {pending}</span><span class="chip"><b>Forks</b> 0</span><span class="chip"><b>Ladder seconds the wait covers</b> {LADDER_S}</span><span class="chip"><b>CI-only reds, the class</b> {N_CLASS}</span></div>
+<div class="ask"><p class="verdict"><strong>Accept all four</strong>: the wait is a command; CI's probes and lint run before the commit; the stems row says what the binary does.</p></div>
+<div class="chips"><span class="chip"><b>Decisions waiting</b> {pending}</span><span class="chip"><b>Forks</b> 0</span><span class="chip"><b>Ladder seconds waited</b> {LADDER_S}</span><span class="chip"><b>CI-only reds, the class</b> {N_CLASS}</span></div>
 
 <div class="tabs" role="tablist" aria-label="The asks">{tabs_html}</div>
 {panels_html}
 <label class="note-row">Anything to add<textarea data-d="note" rows="2" placeholder="optional"></textarea></label>
 <div class="copy-bottom"><button class="copy" data-copy type="button">&#8681; Copy for AI</button></div>
-<footer data-digest="provenance">Computed from the repository at {TREE} on {DATE}; {dirty} uncommitted files; {tests} tests, {failing} failing; CI red on {N_CI_RED} of the last {len(CI_PUSH)} pushes. Clauses quoted; record names glossed. <a href="https://github.com/williamweatherholtz/sysmlv2-ai-toolkit" target="_blank" rel="noopener">repository</a>.</footer>
+<footer data-digest="provenance">Computed from the repository at {TREE} on {DATE}; {dirty} uncommitted files; {tests} tests, {failing} failing; CI red on {N_CI_RED} of the last {len(CI_PUSH)} pushes. <a href="https://github.com/williamweatherholtz/sysmlv2-ai-toolkit" target="_blank" rel="noopener">repository</a>.</footer>
 </div>
 """
 
 
 TITLE = "Accept the wait command, the probe runner, the CI-triple lint and the stems row"
-SUB = "Four held process changes, none a fork, all under the process lock"
+SUB = "Four held process changes, none a fork"
 
 
 def render(panel_bodies):
