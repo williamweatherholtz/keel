@@ -1797,4 +1797,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcQuotedProbeLineIsRefused to issue581;
+
+    part issue582 : Issue {
+        :>> id = "e62ca2b2-e23b-44dc-b181-b600e83c17a7";
+        :>> title = "The brief's pair-file stem sensor read a side's drive letter as the stem: a greedy regex over a command line, right by the shape of its input";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The decision brief's fact reader (scripts/exec_brief/facts.py, probeRung.fileStem) read the pair file of the latest verify ladder as `control_structure ; python C` on 2026-09-16. The receipt's probe command was `--probe-from <scratchpad>/pair732.txt: python scripts/module_home.py view/knowledge guard_names view/control_structure ; python C:/<scratchpad>/neg732.py`; the sensor's regex `--probe-from (?:.*[///])?([^///:]+):` is greedy, so `.*` ran past `pair732.txt:` to the last slash of the second SIDE and took the `C:` of that side's own path as the stem's terminating colon. Brief 38's sides were two cargo test names with no colon, so the same expression read `pair731.txt` correctly the publish before; the sensor was right by the shape of its input, not by construction. CAUGHT before the claim: the thirty-ninth builder refused at the check that compares the pair's sides to the tests it expected (a check about a different fact), and the fileStem value was read in the refused facts file. Had that check not existed the page would have quoted the false stem inside a sentence the reader is told is measured. Same class as issue553 and issue400: a kept check with no known answers - facts.py carried a D0388 pair on one sensor (the exit code) and on none of the regular expressions it runs over receipts, command lines and paths. Corrected at the root in this commit: the stem is read by one helper, non-greedy and refusing a stem with a space, `;` or `:`, with its positive (the sprint 732 line) and negative (a --probe line with no file) run before any fact; the builder refuses a stem that is not one token. The class control - every text-parsing sensor in that file carries its pair and a source scan refuses an unprobed one - is dcFactSensorsCarryTheirPair.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcFactSensorsCarryTheirPair to issue582;
 }

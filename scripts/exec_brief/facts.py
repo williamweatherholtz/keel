@@ -110,6 +110,23 @@ if not (_rc_pos == 1 and _rc_neg == 0):
              % (_rc_pos, _rc_neg))
 _own = open(__file__, encoding="utf-8").read()
 _bad_exit_keys = re.findall(r'"(exit0|probeExit0)":\s*(?:bool\()?_?f?ok\b', _own)
+
+
+def _pair_file_stem(probe_cmd):
+    """The pair file's basename from a verify receipt's probe `command` (`--probe-from PATH: side ; side`), or None.
+
+    issue582 - the first form was greedy (`.*[/\\\\]`) and, on sprint 732's receipt, ran past `pair732.txt:` to the last
+    slash of a SIDE whose own path carried `C:`, reading `control_structure ; python C` as the stem. Non-greedy, and a
+    stem is one token: no space, `;` or `:`. The D0388 pair below runs before any fact and refuses the emission."""
+    m = re.search(r"--probe-from (?:.*?[/\\])?([^/\\:\s;]+):", probe_cmd or "")
+    return m.group(1) if m and re.fullmatch(r"[\w.-]+", m.group(1)) else None
+
+
+_stem_pos = _pair_file_stem("--probe-from C:/t/scratch/pair732.txt: python scripts/module_home.py a b ; python C:/t/scratch/neg732.py")
+_stem_neg = _pair_file_stem("--probe a_probe_file_names_the_pair,a_probe_file_that_is_not_a_pair_is_refused")
+if not (_stem_pos == "pair732.txt" and _stem_neg is None):
+    sys.exit("facts.py: the pair-file stem sensor failed its probe pair (positive %r, negative %r); refusing to emit"
+             % (_stem_pos, _stem_neg))
 if _bad_exit_keys:
     sys.exit("facts.py: %d fact key(s) named for an exit derive from run()'s ok flag (%s); use run_rc"
              % (len(_bad_exit_keys), ", ".join(_bad_exit_keys)))
@@ -4055,7 +4072,8 @@ fact("probePairTravelsInAFile", {
                             "stoppedAt": (re.search(r'^stopped_at = "([^"]+)"', _vr00_receipt, re.M) or [None, None])[1],
                             "rungsGreen": len([v for v in (_vr00_fact.get("rungs") or {}).values() if v == "pass"])},
         "probeRung": {"verdict": _probe00.group(1), "exit": int(_probe00.group(2)), "seconds": int(_probe00.group(3)),
-                      "namesAFile": _probe00_cmd.startswith("--probe-from "), "fileStem": (re.search(r"--probe-from (?:.*[/\\])?([^/\\:]+):", _probe00_cmd) or [None, None])[1],
+                      "namesAFile": _probe00_cmd.startswith("--probe-from "),
+                      "fileStem": _pair_file_stem(_probe00_cmd), "fileStemIsAStem": _pair_file_stem(_probe00_cmd) is not None,
                       "sides": [s.strip() for s in _probe00_cmd.split(": ", 1)[1].split(" ; ")] if ": " in _probe00_cmd else [],
                       "sidesAreTheTests": all(t in _probe00_cmd for t in ("a_probe_file_names_the_pair", "a_probe_file_that_is_not_a_pair_is_refused"))} if _probe00 else None,
         "rungSeconds": _rung00_secs,
@@ -4272,6 +4290,148 @@ fact("subagentOwnStartAndVerifierStop", {
      "`probe` or `keel-facts-` excluded): subagent-start fires, verifier:tree-written and recorder:tree-red lines, subagent-stop block lines ever and in the "
      "UTC day 2026-09-16 by ts; agentFpFiles = agent-*.fp under .keel/metrics now. issue578 as section 37. resolverPositions as section 34; backlogItems = every "
      "`action x;` in backlog.sysml. sprint731 from its delivery file, charter d0502, plus literal `issue578`, `dispatch order` and the standup's ordering sentence.")
+# ================================================================ 39. D0503 - the guard-name list is a fact of the schema member (sprint 732, brief 39)
+_d0503 = _dec_file("0503-")
+_f503 = _decision_facts(_d0503, "d0503")
+_gn03_path = os.path.join(REPO, "members", "keel-schema", "src", "guard_names.rs")
+_gn03 = read(_gn03_path) or ""
+_gd03_path = _module_home("guards")
+_gd03 = read(_gd03_path or "") or ""
+_gd03_rel = os.path.relpath(_gd03_path, REPO).replace(os.sep, "/") if _gd03_path else None
+_cp03 = read(os.path.join(REPO, "members", "keel-view", "src", "control_proof.rs")) or ""
+_vc03 = read(os.path.join(REPO, "members", "keel-view", "Cargo.toml")) or ""
+_vl03 = read(os.path.join(REPO, "members", "keel-view", "src", "lib.rs")) or ""
+_cl03 = read(_mh("lib", crate="keel-cli") or "") or ""
+_gdoc03 = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_sp03 = read(os.path.join(REPO, ".engine", "processes", "stpa-diagram.sysml")) or ""
+_sk03 = read(os.path.join(REPO, ".engine", "skills", "stpa-diagram", "SKILL.md")) or ""
+_sk03c = read(os.path.join(REPO, ".claude", "skills", "stpa-diagram", "SKILL.md")) or ""
+_reg03 = read(os.path.join(REPO, ".tracking", "architecture", "code-registry.sysml")) or ""
+_mh03 = read(os.path.join(REPO, "scripts", "module_home.py")) or ""
+_gn03_decl = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gn03, re.S)
+_gn03_names = re.findall(r'"([^"]+)"', _gn03_decl.group(2)) if _gn03_decl else []
+_gd03_decl = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\]", _gd03)
+_gsf03 = (re.search(r"const GUARD_SOURCE_FILES: &\[&str\] = &\[(.*?)\];", _gd03) or [None, ""])[1]
+_gsf03_paths = re.findall(r'"([^"]+)"', _gsf03)
+_vdeps03 = re.findall(r"^([\w-]+)\s*=\s*\{\s*path\s*=", (re.search(r"\[dependencies\](.*?)(?:\n\[|\Z)", _vc03, re.S) or [None, ""])[1], re.M)
+_view03_mods = sorted(f[:-3] for f in os.listdir(os.path.join(REPO, "members", "keel-view", "src", "view")) if f.endswith(".rs") and f != "mod.rs") \
+    if os.path.isdir(os.path.join(REPO, "members", "keel-view", "src", "view")) else []
+_reexp03 = [m for m in ("control_proof", "arch", "govern", "pm", "view") if re.search(r"^pub use keel_view::" + m + r";", _cl03, re.M)]
+_members03 = sorted(d for d in os.listdir(os.path.join(REPO, "members")) if os.path.isdir(os.path.join(REPO, "members", d, "src")))
+_view03_files = sum(len([f for f in fs if f.endswith(".rs")]) for _, _, fs in os.walk(os.path.join(REPO, "members", "keel-view", "src")))
+_view03_lines = sum(len((read(os.path.join(dp, f)) or "").splitlines()) for dp, _, fs in os.walk(os.path.join(REPO, "members", "keel-view", "src")) for f in fs if f.endswith(".rs"))
+# the landed commit's shape: the sprint's diff against the commit before it (renames followed, D0479's "moved, not rewritten")
+_ok03d, _out03d = run(["git", "diff", "--name-status", "-M", "397e49c", "d2ee86e"])
+_codes03 = [l.split("\t")[0][:1] for l in (_out03d or "").splitlines() if l.strip()]
+_ok03s, _out03s = run(["git", "diff", "--shortstat", "397e49c", "d2ee86e"])
+_short03 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out03s or "")
+# live: what the binary states about the list, and the lock's own verdict on this tree
+_rc03v, _out03v = run_rc([KEEL, "version"], timeout=60)
+_guards03_line = next((l for l in (_out03v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards03_n = int(re.search(r"guards:\s*(\d+)", _guards03_line).group(1)) if re.search(r"guards:\s*(\d+)", _guards03_line) else None
+_rc03g, _out03g = run_rc([KEEL, "gate", "guard", "process-change", "--no-receipt", "."], timeout=300)
+_pc03_last = (_out03g or "").strip().splitlines()[-1] if (_out03g or "").strip() else ""
+_pc03 = re.search(r"\[guard:process-change\] (PASS|FAIL)", _pc03_last)
+_i579 = _issue_facts("579", "storyViewIsAMember")
+_i580 = _issue_facts("580", "dcWorkspaceLayeringIsGuarded")
+_i581 = _issue_facts("581", "dcQuotedProbeLineIsRefused")
+_s732 = _sprint_facts("sprint732_viewIsAMember.sysml", "d0479")
+# the issues guard's rule (guards.rs, issue333/D0304): the resolver names the issue in its title, DoD text or decision, OR the issue names its resolver
+_i580["resolverNamedByIssue"] = "dcWorkspaceLayeringIsGuarded" in (re.search(r"part issue580 : Issue\s*\{(.*?)\n\s*\}", _iss, re.S) or [None, ""])[1]
+_i581["resolverDodNamesIssue"] = bool(re.search(r"dcQuotedProbeLineIsRefusedDoD[^\n]*resolves issue581", _bl))
+_i579["resolverDodNamesIssue"] = "this story resolves issue579" in (_s732.get("text") or "")
+_reg03_view = re.search(r"part ceViewCore : CodeElement \{(.*?)\n\s*\}", _reg03, re.S)
+_reg03_arch = re.search(r"part ceArchViewsMember : CodeElement \{(.*?)\n\s*\}", _reg03, re.S)
+fact("guardNameListIsASchemaFact", {
+    **_f503,
+    "dependsOnD0479": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0503\s+to\s+d0479\s*;", _d0503)),
+    "namesThirdExtraction": "the third D0479 extraction" in (_f503["context"] or ""),
+    "namesTheOneReference": "control_proof::census read GUARD_NAMES" in (_f503["context"] or ""),
+    "namesLockCannotTell": "the lock cannot tell a declaration move from a disarm" in (_f503["context"] or ""),
+    "namesD0486Precedent": "sprint 718 met the same lock and recorded D0486" in (_f503["context"] or ""),
+    "namesNewHome": "members/keel-schema/src/guard_names.rs" in (_f503["decision"] or ""),
+    "namesReExport": "re-exported by keel-cli/src/guards.rs under its old path" in (_f503["decision"] or ""),
+    "namesJoinsLock": "guard_names.rs joins GUARD_SOURCE_FILES" in (_f503["decision"] or ""),
+    "namesRendererHome": "members/keel-view/src/view/stpa_diagram.rs" in (_f503["decision"] or ""),
+    "namesNoGuardChanges": "No guard's name, dispatch, severity or gate set changes" in (_f503["decision"] or ""),
+    "namesOneHome": "One home per fact (D0105)" in (_f503["rationale"] or ""),
+    "namesDisarmClass": "issue236's class" in (_f503["rationale"] or ""),
+    "namesTwoLockedFiles": "Adding a guard edits two locked files instead of one" in (_f503["consequences"] or ""),
+    "namesThirdMeeting": "dcGuardsAreMembersPerFamily meets the lock a third time" in (_f503["consequences"] or ""),
+    "namesReversesNothing": "reverses nothing" in (_f503["consequences"] or ""),
+    "source": {
+        "listDeclaredInSchema": bool(_gn03_decl),
+        "declaredCount": int(_gn03_decl.group(1)) if _gn03_decl else None,
+        "listedNames": len(_gn03_names),
+        "countMatchesList": bool(_gn03_decl) and int(_gn03_decl.group(1)) == len(_gn03_names),
+        "listNoLongerDeclaredInGuards": not _gd03_decl,
+        "guardsReExports": bool(re.search(r"^pub use keel_schema::guard_names::GUARD_NAMES;", _gd03, re.M)),
+        "guardNamesOnTheLock": "members/keel-schema/src/guard_names.rs" in _gsf03_paths,
+        "lockPaths": _gsf03_paths,
+        "lockCommentNamesSprint": "guard_names.rs holds GUARD_NAMES (sprint 732)" in _gd03,
+        "dispatchTest": "fn every_enforced_guard_dispatches()" in _gd03,
+        "surfaceTest": "fn enforcement_surface_covers_every_guard_source()" in _gd03,
+        "censusReadsSchema": "census_over(root, &keel_schema::guard_names::GUARD_NAMES)" in _cp03,
+        "viewDependsOn": _vdeps03,
+        "viewReadsNoCrateAbove": bool(_vdeps03) and not any(d in ("keel-cli",) for d in _vdeps03),
+        "viewSubmodules": _view03_mods,
+        "viewSubmoduleCount": len(_view03_mods),
+        "viewTopModules": [m for m in ("arch", "control_proof", "govern", "pm", "view") if re.search(r"^pub mod " + m + r";", _vl03, re.M)],
+        "cliReExports": _reexp03,
+        "viewRsFiles": _view03_files, "viewRsLines": _view03_lines,
+        "members": _members03, "memberCount": len(_members03),
+        "moduleHomeKnowsGuardNames": '("guard_names", os.path.join("members", "keel-schema", "src", "guard_names.rs"))' in _mh03,
+    },
+    "landed": {
+        "renames": _codes03.count("R"), "modified": _codes03.count("M"), "added": _codes03.count("A"), "deleted": _codes03.count("D"),
+        "filesChanged": int(_short03.group(1)) if _short03 else None,
+        "insertions": int(_short03.group(2)) if _short03 and _short03.group(2) else None,
+        "deletions": int(_short03.group(3)) if _short03 and _short03.group(3) else None,
+    } if _ok03d and _ok03s else None,
+    "declared": {
+        "guardsDocNamesTheFile": "members/keel-schema/src/guard_names.rs" in _gdoc03 and "since D0503" in _gdoc03,
+        "processNamesRenderer": "members/keel-view/src/view/stpa_diagram.rs" in _sp03,
+        "processNamesOldPath": "keel-cli/src/view/stpa_diagram.rs" in _sp03,
+        "skillNamesRenderer": "members/keel-view/src/view/stpa_diagram.rs" in _sk03,
+        "claudeCopyAgrees": _sk03 == _sk03c and bool(_sk03),
+        "registryViewCorePath": (re.search(r'filePath\s*=\s*"([^"]+)"', _reg03_view.group(1)) or [None, None])[1] if _reg03_view else None,
+        "registryArchMemberPath": (re.search(r'filePath\s*=\s*"([^"]+)"', _reg03_arch.group(1)) or [None, None])[1] if _reg03_arch else None,
+        "registryArchSupersedes": "#Supersede dependency from ceArchViewsMember to ceArchViews;" in _reg03,
+    },
+    "live": {
+        "version": {"exit0": _rc03v == 0, "guardsLine": _guards03_line.strip() or None, "guards": _guards03_n,
+                    "matchesTheList": _guards03_n is not None and _guards03_n == len(_gn03_names)},
+        "processChange": {"exit0": _rc03g == 0, "verdict": _pc03.group(1) if _pc03 else None, "line": _pc03_last[:240] or None},
+    },
+    "issue579": _i579, "issue580": _i580, "issue581": _i581,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcSuiteIsAMember", "dcGuardsAreMembersPerFamily", "dcWorkspaceLayeringIsGuarded", "dcQuotedProbeLineIsRefused", "dcOneRepoRootHelper")},
+    "backlogItems": len(_bl00_actions),
+    "sprint732": {k: v for k, v in _s732.items() if k != "text"} | ({
+        "retroNamesIssue579": "issue579" in _s732["text"] or "an Issue with the widened regex" in _s732["text"],
+        "retroNamesIssue581": "issue581" in _s732["text"],
+        "retroNamesModgraphVacuous": "modgraph.py --check" in _s732["text"] and "cannot fail on what it names" in _s732["text"],
+        "retroNamesAnchorControlFired": "fired for the first time on a real move" in _s732["text"],
+        "retroNamesD0486Pattern": "as sprint 718 needed D0486" in _s732["text"],
+        "retroFindings": len(re.findall(r"(?:^|[.;] )\((\d)\) ", (re.search(r'viewIsAMemberRetroGate[^\n]*procedureText = "([^"]*)"', _s732["text"]) or [None, ""])[1])),
+        "dodSaysHelpByteIdentical": "keel --help is byte-identical to the pre-move render" in _s732["text"],
+        "dodSaysGuardsUnchanged": "keel version's guards line is unchanged at 75" in _s732["text"],
+    } if _s732.get("exists") else {}),
+} if _d0503 and _gn03 and _gd03 else None,
+     "the held record for the guard-name list's move: Decision, the list and the lock in source, the member's read set, the landed diff, the declaration homes, live version and lock verdict, issues 579-581, sprint 732",
+     _DEC_HOW + " Names by literal search in the field named; dependsOnD0479 = the `#DependsOn dependency from d0503 to d0479;` line. source: "
+     "members/keel-schema/src/guard_names.rs searched for `pub const GUARD_NAMES: [&str; N] = [...]` (N and the quoted members counted apart); the guards "
+     "module wherever module_home resolves it searched for the same declaration (absent = moved), the `pub use keel_schema::guard_names::GUARD_NAMES;` "
+     "re-export, GUARD_SOURCE_FILES' quoted paths, the sprint-732 comment above it and the two test fn names; members/keel-view/src/control_proof.rs for the "
+     "census call reading keel_schema; keel-view's Cargo.toml [dependencies] `x = { path = ...}` names; the .rs files under members/keel-view/src/view "
+     "other than mod.rs; keel-view's lib.rs `pub mod x;` lines; keel-cli's lib.rs `pub use keel_view::x;` lines; .rs files and their line counts under "
+     "members/keel-view/src; members/*/src directories; module_home.py's guard_names entry. landed = `git diff --name-status -M 397e49c d2ee86e` first "
+     "letters counted and `git diff --shortstat` over the same range. declared: .engine/docs/guards.md, .engine/processes/stpa-diagram.sysml, the "
+     "stpa-diagram skill and its .claude copy (byte equality), code-registry.sysml's ceViewCore and ceArchViewsMember filePath and the #Supersede edge. "
+     "live: `" + KEEL + " version`'s `guards:` line against the list's length; `" + KEEL + " gate guard process-change --no-receipt .` last line. "
+     "issues 579-581 as section 34, with the issues guard's naming rule (resolver names the issue in its DoD text, or the issue names its resolver) read "
+     "from the sprint file (579), backlog.sysml (581) and the issue's own description (580). resolverPositions as section 34; sprint732 from its delivery "
+     "file, charter d0479, plus literal spans in the retro and DoD; retroFindings = `(n) ` markers opening a sentence in the retro gate's procedureText (a back-reference like `finding (1)` is not one).")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
