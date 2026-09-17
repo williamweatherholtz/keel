@@ -1984,4 +1984,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcTouchedRunEnvironmentIsNormalized to issue598;
+
+    part issue599 : Issue {
+        :>> id = "f6c31b4d-6445-45da-b16c-301b3d4c428c";
+        :>> title = "The touched receipt names its base as a ref, not the sha it measured from, so a receipt's range is lost once the push moves origin/main";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The touched receipt names the base its changed set was measured from as a ref, not the sha that ref resolved to. .keel/metrics/touched-receipt.toml after commit 28fcae8d reads `base = 'origin/main'` and `stems = ['init', 'launcher']`; the run was measured from merge-base(origin/main, HEAD) to the working tree (members/keel-suite/src/touched.rs, the base's doc comment at :378 and the merge-base at :407), and at run time origin/main stood at e5e71f2a, two commits behind, so `init` came from 619d6b0f's new .engine/decisions/0510 file and `launcher` from 28fcae8d. After keel-land pushed, origin/main moved to 28fcae8d and nothing in the receipt says which range it measured: a reader of the receipt cannot re-derive its stems, and brief 44's builder, reading the .engine paths of the one commit the receipt names, refused the page over an `init` stem the receipt attributes and git shows no engine path for. The brief's facts.py now recovers the base from the push history (the pushed sha before head's own push), a workaround that reads a second source for a fact the receipt should carry. The class is issue586's - a fact about a range reads the range - applied to the receipt itself: the control is that keel suite --touched writes the resolved base sha (`base_sha`, the merge-base it diffed from) beside the ref, and that any reader of the receipt (the brief facts, keel show status, the landing log line) names that sha rather than the ref.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcTouchedReceiptNamesItsBaseSha to issue599;
 }

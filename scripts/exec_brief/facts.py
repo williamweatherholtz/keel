@@ -3523,11 +3523,29 @@ _tr94 = _receipt94("touched-receipt.toml")
 # the .engine paths in the commit each receipt is over (a landed run's change set is that commit against its parent);
 # `running` names a run in flight, so its attribution is not yet a verdict and is reported as such
 _eng94 = {}
-if _tr94.get("head"):
+# The touched set is measured from merge-base(origin/main, HEAD) to the working tree (touched.rs), and the receipt
+# names that base as the REF, not the sha it resolved to (issue599) - so once the push moves origin/main the range is
+# gone from the receipt. Recover it from the push history: the base was the pushed sha before head's own push (or the
+# latest pushed sha while head is unpushed). One commit landed = the same read as `git show <head>`.
+_ok94p, _o94p = run(["gh", "run", "list", "--workflow=ci.yml", "--branch=main", "--event=push", "--limit", "30", "--json", "headSha,createdAt"], timeout=60)
+_pushes94 = [r["headSha"] for r in (as_json(_o94p) or [])] if _ok94p else []   # newest first, one row per pushed head
+_base94 = None
+if _tr94.get("head") and _pushes94:
+    _full94 = [s for s in _pushes94 if s.startswith(_tr94["head"])]
+    _idx94 = _pushes94.index(_full94[0]) if _full94 else -1
+    _base94 = _pushes94[_idx94 + 1] if _idx94 + 1 < len(_pushes94) else None
+if _tr94.get("head") and _base94:
+    _ok94, _o94 = run(["git", "diff", "--name-only", _base94, _tr94["head"], "--", ".engine"])
+    _ok94c, _o94c = run(["git", "rev-list", "--count", _base94 + ".." + _tr94["head"]])
+    _eng94["landing"] = sorted(l for l in _o94.splitlines() if l.strip()) if _ok94 else None
+    _eng94["base"] = _base94[:8]
+    _eng94["commits"] = int(_o94c.strip()) if _ok94c and _o94c.strip().isdigit() else None
+elif _tr94.get("head"):
     _ok94, _o94 = run(["git", "show", "--name-only", "--format=", _tr94["head"], "--", ".engine"])
     _eng94["landing"] = sorted(l for l in _o94.splitlines() if l.strip()) if _ok94 else None
+    _eng94["base"], _eng94["commits"] = None, 1
 else:
-    _eng94["landing"] = None
+    _eng94["landing"], _eng94["base"], _eng94["commits"] = None, None, None
 _ok94s, _o94s = run(["git", "status", "--short", "--", ".engine"])
 _eng94["workingTree"] = sorted(l for l in _o94s.splitlines() if l.strip()) if _ok94s else None
 # the binary's own test for the rule, run live (the lib test binary is the one keel land just built; ~a minute cold) - in
@@ -3586,6 +3604,7 @@ fact("verifierStemsRow", {
                     "passed": int(_t94_res.group(2)) if _t94_res else None, "failed": int(_t94_res.group(3)) if _t94_res else None},
         "verifierReceipt": _vr94,
         "landingReceipt": _tr94, "landingCommitEnginePaths": _eng94["landing"],
+        "landingRangeBase": _eng94["base"], "landingRangeCommits": _eng94["commits"],
         "workingTreeEngineChanges": _eng94["workingTree"],
     },
     "issue530": {**_i530,
@@ -3606,8 +3625,10 @@ fact("verifierStemsRow", {
      "touched module>/Cargo.toml --lib -- touched::tests::a_change_under_the_embedded_tree_names_init` exit and its `test result:` line "
      "(manifest = the path used). verifierReceipt / landingReceipt "
      "= head, outcome, stems, passed, failed read from .keel/metrics/verify-receipt.toml and touched-receipt.toml (a verify receipt "
-     "carries no run of its own: its [[rung]] name/verdict pairs, rungsGreen and stopped_at are read instead); landingCommitEnginePaths = `git show --name-only --format= <head> -- .engine`, "
-     "the .engine paths the commit that receipt names changed; workingTreeEngineChanges = `git status --short -- .engine` now. "
+     "carries no run of its own: its [[rung]] name/verdict pairs, rungsGreen and stopped_at are read instead); landingCommitEnginePaths = `git diff --name-only <base> <head> -- .engine` "
+     "over the range the run measured (touched.rs: merge-base(origin/main, HEAD) to the tree), base recovered as the pushed sha before head's push in "
+     "`gh run list --workflow=ci.yml --branch=main --event=push --json headSha` because the receipt names its base as a ref, not a sha (issue599); "
+     "landingRangeBase / landingRangeCommits = that sha and `git rev-list --count base..head`; with no push history the single commit is read with `git show`; workingTreeEngineChanges = `git status --short -- .engine` now. "
      "issue530 from .tracking/issues-claudeFable5.sysml with its #Resolves edge, resolverDodNamesIssue = the resolver's DoD "
      "procedureText opening `issue530 is resolved`, and two literal searches of its description. resolverPosition = the resolver's 1-based place among `action x;` lines in NextWork (declaration order IS "
      "priority, D0052). obligations: each red-yield file's existence, its `#Resolves dependency from d0494 to obligationX;` edge, "
@@ -5140,6 +5161,293 @@ fact("issuesReadsTheModelAndTheWriteApi", {
      "against the lock's file list and directory prefix. live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line; the touched receipt as section 32 reads it; landingLog as section 42 reads it. "
      "resolverPositions as section 34; sprint737 from its delivery file, charter d0480, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or following a label's colon; retroNoNewItemCount / "
      "retroNotTrackedCount = the phrases counted; storyDodResults = the story's DoDRn outcomes and shas; itemDodResults = the backlog item's DoDRn outcomes and shas.")
+# ================================================================ 44. D0509 - the console is member keel-serve, above every member and below the binary (sprint 738, brief 44)
+_d0509 = _dec_file("0509-")
+_f509 = _decision_facts(_d0509, "d0509")
+_LAND738_FROM, _LAND738_TO = "904ff24c", "e5e71f2a"   # the sprint's landing range, fixed (issue586)
+_SERVE09 = ["serve", "deck", "launcher", "console_registry", "reports", "attestation"]   # the member's six modules, in the Decision's order
+_sv09_dir = os.path.join(REPO, "members", "keel-serve", "src")
+_sv09_files = sorted(f[:-3] for f in os.listdir(_sv09_dir) if f.endswith(".rs")) if os.path.isdir(_sv09_dir) else []
+_sv09_toml = read(os.path.join(REPO, "members", "keel-serve", "Cargo.toml")) or ""
+_sv09_deptab = (re.search(r"\[dependencies\](.*?)(?:\n\[|\Z)", _sv09_toml, re.S) or [None, ""])[1]
+_sv09_devtab = (re.search(r"\[dev-dependencies\](.*?)(?:\n\[|\Z)", _sv09_toml, re.S) or [None, ""])[1]
+_sv09_deps = re.findall(r"^([\w-]+)\s*=\s*\{\s*path\s*=", _sv09_deptab, re.M)
+_sv09_crates = re.findall(r'^([\w-]+)\s*=\s*(?:"|\{\s*version)', _sv09_deptab, re.M)
+_sv09_dev = re.findall(r"^([\w-]+)\s*=", _sv09_devtab, re.M)
+_sv09_lib = read(os.path.join(_sv09_dir, "lib.rs")) or ""
+_sv09_declared = [m for m in _SERVE09 if re.search(r"^pub mod " + m + r";", _sv09_lib, re.M)]
+_sv09_serve = read(os.path.join(_sv09_dir, "serve.rs")) or ""
+_cli09_lib = read(_mh("lib", crate="keel-cli") or "") or ""
+_cli09_toml = read(os.path.join(REPO, "keel-cli", "Cargo.toml")) or ""
+_cli09_deptab = (re.search(r"\[dependencies\](.*?)(?:\n\[|\Z)", _cli09_toml, re.S) or [None, ""])[1]
+_cli09_devtab = (re.search(r"\[dev-dependencies\](.*?)(?:\n\[|\Z)", _cli09_toml, re.S) or [None, ""])[1]
+_gh09_toml = read(os.path.join(REPO, "members", "keel-github", "Cargo.toml")) or ""
+_gh09_deps = re.findall(r"^([\w-]+)\s*=\s*\{\s*path\s*=", (re.search(r"\[dependencies\](.*?)(?:\n\[|\Z)", _gh09_toml, re.S) or [None, ""])[1], re.M)
+_gh09_lib = read(os.path.join(REPO, "members", "keel-github", "src", "lib.rs")) or ""
+_vw09_lib = read(os.path.join(REPO, "members", "keel-view", "src", "lib.rs")) or ""
+_md09_lib = read(os.path.join(REPO, "members", "keel-model", "src", "lib.rs")) or ""
+_rd09 = read(os.path.join(REPO, "members", "keel-model", "src", "readiness.rs")) or ""
+_hd09 = read(os.path.join(REPO, "members", "keel-guards", "src", "hardening.rs")) or ""
+_or09 = read(os.path.join(REPO, ".engine", "processes", "obligation-review.sysml")) or ""
+_orr09 = read(os.path.join(REPO, ".engine", "skills", "obligation-review", "registry.sysml")) or ""
+_ws09_members = re.findall(r'^\s*"([^"]+)",', (re.search(r"members\s*=\s*\[(.*?)\]", read(os.path.join(REPO, "Cargo.toml")) or "", re.S) or [None, ""])[1], re.M)
+_ws09_member_tomls = {m: read(os.path.join(REPO, m, "Cargo.toml")) or "" for m in _ws09_members if m.startswith("members/")}
+_ext09 = read(os.path.join(REPO, "scripts", "extract_serve.py")) or ""
+_gsf09_paths = _gsf05_paths
+# the landed commit's shape over the fixed range (renames followed), and the locked files' own diffs inside it
+_ok09d, _out09d = run(["git", "diff", "--name-status", "-M", _LAND738_FROM, _LAND738_TO])
+_rows09 = [l.split("\t") for l in (_out09d or "").splitlines() if l.strip()]
+_codes09 = [r[0][:1] for r in _rows09]
+_names09 = [r[-1] for r in _rows09]
+_all09 = [n for r in _rows09 for n in r[1:]]
+_renames09 = {r[1]: {"to": r[2], "similarity": int(r[0][1:])} for r in _rows09 if r[0].startswith("R")}
+_ok09s, _out09s = run(["git", "diff", "--shortstat", _LAND738_FROM, _LAND738_TO])
+_short09 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out09s or "")
+_LOCKED09 = ["members/keel-guards/src/hardening.rs", ".engine/processes/obligation-review.sysml", ".engine/skills/obligation-review/registry.sysml"]
+_ok09n, _out09n = run(["git", "diff", "--numstat", _LAND738_FROM, _LAND738_TO, "--"] + _LOCKED09)
+_num09 = {m.group(3): {"insertions": int(m.group(1)), "deletions": int(m.group(2))} for m in re.finditer(r"^(\d+)\s+(\d+)\s+(\S+)$", _out09n or "", re.M)}
+_ok09p, _out09p = run(["git", "diff", "-U0", _LAND738_FROM, _LAND738_TO, "--"] + _LOCKED09)
+_lock09_added = [l[1:] for l in (_out09p or "").splitlines() if l.startswith("+") and not l.startswith("+++")]
+_lock09_removed = [l[1:] for l in (_out09p or "").splitlines() if l.startswith("-") and not l.startswith("---")]
+_PATH09 = (("keel-cli/src/", "members/keel-serve/src/"), ("keel-cli/assets/", "members/keel-serve/assets/"))
+def _repoint09(line):
+    for old, new in _PATH09:
+        line = line.replace(old, new)
+    return line
+_locked09_touched = sorted(set(n for n in _all09 if n in _gsf09_paths or n.startswith("members/keel-guards/src/") or n.startswith(".engine/processes/") or n.startswith(".engine/skills/")))
+# live: the lock's own verdict on this tree, the binary's guard count, the landing run's log
+_rc09g, _out09g = run_rc([KEEL, "gate", "guard", "process-change", "--no-receipt", "."], timeout=300)
+_pc09_last = (_out09g or "").strip().splitlines()[-1] if (_out09g or "").strip() else ""
+_pc09 = re.search(r"\[guard:process-change\] (PASS|FAIL|WARN)[^\d]*(\d+) scanned[^\d]*(\d+) warning\(s\), (\d+) violation\(s\)", _pc09_last)
+_rc09v, _out09v = run_rc([KEEL, "version"], timeout=60)
+_guards09_line = next((l for l in (_out09v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards09 = re.search(r"guards:\s*(\d+)\D+(\d+) hard-blocking\D+(\d+) warning-only", _guards09_line)
+_tr09 = _receipt94("touched-receipt.toml")
+_ok09t, _out09t = run(["git", "log", "-1", "--format=%ct", _LAND738_TO])
+_ok09n2, _out09n2 = run(["git", "rev-list", "--reverse", _LAND738_TO + "..HEAD"])
+_next09 = (_out09n2.split() or [None])[0] if _ok09n2 else None
+_ok09t2, _out09t2 = run(["git", "log", "-1", "--format=%ct", _next09]) if _next09 else (False, "")
+_win09 = (int(_out09t.strip()), int(_out09t2.strip()) if _ok09t2 and _out09t2.strip() else None) if _ok09t and _out09t.strip() else None
+_logs09 = sorted(int(m.group(1)) for f in os.listdir(os.path.join(REPO, ".keel", "metrics")) for m in [re.match(r"touched-(\d+)\.log$", f)] if m)
+_inwin09 = [e for e in _logs09 if _win09 and e >= _win09[0] and (_win09[1] is None or e < _win09[1])]
+_log09 = read(os.path.join(REPO, ".keel", "metrics", f"touched-{_inwin09[-1]}.log")) if _inwin09 else ""
+_sum09 = re.findall(r"^\s*Summary \[\s*([\d.]+)s\] (\d+) tests run: (\d+) passed(?: \(\d+ slow\))?(?:, (\d+) failed)?, (\d+) skipped", _log09 or "", re.M)
+_s738 = _sprint_facts("sprint738_serveAndGithubAreMembers.sysml", "d0479")
+_retro09 = (re.search(r'serveAndGithubAreMembersRetroGate[^\n]*procedureText = "([^"]*)"', _s738.get("text") or "") or [None, ""])[1]
+_i593 = _issue_facts("593", "dcCodeRegistryPathsResolve")
+_i594 = _issue_facts("594", "dcMembersCarryTheLintPreamble")
+_i595 = _issue_facts("595", "dcSuiteReceiptNamesTheStandbyItSpanned")
+fact("serveSitsAboveEveryMemberAndBelowTheBinary", {
+    **_f509,
+    "dependsOn": re.findall(r"#DependsOn\s+dependency\s+from\s+d0509\s+to\s+(d\d+)\s*;", _d0509),
+    "supersedesAnything": bool(re.search(r"#Supersede(?:Clause)?\s+dependency\s+from\s+d0509", _d0509)),
+    "notAForkInConsequences": "NOT A FORK" in (_f509["consequences"] or ""),
+    "namesFourThingsUnsaid": "Four things the DoD did not say had to be settled for the probe to hold." in (_f509["context"] or ""),
+    "namesThreeLockedPathStrings": "three locked files whose only change is a path string following the source it names" in (_f509["context"] or ""),
+    "namesNoMemberBelowCanHold": "no member below the console can hold them without depending upward" in (_f509["context"] or ""),
+    "namesCliAlone": "is depended on by keel-cli alone" in (_f509["decision"] or ""),
+    "namesNoMemberNamesIt": "no member names it" in (_f509["decision"] or ""),
+    "namesGuardReadsWhereManifestsPut": "reads that file where the manifests put it" in (_f509["decision"] or ""),
+    "namesOrientIsReadiness": "The orient computation is keel_model::readiness" in (_f509["decision"] or ""),
+    "namesReadersRule": "a fact lives where its readers are" in (_f509["rationale"] or ""),
+    "namesTopOfGraph": "the console is the top of the member graph" in (_f509["rationale"] or ""),
+    "namesTwoVocabulariesClass": "the two-vocabularies class" in (_f509["rationale"] or ""),
+    "namesHumanJudges": "the human judges it" in (_f509["rationale"] or ""),
+    "namesFailClosed": "the guard fail-closed as designed" in (_f509["rationale"] or ""),
+    "namesByteIdentical": "byte-identical to the pre-move render" in (_f509["consequences"] or ""),
+    "namesGuardLineUnchanged": "unchanged at 75" in (_f509["consequences"] or ""),
+    "namesLastExtraction": "The next extraction is the last: dcKeelCliIsThinDispatch" in (_f509["consequences"] or ""),
+    "namesIssue593": "issue593" in (_f509["consequences"] or ""),
+    "source": {
+        "memberExists": os.path.isdir(_sv09_dir),
+        "memberModules": _sv09_files,
+        "memberDeclaresTheSix": _sv09_declared, "memberDeclaresAllSix": sorted(_sv09_declared) == sorted(_SERVE09),
+        "memberHoldsConsoleHtml": os.path.exists(os.path.join(REPO, "members", "keel-serve", "assets", "console.html")),
+        "memberEmbedsConsoleHtml": 'include_str!("../assets/console.html")' in _sv09_serve,
+        "memberEmbedsMainRs": 'include_str!("../../../keel-cli/src/main.rs")' in _sv09_serve,
+        "memberHasLintPreamble": "#![deny(warnings, clippy::all, clippy::pedantic, clippy::nursery)]" in _sv09_lib,
+        "memberPathDeps": _sv09_deps, "memberCrateDeps": _sv09_crates, "memberDevDeps": _sv09_dev,
+        "memberDependsOnEveryMember": sorted(_sv09_deps) == sorted(["keel-perf", "keel-git", "keel-json", "keel-actor", "keel-schema", "keel-model", "keel-write", "keel-view", "keel-guards", "keel-process", "keel-issues"]),
+        "memberHasNoBuildRs": not os.path.exists(os.path.join(REPO, "members", "keel-serve", "build.rs")),
+        "noMemberNamesServe": [m for m, t in _ws09_member_tomls.items() if re.search(r"^keel-serve\s*=", t, re.M)],
+        "cliReexportsTheSix": [m for m in _SERVE09 if re.search(r"^pub use keel_serve::" + m + r";", _cli09_lib, re.M)],
+        "cliReexportsCiRuns": bool(re.search(r"^pub use keel_github::ci_runs;", _cli09_lib, re.M)),
+        "cliReexportsVerification": bool(re.search(r"^pub use keel_view::verification;", _cli09_lib, re.M)),
+        "cliReexportsOrientNames": "pub use keel_model::readiness::{compute_orient_state, orient_root, whats_next_root, OrientReport};" in _cli09_lib,
+        "cliStillHoldsAny": [m for m in _SERVE09 + ["ci_runs", "verification"] if os.path.exists(os.path.join(REPO, "keel-cli", "src", m + ".rs"))],
+        "cliStillHoldsConsoleHtml": os.path.exists(os.path.join(REPO, "keel-cli", "assets", "console.html")),
+        "cliLibStillDefinesOrient": bool(re.search(r"^pub fn (?:orient_root|whats_next_root|compute_orient_state)\(", _cli09_lib, re.M)),
+        "cliManifestDependsOnServe": bool(re.search(r"^keel-serve\s*=\s*\{\s*path\s*=", _cli09_deptab, re.M)),
+        "cliNormalDepsStillName": [c for c in ("tokio", "axum", "async-stream", "tokio-stream") if re.search(r"^" + c + r"\s*=", _cli09_deptab, re.M)],
+        "cliDevDepsStillNameTower": bool(re.search(r"^tower\s*=", _cli09_devtab, re.M)),
+        "workspaceMembers": _ws09_members, "workspaceMemberCount": len(_ws09_members),
+        "serveListedLastBeforeCli": ("members/keel-serve" in _ws09_members and "keel-cli" in _ws09_members
+                                     and _ws09_members.index("members/keel-serve") + 1 == _ws09_members.index("keel-cli")),
+        "githubPathDeps": _gh09_deps,
+        "githubDependsOnTheThree": sorted(_gh09_deps) == sorted(["keel-json", "keel-git", "keel-model"]),
+        "githubDeclaresCiRuns": bool(re.search(r"^pub mod ci_runs;", _gh09_lib, re.M)),
+        "githubHoldsCiRuns": os.path.exists(os.path.join(REPO, "members", "keel-github", "src", "ci_runs.rs")),
+        "viewDeclaresVerification": bool(re.search(r"^pub mod verification;", _vw09_lib, re.M)),
+        "viewHoldsVerification": os.path.exists(os.path.join(REPO, "members", "keel-view", "src", "verification.rs")),
+        "modelDeclaresReadiness": bool(re.search(r"^pub mod readiness;", _md09_lib, re.M)),
+        "readinessDefinesTheFour": (bool(re.search(r"^pub struct OrientReport\b", _rd09, re.M)) and bool(re.search(r"^pub fn compute_orient_state\(", _rd09, re.M))
+                                    and bool(re.search(r"^pub fn orient_root\(", _rd09, re.M)) and bool(re.search(r"^pub fn whats_next_root\(", _rd09, re.M))),
+        "hardeningReadsNewPaths": _hd09.count('"members/keel-serve/src/serve.rs"') + _hd09.count('"members/keel-serve/assets/console.html"'),
+        "hardeningReadsOldPaths": _hd09.count("keel-cli/src/serve.rs") + _hd09.count("keel-cli/assets/console.html"),
+        "processCitesNewDeck": "members/keel-serve/src/deck.rs" in _or09 and "keel-cli/src/deck.rs" not in _or09,
+        "registryCitesNewDeck": "members/keel-serve/src/deck.rs" in _orr09 and "keel-cli/src/deck.rs" not in _orr09,
+        "codemodDeclaresItself": "not-an-instrument:" in _ext09 and "one-shot codemod" in _ext09,
+        "codemodIdempotent": "Idempotent" in _ext09 and "already applied" in _ext09,
+        "codemodHasApplyFlag": "--apply" in _ext09,
+    },
+    "landed": {
+        "range": [_LAND738_FROM, _LAND738_TO],
+        "renames": _codes09.count("R"), "modified": _codes09.count("M"), "added": _codes09.count("A"), "deleted": _codes09.count("D"),
+        "renamedFrom": _renames09,
+        "movedWhole": [old for old, r in _renames09.items() if r["similarity"] == 100],
+        "filesChanged": int(_short09.group(1)) if _short09 else None,
+        "insertions": int(_short09.group(2)) if _short09 and _short09.group(2) else None,
+        "deletions": int(_short09.group(3)) if _short09 and _short09.group(3) else None,
+        "lockedFileNumstat": _num09,
+        "lockedAddedLines": _lock09_added, "lockedRemovedLines": _lock09_removed,
+        "lockedDiffIsPathStringsOnly": (len(_lock09_added) == len(_lock09_removed) > 0
+                                        and sorted(_lock09_added) == sorted(_repoint09(l) for l in _lock09_removed)
+                                        and all(l != _repoint09(l) for l in _lock09_removed)),
+        "lockedFilesTouched": _locked09_touched,
+        "newDecisionInRange": any(n.startswith(".engine/decisions/0509-") for n in _names09),
+        "sprintInRange": any(n.endswith("sprint738_serveAndGithubAreMembers.sysml") for n in _names09),
+        "codemodInRange": "scripts/extract_serve.py" in _names09,
+        "readinessInRange": "members/keel-model/src/readiness.rs" in _names09,
+        "memberManifestInRange": "members/keel-serve/Cargo.toml" in _names09,
+    } if _ok09d and _ok09s and _ok09n and _ok09p else None,
+    "live": {
+        "processChange": {"exit0": _rc09g == 0, "verdict": _pc09.group(1) if _pc09 else None, "scanned": int(_pc09.group(2)) if _pc09 else None,
+                          "violations": int(_pc09.group(4)) if _pc09 else None, "line": _pc09_last[:240] or None},
+        "guards": {"total": int(_guards09.group(1)), "hardBlocking": int(_guards09.group(2)), "warningOnly": int(_guards09.group(3))} if _guards09 else None,
+        "landingReceipt": _tr09,
+        "landingLog": {"window": _win09, "nextCommit": _next09[:8] if _next09 else None, "logsInWindow": len(_inwin09), "epoch": _inwin09[-1] if _inwin09 else None,
+                       "binaries": len(_sum09), "run": sum(int(r[1]) for r in _sum09), "passed": sum(int(r[2]) for r in _sum09),
+                       "failed": sum(int(r[3] or 0) for r in _sum09), "skipped": sum(int(r[4]) for r in _sum09),
+                       "seconds": round(sum(float(r[0]) for r in _sum09), 1)} if _sum09 else None,
+    },
+    "issue593": _i593, "issue594": _i594, "issue595": _i595,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcServeAndGithubAreMembers", "dcTouchedSetDescendsTheWorkspace", "dcSuiteMeasuresTheWorkspace",
+                                    "dcSourceCitationsOnTheLivingDocsResolve", "dcSprintNamesTheItemItDelivers", "dcKeelCliIsThinDispatch",
+                                    "dcCodeRegistryPathsResolve", "dcMembersCarryTheLintPreamble", "dcSuiteReceiptNamesTheStandbyItSpanned")},
+    "backlogItems": len(_bl00_actions),
+    "sprint738": {k: v for k, v in _s738.items() if k != "text"} | ({
+        "retroScansAvoidable": "avoidable issues scanned (issue011)" in _retro09,
+        "retroNamesFifthSprintRunning": "the fifth sprint running (734-738)" in _retro09,
+        "retroNamesFourthHeld": "the fourth HELD extraction Decision" in _retro09,
+        "retroNamesControlFiredAsDesigned": "D0209 cl.2 is the control and it fired as designed" in _retro09,
+        "retroNamesCleanFirstBuild": "the first extraction of eight to do so" in _retro09,
+        "retroNamesDualTruthEdge": "the edge was described and not authored, the dual-truth class" in _retro09,
+        "retroNamesStandby": "spanned a 97-minute host standby" in _retro09,
+        "retroNotTrackedCount": _retro09.count("Not tracked"),
+        "retroTrackedCount": _retro09.count("Tracked:"),
+        "retroFindings": len(re.findall(r"(?:^|[.;:] )\((\d)\) ", _retro09)),
+        "storyDodResults": [{"outcome": o, "judgedAgainst": s} for o, s in re.findall(
+            r"part storyServeAndGithubAreMembersDoDR\d+ : TestResult \{[^}]*?outcome = VerdictKind::(\w+);[^}]*?judgedAgainst = \"([^\"]+)\"", _s738.get("text") or "")],
+        "itemDodResults": _dod_results("dcServeAndGithubAreMembers"),
+    } if _s738.get("exists") else {}),
+} if _d0509 and _sv09_toml and _cli09_lib and _hd09 and _gh09_toml else None,
+     "the held record for the console's extraction: Decision, the member's manifest, modules and page, keel-cli's re-exports and thinned manifest, ci_runs and verification at their new homes, the orient descent, the landed diff with its three locked files' path lines, live lock verdict and guard count, issues 593-595, sprint 738",
+     _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0509 to dNNNN;` targets; supersedesAnything = any `#Supersede`/`#SupersedeClause` line from d0509 (expected absent). source: members/keel-serve/Cargo.toml [dependencies] split into path rows "
+     "(memberPathDeps), version rows (memberCrateDeps) and [dev-dependencies] names; members/keel-serve/src listed for .rs stems, lib.rs for `pub mod x;` of each of the six and the deny-lints line; serve.rs for its two include_str! paths; assets/console.html probed; every members/*/Cargo.toml "
+     "scanned for a `keel-serve =` row (noMemberNamesServe, expected empty); keel-cli's lib.rs (resolved by scripts/module_home.py) for `pub use keel_serve::x;` of each of the six, the ci_runs and verification re-exports and the one-line orient re-export, and for any `pub fn orient_root(` "
+     "etc. still defined (expected absent); keel-cli/src probed for each of the eight moved files and keel-cli/assets/console.html (expected absent); keel-cli/Cargo.toml [dependencies] for a keel-serve path row and for tokio/axum/async-stream/tokio-stream rows (expected absent), "
+     "[dev-dependencies] for tower (expected absent; tokio stays a dev-dep for cucumber); the root Cargo.toml `members = [...]` list and whether keel-serve is the entry immediately before keel-cli; members/keel-github/Cargo.toml path rows and lib.rs for `pub mod ci_runs;`, "
+     "members/keel-view/src/lib.rs for `pub mod verification;`, members/keel-model/src/lib.rs for `pub mod readiness;` and readiness.rs for the struct and three fn signatures; members/keel-guards/src/hardening.rs counted for the two new path literals and the two old ones (expected 0); "
+     "the obligation-review process and skill registry for `members/keel-serve/src/deck.rs` and the absence of `keel-cli/src/deck.rs`; scripts/extract_serve.py for its not-an-instrument, Idempotent, already-applied and --apply lines. landed = `git diff --name-status -M " + _LAND738_FROM + " " + _LAND738_TO +
+     "` first letters counted, rename rows kept with their similarity (movedWhole = 100), `--shortstat` over the range, `--numstat` and `-U0` over the range for the three locked files alone (added and removed lines verbatim; lockedDiffIsPathStringsOnly = the added lines are exactly the "
+     "removed lines with keel-cli/src/ -> members/keel-serve/src/ and keel-cli/assets/ -> members/keel-serve/assets/ substituted, each removed line changed by that substitution), every old or new name held against the lock's file list and the locked directory prefixes. "
+     "live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line; the touched receipt as section 32 reads it; landingLog as section 42 reads it. issues 593, 594 and 595 as section 34. "
+     "resolverPositions as section 34; sprint738 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or following a label's colon; retroTrackedCount / retroNotTrackedCount = the phrases counted; "
+     "storyDodResults = the story's DoDRn outcomes and shas; itemDodResults = the backlog item's DoDRn outcomes and shas.")
+
+# ================================================================ 45. D0510 - a sitting review is finished by analysis, not confirmation (issue597, brief 44)
+_d0510 = _dec_file("0510-")
+_f510 = _decision_facts(_d0510, "d0510")
+_f510.update({
+    "namesTheHumansWords": "change the method for finishing a review to not be confirmation" in (_f510["context"] or ""),
+    "namesD0049Clause3": "D0049 clause 3" in (_f510["context"] or ""),
+    "namesD0204RetiredTheFraming": "D0204 already retired the framing" in (_f510["context"] or ""),
+    "namesTheCoverageNumbers": "309 sprints due such a review out of 738 (116 covered, 313 grandfathered under D0155)" in (_f510["context"] or ""),
+    "namesEightyOldMethod": "Eighty sitting reviews on the tree carry the old method" in (_f510["context"] or ""),
+    "namesMethodAnalysis": "method = analysis, judged by the AI actor that ran it" in (_f510["decision"] or ""),
+    "namesTheThreeVerbs": "keel accept for a proposed Decision, keel judge-set for a proposed result, a disposition for a finding" in (_f510["decision"] or ""),
+    "namesNoConfirmationFromHere": "no Test with method = confirmation is recorded for a sitting, a sprint, or a review from this Decision on" in (_f510["decision"] or ""),
+    "namesAssuranceSurface": "leaves the act surface for the assurance surface" in (_f510["decision"] or ""),
+    "namesReceiptNotTestimony": "D0232 says a receipt is not testimony" in (_f510["rationale"] or ""),
+    "namesTheRetroPrecedent": "The retro is the precedent" in (_f510["rationale"] or ""),
+    "namesD0337Held": "The human judges this Decision under D0337" in (_f510["rationale"] or ""),
+    "namesHistoryNotRewritten": "their judgedBy is a human's actual word and is not rewritten" in (_f510["consequences"] or ""),
+    "namesTheGuardToFollow": "A guard follows in the resolving sprint" in (_f510["consequences"] or ""),
+    "supersedesClauseD0049": bool(re.search(r"#SupersedeClause dependency from d0510 to d0049;", _d0510 or "")),
+    "supersedesClauseD0051": bool(re.search(r"#SupersedeClause dependency from d0510 to d0051;", _d0510 or "")),
+    "dependsOnD0204": bool(re.search(r"#DependsOn dependency from d0510 to d0204;", _d0510 or "")),
+    "dependsOnD0312": bool(re.search(r"#DependsOn dependency from d0510 to d0312;", _d0510 or "")),
+    "notAForkInConsequences": "NOT A FORK:" in (_f510["consequences"] or ""),
+})
+# the clauses D0510 reverses, quoted from the two targets as they stand on the tree
+_d0049 = _dec_file("0049-") or ""
+_d0051 = _dec_file("0051-") or ""
+_D49_CLAUSE = "the single HUMAN touchpoint is a per-SITTING sprint review (method=confirmation, batchable across the sitting's sprints)"
+_D51_CLAUSE = "the per-sitting review requires human confirmation ONLY for non-test-verifiable items"
+# the surfaces the Decision names, as the tree holds them today (the Decision is held, so the OLD shape is expected)
+_vp10 = read(os.path.join(REPO, ".engine", "views", "viewpoint-registry.sysml")) or ""
+_vp10_body = (re.search(r"part sittingReviewVP : Viewpoint \{(.*?)\n\s*\}", _vp10, re.S) or [None, ""])[1]
+_sk10 = read(os.path.join(REPO, ".engine", "skills", "sprint-review", "SKILL.md")) or ""
+_ok10c, _out10c = run([KEEL, "show", "sitting-coverage", "."])
+try:
+    _cov10 = json.loads(_out10c) if _ok10c else None
+except ValueError:
+    _cov10 = None
+_rev10 = (_cov10 or {}).get("sitting_reviews") or []
+fact("sittingReviewIsFinishedByAnalysisNotConfirmation", {
+    "decision": _f510 if _d0510 else None,
+    "reversedClauses": {
+        "d0049Clause3OnTree": _D49_CLAUSE in _d0049,
+        "d0051ClauseOnTree": _D51_CLAUSE in _d0051,
+        "d0049Text": _D49_CLAUSE, "d0051Text": _D51_CLAUSE,
+    },
+    "today": {
+        "viewpointSurface": (re.search(r'surface = "(\w+)"', _vp10_body) or [None, None])[1],
+        "viewpointConcern": (re.search(r'concernText = "([^"]+)"', _vp10_body) or [None, None])[1],
+        "viewpointRenderer": (re.search(r'renderer = "([^"]+)"', _vp10_body) or [None, None])[1],
+        "skillSaysTheOneGate": "the human accepts the sitting's content (the one gate)" in _sk10,
+        "skillRecordShapeIsConfirmation": "method = VerificationMethod::confirmation" in _sk10,
+        "skillConfirmationMentions": len(re.findall(r"confirmation", _sk10)),
+    },
+    "coverage": ({k: _cov10.get(k) for k in ("sprints", "covered", "readReviewed", "batchAcknowledgedOnly", "uncovered", "due", "grandfathered_unreviewed")}
+                 | {"sittingReviews": len(_rev10),
+                    "sprintsCovered": len({s for r in _rev10 for s in (r.get("covers") or [])}),
+                    "dueEqualsUncoveredMinusGrandfathered": (_cov10.get("due") == _cov10.get("uncovered", 0) - _cov10.get("grandfathered_unreviewed", 0))})
+                if _cov10 else None,
+    "issue597": _issue_facts("597", "dcSittingReviewIsFinishedByAnalysis") if _iss else None,
+    "resolverPosition": ({"place": _bl00_actions.index("dcSittingReviewIsFinishedByAnalysis") + 1, "def": _bl00_defs.get("dcSittingReviewIsFinishedByAnalysis")}
+                         if "dcSittingReviewIsFinishedByAnalysis" in _bl00_actions else None),
+    "resolverDodResults": _dod_results("dcSittingReviewIsFinishedByAnalysis") if _bl else None,
+    "resolverReadyRank": (_ready_names.index("dcSittingReviewIsFinishedByAnalysis") + 1) if "dcSittingReviewIsFinishedByAnalysis" in _ready_names else None,
+    "readyItems": len(_ready_names),
+    "resolverDodNamesTheGuard": "sitting-review-method" in _bl and "Resolves issue597" in _bl,
+    "backlogItems": len(_bl00_actions),
+}, "the held Decision, the two clauses it reverses, the surfaces as they stand, and the coverage numbers it cites",
+     _DEC_HOW + " Names by literal search in the Decision's fields (the human's words, `D0049 clause 3`, `D0204 already retired the framing`, the "
+     "738/116/309/313 sentence and `Eighty sitting reviews` in context; `method = analysis, judged by the AI actor`, the three verbs, `no Test "
+     "with method = confirmation is recorded ... from this Decision on` and `leaves the act surface for the assurance surface` in decision; "
+     "`D0232 says a receipt is not testimony`, `The retro is the precedent`, `under D0337` in rationale; `is not rewritten`, `A guard follows` in "
+     "consequences); the four edges as `#SupersedeClause`/`#DependsOn dependency from d0510 to X;` lines. reversedClauses: the quoted clause is "
+     "a literal substring of 0049-*.sysml / 0051-*.sysml. today: sittingReviewVP's surface/concernText/renderer fields in "
+     ".engine/views/viewpoint-registry.sysml and two literal phrases + a count of `confirmation` in .engine/skills/sprint-review/SKILL.md - the "
+     "OLD shape, since the Decision is held. coverage: `keel show sitting-coverage .` JSON scalars; sittingReviews = len(sitting_reviews); "
+     "sprintsCovered = distinct Stories across their covers; due == uncovered - grandfathered_unreviewed re-derived. issue597 / resolver / "
+     "DoD results as the other issue facts read .tracking/issues-claudeFable5.sysml and backlog.sysml; resolverPosition = 1-based place of "
+     "the action among the backlog's declared actions (D0052: declaration order is priority); resolverReadyRank = its line in "
+     "`keel show whats-next .` (1 = the top of the ready frontier), readyItems = that list's length; notAForkInConsequences = the "
+     "literal `NOT A FORK:` in consequences, where D0510 carries it (_decision_facts reads only the decision field).")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
