@@ -4952,6 +4952,194 @@ fact("suiteDependsOnNoViewOrGuard", {
      "`Summary [..s] N tests run: N passed[, N failed], N skipped` lines summed over the binaries. "
      "issues 588 and 589 as section 34. resolverPositions as section 34; sprint735 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or "
      "following a label's colon in that text; retroNotTrackedCount = the phrase counted; storyDodResults = the story's DoDRn outcomes and shas in the delivery file; itemDodResults = the backlog item's DoDRn outcomes and shas.")
+# ================================================================ 43. D0508 - the item member reads the model and the write API and nothing above (sprint 737, brief 43)
+_d0508 = _dec_file("0508-")
+_f508 = _decision_facts(_d0508, "d0508")
+_d0480b = _dec_file("0480-")
+_LAND737_FROM, _LAND737_TO = "9e4e79c", "b4fbe949"   # the sprint's landing range, fixed (issue586)
+_ISSUES08 = ["github_ingest", "intake_write", "issue_write", "views"]   # the member's four modules, in the DoD's order
+_is08_dir = os.path.join(REPO, "members", "keel-issues", "src")
+_is08_files = sorted(f[:-3] for f in os.listdir(_is08_dir) if f.endswith(".rs")) if os.path.isdir(_is08_dir) else []
+_is08_toml = read(os.path.join(REPO, "members", "keel-issues", "Cargo.toml")) or ""
+_is08_deptab = (re.search(r"\[dependencies\](.*?)(?:\n\[|\Z)", _is08_toml, re.S) or [None, ""])[1]
+_is08_deps = re.findall(r"^([\w-]+)\s*=\s*\{\s*path\s*=", _is08_deptab, re.M)
+_is08_crates = re.findall(r'^([\w-]+)\s*=\s*"', _is08_deptab, re.M)
+_is08_lib = read(os.path.join(_is08_dir, "lib.rs")) or ""
+_is08_declared = [m for m in _ISSUES08 if re.search(r"^pub mod " + m + r";", _is08_lib, re.M)]
+_is08_iw = read(os.path.join(_is08_dir, "issue_write.rs")) or ""
+_cli08_lib = read(_mh("lib", crate="keel-cli") or "") or ""
+_cli08_main = read(_mh("main", crate="keel-cli") or "") or ""
+_cli08_toml = read(os.path.join(REPO, "keel-cli", "Cargo.toml")) or ""
+_gl08 = read(os.path.join(REPO, "members", "keel-guards", "src", "lib.rs")) or ""
+_gi08 = read(os.path.join(REPO, "members", "keel-guards", "src", "issues.rs")) or ""
+_rs08 = read(os.path.join(REPO, "members", "keel-model", "src", "resolvers.rs")) or ""
+_ml08 = read(os.path.join(REPO, "members", "keel-model", "src", "lib.rs")) or ""
+_mq08 = read(os.path.join(REPO, "members", "keel-model", "src", "queries.rs")) or ""
+_ww08 = read(os.path.join(REPO, "members", "keel-write", "src", "write.rs")) or ""
+_vm08 = read(os.path.join(REPO, "members", "keel-view", "src", "view", "mod.rs")) or ""
+_ws08_members = re.findall(r'^\s*"([^"]+)",', (re.search(r"members\s*=\s*\[(.*?)\]", read(os.path.join(REPO, "Cargo.toml")) or "", re.S) or [None, ""])[1], re.M)
+_ext08 = read(os.path.join(REPO, "scripts", "extract_issues.py")) or ""
+_gsf08_paths = _gsf05_paths   # the lock's file list as section 41 read it from enforcement.rs
+# the landed commit's shape over the fixed range (renames followed), and the locked files' own diffs inside it
+_ok08d, _out08d = run(["git", "diff", "--name-status", "-M", _LAND737_FROM, _LAND737_TO])
+_rows08 = [l.split("\t") for l in (_out08d or "").splitlines() if l.strip()]
+_codes08 = [r[0][:1] for r in _rows08]
+_names08 = [r[-1] for r in _rows08]
+_all08 = [n for r in _rows08 for n in r[1:]]
+_renames08 = {r[1]: {"to": r[2], "similarity": int(r[0][1:])} for r in _rows08 if r[0].startswith("R")}
+_ok08s, _out08s = run(["git", "diff", "--shortstat", _LAND737_FROM, _LAND737_TO])
+_short08 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out08s or "")
+_LOCKED08 = ["members/keel-guards/src/lib.rs", "members/keel-guards/src/issues.rs"]
+_ok08n, _out08n = run(["git", "diff", "--numstat", _LAND737_FROM, _LAND737_TO, "--"] + _LOCKED08)
+_num08 = {m.group(3): {"insertions": int(m.group(1)), "deletions": int(m.group(2))} for m in re.finditer(r"^(\d+)\s+(\d+)\s+(\S+)$", _out08n or "", re.M)}
+_ok08p, _out08p = run(["git", "diff", "-U0", _LAND737_FROM, _LAND737_TO, "--"] + _LOCKED08)
+_lock08_added = [l[1:] for l in (_out08p or "").splitlines() if l.startswith("+") and not l.startswith("+++")]
+_lock08_removed = [l[1:] for l in (_out08p or "").splitlines() if l.startswith("-") and not l.startswith("---")]
+_locked08_touched = sorted(set(n for n in _all08 if n in _gsf08_paths or n.startswith("members/keel-guards/src/")))
+# live: the lock's own verdict on this tree, the binary's guard count, the landing run's log
+_rc08g, _out08g = run_rc([KEEL, "gate", "guard", "process-change", "--no-receipt", "."], timeout=300)
+_pc08_last = (_out08g or "").strip().splitlines()[-1] if (_out08g or "").strip() else ""
+_pc08 = re.search(r"\[guard:process-change\] (PASS|FAIL|WARN)[^\d]*(\d+) scanned[^\d]*(\d+) warning\(s\), (\d+) violation\(s\)", _pc08_last)
+_rc08v, _out08v = run_rc([KEEL, "version"], timeout=60)
+_guards08_line = next((l for l in (_out08v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards08 = re.search(r"guards:\s*(\d+)\D+(\d+) hard-blocking\D+(\d+) warning-only", _guards08_line)
+_tr08 = _receipt94("touched-receipt.toml")
+_ok08t, _out08t = run(["git", "log", "-1", "--format=%ct", _LAND737_TO])
+_ok08n2, _out08n2 = run(["git", "rev-list", "--reverse", _LAND737_TO + "..HEAD"])
+_next08 = (_out08n2.split() or [None])[0] if _ok08n2 else None
+_ok08t2, _out08t2 = run(["git", "log", "-1", "--format=%ct", _next08]) if _next08 else (False, "")
+_win08 = (int(_out08t.strip()), int(_out08t2.strip()) if _ok08t2 and _out08t2.strip() else None) if _ok08t and _out08t.strip() else None
+_logs08 = sorted(int(m.group(1)) for f in os.listdir(os.path.join(REPO, ".keel", "metrics")) for m in [re.match(r"touched-(\d+)\.log$", f)] if m)
+_inwin08 = [e for e in _logs08 if _win08 and e >= _win08[0] and (_win08[1] is None or e < _win08[1])]
+_log08 = read(os.path.join(REPO, ".keel", "metrics", f"touched-{_inwin08[-1]}.log")) if _inwin08 else ""
+_sum08 = re.findall(r"^\s*Summary \[\s*([\d.]+)s\] (\d+) tests run: (\d+) passed(?: \(\d+ slow\))?(?:, (\d+) failed)?, (\d+) skipped", _log08 or "", re.M)
+_s737 = _sprint_facts("sprint737_keelIssuesIsAMember.sysml", "d0480")
+_retro08 = (re.search(r'keelIssuesIsAMemberRetroGate[^\n]*procedureText = "([^"]*)"', _s737.get("text") or "") or [None, ""])[1]
+fact("issuesReadsTheModelAndTheWriteApi", {
+    **_f508,
+    "supersedesClauseOfD0480": bool(re.search(r"#SupersedeClause\s+dependency\s+from\s+d0508\s+to\s+d0480\s*;", _d0508)),
+    "supersedesWholeD0480": bool(re.search(r"#Supersede\s+dependency\s+from\s+d0508\s+to\s+d0480\s*;", _d0508)),
+    "notAForkInConsequences": "NOT A FORK" in (_f508["consequences"] or ""),
+    "namesThreeThingsUnsaid": "Three things the DoD did not say had to be settled for the probe to hold." in (_f508["context"] or ""),
+    "namesLockedPathMarker": "a locked path, so this Decision carries the process-change marker" in (_f508["context"] or ""),
+    "namesNoCrateAbove": "on no crate above them" in (_f508["decision"] or ""),
+    "namesCannotDisagree": "the write and the gate cannot disagree" in (_f508["decision"] or ""),
+    "namesPathNotHome": "the member is the path, not the home" in (_f508["decision"] or ""),
+    "namesNeverRestatedInSynopsis": "is never restated in a synopsis" in (_f508["decision"] or ""),
+    "namesRestOfD0480Stands": "The rest of D0480 stands." in (_f508["decision"] or ""),
+    "namesReadersRule": "a fact lives where its readers are" in (_f508["rationale"] or ""),
+    "namesTwoVocabulariesClass": "issue119/issue120 class" in (_f508["rationale"] or ""),
+    "namesOneHomePerFact": "one home per fact (D0105)" in (_f508["rationale"] or ""),
+    "namesHumanJudgesNotTree": "the human judges it, not the tree" in (_f508["rationale"] or ""),
+    "namesDescentNotDependency": "follows this descent, not a dependency on keel-guards" in (_f508["consequences"] or ""),
+    "namesByteIdentical": "byte-identical to the pre-move render" in (_f508["consequences"] or ""),
+    "namesGuardLineUnchanged": "unchanged at 75" in (_f508["consequences"] or ""),
+    "d0480": {
+        "status": (re.search(r"status\s*=\s*DecisionStatus::(\w+)", _d0480b) or [None, None])[1],
+        "acceptedUnderStandingConsent": "AUTO-ACCEPTED under standing consent (D0207)" in _d0480b,
+        "acceptedAgainst": (re.search(r'd0480AcceptR1[^}]*judgedAgainst = "([^"]+)"', _d0480b) or [None, None])[1],
+        "clauseText": (re.search(r"([^.]*name the member in their synopsis when it lands\.)", _d0480b) or [None, None])[1],
+        "clauseIsInConsequences": "name the member in their synopsis when it lands." in (_guard_field(_d0480b, "d0480", "consequences") or ""),
+    } if _d0480b else None,
+    "source": {
+        "memberExists": os.path.isdir(_is08_dir),
+        "memberModules": _is08_files,
+        "memberDeclaresTheFour": _is08_declared, "memberDeclaresAllFour": sorted(_is08_declared) == sorted(_ISSUES08),
+        "memberReexportsAddTask": "pub use keel_write::write::add_task;" in _is08_lib,
+        "memberPathDeps": _is08_deps, "memberCrateDeps": _is08_crates,
+        "memberDependsOnNoGovernance": not any(d in _is08_deps for d in ("keel-view", "keel-guards", "keel-suite", "keel-process")),
+        "memberHasNoBuildRs": not os.path.exists(os.path.join(REPO, "members", "keel-issues", "build.rs")),
+        "memberDefinesTriage": bool(re.search(r"^pub enum TriageRefusal", _is08_iw, re.M)) and bool(re.search(r"^pub fn triage_holds\(", _is08_iw, re.M)),
+        "memberDefinesRecordIssue": bool(re.search(r"^pub fn record_issue\(", _is08_iw, re.M)),
+        "cliReexportsGithubIngest": bool(re.search(r"^pub use keel_issues::github_ingest;", _cli08_lib, re.M)),
+        "cliReexportsIntakeWrite": bool(re.search(r"^pub use keel_issues::intake_write;", _cli08_lib, re.M)),
+        "cliReexportsIssues": bool(re.search(r"^pub use keel_issues as issues;", _cli08_lib, re.M)),
+        "cliViewWrapperAddsTheThree": "pub use keel_issues::views::{dispositions, intake, open_issues};" in _cli08_lib and "pub use keel_view::view::*;" in _cli08_lib,
+        "cliWriteWrapperAddsTheIssueWrite": "pub use keel_issues::issue_write::{record_issue, NewIssue};" in _cli08_lib and "pub use keel_write::write::*;" in _cli08_lib,
+        "cliStillHoldsGithubIngest": _mh("github_ingest", crate="keel-cli") is not None,
+        "writeStillHoldsIntakeWrite": os.path.exists(os.path.join(REPO, "members", "keel-write", "src", "intake_write.rs")),
+        "writeStillDefinesRecordIssue": bool(re.search(r"^pub fn record_issue\(", _ww08, re.M)),
+        "viewStillDefinesOpenIssues": bool(re.search(r"^pub fn open_issues\(", _vm08, re.M)),
+        "mainCallsTriageHolds": "keel_cli::issues::issue_write::triage_holds(&root, &severity, &resolver)" in _cli08_main,
+        "cliManifestDependsOnIssues": bool(re.search(r"^keel-issues\s*=\s*\{\s*path\s*=", _cli08_toml, re.M)),
+        "workspaceMembers": _ws08_members, "workspaceMemberCount": len(_ws08_members),
+        "issuesListedBeforeCli": ("members/keel-issues" in _ws08_members and "keel-cli" in _ws08_members
+                                  and _ws08_members.index("members/keel-issues") < _ws08_members.index("keel-cli")),
+        "resolversDefinesBoth": bool(re.search(r"^pub fn declared_task_names\(", _rs08, re.M)) and bool(re.search(r"^pub fn resolver_kind_holds", _rs08, re.M)),
+        "modelDeclaresResolvers": bool(re.search(r"^pub mod resolvers;", _ml08, re.M)),
+        "queriesDefinesAtLeastMedium": bool(re.search(r"^pub fn at_least_medium\(", _mq08, re.M)),
+        "guardLibReexportsDeclared": "pub use keel_model::resolvers::declared_task_names;" in _gl08,
+        "guardLibDefinesDeclared": bool(re.search(r"^pub fn declared_task_names\(", _gl08, re.M)),
+        "guardIssuesReexportsKindHolds": "pub use keel_model::resolvers::resolver_kind_holds;" in _gi08,
+        "guardIssuesDefinesKindHolds": bool(re.search(r"^pub fn resolver_kind_holds", _gi08, re.M)),
+        "guardIssuesStillAppliesIt": "resolver_kind_holds(" in _gi08,
+        "codemodDeclaresItself": "not-an-instrument:" in _ext08 and "one-shot codemod" in _ext08,
+        "codemodIdempotent": "Idempotent" in _ext08 and "already applied" in _ext08,
+        "codemodHasApplyFlag": "--apply" in _ext08,
+    },
+    "landed": {
+        "range": [_LAND737_FROM, _LAND737_TO],
+        "renames": _codes08.count("R"), "modified": _codes08.count("M"), "added": _codes08.count("A"), "deleted": _codes08.count("D"),
+        "renamedFrom": _renames08,
+        "movedWhole": [old for old, r in _renames08.items() if r["similarity"] == 100],
+        "filesChanged": int(_short08.group(1)) if _short08 else None,
+        "insertions": int(_short08.group(2)) if _short08 and _short08.group(2) else None,
+        "deletions": int(_short08.group(3)) if _short08 and _short08.group(3) else None,
+        "lockedFileNumstat": _num08,
+        "lockedAddedLines": _lock08_added, "lockedRemovedLines": _lock08_removed,
+        "lockedDiffIsTheTwoDescents": (any(l.startswith("pub fn declared_task_names(") for l in _lock08_removed)
+                                       and any(l.startswith("pub fn resolver_kind_holds") for l in _lock08_removed)
+                                       and "pub use keel_model::resolvers::declared_task_names;" in _lock08_added
+                                       and "pub use keel_model::resolvers::resolver_kind_holds;" in _lock08_added
+                                       and not any(l.startswith("pub fn ") for l in _lock08_added)),
+        "lockedFilesTouched": _locked08_touched,
+        "newDecisionInRange": any(n.startswith(".engine/decisions/0508-") for n in _names08),
+        "sprintInRange": any(n.endswith("sprint737_keelIssuesIsAMember.sysml") for n in _names08),
+        "codemodInRange": "scripts/extract_issues.py" in _names08,
+        "resolversInRange": "members/keel-model/src/resolvers.rs" in _names08,
+    } if _ok08d and _ok08s and _ok08n and _ok08p else None,
+    "live": {
+        "processChange": {"exit0": _rc08g == 0, "verdict": _pc08.group(1) if _pc08 else None, "scanned": int(_pc08.group(2)) if _pc08 else None,
+                          "violations": int(_pc08.group(4)) if _pc08 else None, "line": _pc08_last[:240] or None},
+        "guards": {"total": int(_guards08.group(1)), "hardBlocking": int(_guards08.group(2)), "warningOnly": int(_guards08.group(3))} if _guards08 else None,
+        "landingReceipt": _tr08,
+        "landingLog": {"window": _win08, "nextCommit": _next08[:8] if _next08 else None, "logsInWindow": len(_inwin08), "epoch": _inwin08[-1] if _inwin08 else None,
+                       "binaries": len(_sum08), "run": sum(int(r[1]) for r in _sum08), "passed": sum(int(r[2]) for r in _sum08),
+                       "failed": sum(int(r[3] or 0) for r in _sum08), "skipped": sum(int(r[4]) for r in _sum08),
+                       "seconds": round(sum(float(r[0]) for r in _sum08), 1)} if _sum08 else None,
+    },
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcKeelIssuesIsAMember", "dcTouchedSetDescendsTheWorkspace", "dcSuiteMeasuresTheWorkspace",
+                                    "dcSourceCitationsOnTheLivingDocsResolve", "dcSprintNamesTheItemItDelivers", "dcServeAndGithubAreMembers", "dcKeelCliIsThinDispatch")},
+    "backlogItems": len(_bl00_actions),
+    "sprint737": {k: v for k, v in _s737.items() if k != "text"} | ({
+        "retroScansAvoidable": "avoidable issues scanned (issue011)" in _retro08,
+        "retroNamesFourthSprintRunning": "the fourth sprint running (734-736)" in _retro08,
+        "retroNamesThirdHeld": "the third HELD Decision from an extraction" in _retro08,
+        "retroNamesControlFiredAsDesigned": "D0209 cl.2 is the control and it fired as designed" in _retro08,
+        "retroNamesProbeNarrowed": "narrowed to code lines" in _retro08,
+        "retroNamesThreeFlagHelpers": "Three private `flag` helpers now sit in three crates" in _retro08,
+        "retroNamesHomeIsComputed": "the module home is manifest-computed" in _retro08,
+        "retroNoNewItemCount": _retro08.count("No new item"),
+        "retroNotTrackedCount": _retro08.count("Not tracked"),
+        "retroFindings": len(re.findall(r"(?:^|[.;:] )\((\d)\) ", _retro08)),
+        "storyDodResults": [{"outcome": o, "judgedAgainst": s} for o, s in re.findall(
+            r"part storyKeelIssuesIsAMemberDoDR\d+ : TestResult \{[^}]*?outcome = VerdictKind::(\w+);[^}]*?judgedAgainst = \"([^\"]+)\"", _s737.get("text") or "")],
+        "itemDodResults": _dod_results("dcKeelIssuesIsAMember"),
+    } if _s737.get("exists") else {}),
+} if _d0508 and _is08_toml and _cli08_lib and _gl08 and _gi08 else None,
+     "the held record for the resolver predicate's descent out of the guard member and the reversed synopsis clause: Decision, D0480's clause and standing, the member's manifest and modules, keel-cli's wrappers, the predicate's new home, the landed diff with its two locked files' lines, live lock verdict and guard count, sprint 737",
+     _DEC_HOW + " Names by literal search in the field named; supersedesClauseOfD0480 = the `#SupersedeClause dependency from d0508 to d0480;` line (supersedesWholeD0480 = a `#Supersede` line, expected absent - D0398 never both); d0480 = its status, the D0207 phrase, AcceptR1's sha, "
+     "the sentence ending `name the member in their synopsis when it lands.` and whether the consequences field holds it. source: members/keel-issues/Cargo.toml [dependencies] split into path rows and version rows; members/keel-issues/src listed for .rs stems, "
+     "lib.rs for `pub mod x;` of each of the four and the add_task re-export line, build.rs probed; issue_write.rs for `pub enum TriageRefusal`, `pub fn triage_holds(` and `pub fn record_issue(`; keel-cli's lib.rs (resolved by scripts/module_home.py) for the "
+     "three `pub use keel_issues...` lines and the two wrapper pairs (the member's names beside the glob of the staying crate); keel-cli/src probed for github_ingest.rs and members/keel-write/src for intake_write.rs; write.rs and view/mod.rs for the sliced "
+     "signatures (expected absent); main.rs for the triage_holds call; keel-cli/Cargo.toml for a keel-issues path row; the root Cargo.toml `members = [...]` list and the two indices; members/keel-model/src/resolvers.rs for the two signatures, lib.rs for "
+     "`pub mod resolvers;`, queries.rs for `pub fn at_least_medium(`; members/keel-guards/src/lib.rs and issues.rs for the re-export lines, the signatures (expected absent) and a call of resolver_kind_holds; scripts/extract_issues.py for its not-an-instrument, "
+     "Idempotent, already-applied and --apply lines. landed = `git diff --name-status -M " + _LAND737_FROM + " " + _LAND737_TO + "` first letters counted, rename rows kept with their similarity (movedWhole = 100), `--shortstat` over the range, `--numstat` and `-U0` "
+     "over the range for members/keel-guards/src/lib.rs and issues.rs alone (added and removed lines verbatim; lockedDiffIsTheTwoDescents = the removed lines hold both signatures, the added lines hold both re-exports and no fn), every old or new name held "
+     "against the lock's file list and directory prefix. live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line; the touched receipt as section 32 reads it; landingLog as section 42 reads it. "
+     "resolverPositions as section 34; sprint737 from its delivery file, charter d0480, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or following a label's colon; retroNoNewItemCount / "
+     "retroNotTrackedCount = the phrases counted; storyDodResults = the story's DoDRn outcomes and shas; itemDodResults = the backlog item's DoDRn outcomes and shas.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
