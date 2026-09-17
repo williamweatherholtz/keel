@@ -1712,31 +1712,30 @@ mod tests {
 
     /// Sprint 714 broke four member tests and sprint 718 eight on the same anchor class - a test keyed
     /// on `..` or `src/...` from the crate directory, which names the repo only one level down. Each
-    /// was fixed by hand twice; this is the control (D0047). Negative: the four anchors are found in a
-    /// synthetic source and a commented one is not. Positive: no member source carries one.
+    /// was fixed by hand twice; this is the control (D0047). Since sprint 734 the population is every
+    /// crate's source, `keel-cli/src` included, so a module carries no anchor INTO its D0479 move: the
+    /// one root walk is `keel_fs::test_support::repo_root`. Negative: the four anchors are found in a
+    /// synthetic source and a commented one is not. Positive: no source carries one.
     #[test]
     fn no_member_test_anchors_on_a_cwd_relative_path() {
         let synthetic = "let root = Path::new(\"..\");\n// let x = Path::new(\"..\");\nlet s = read_to_string(\"src/main.rs\");\nlet d = Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"..\");\nlet t = read_to_string(\"../x\");\n";
         let found = cwd_relative_anchors(synthetic);
         assert_eq!(found.iter().map(|(l, _)| *l).collect::<Vec<_>>(), vec![1, 3, 4, 5], "the synthetic anchors are found and the comment is not: {found:?}");
 
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("keel-cli sits inside the keel repository")
-            .to_path_buf();
-        let files = member_sources(&root);
-        assert!(files.len() > 20, "the member sources are the population, asserted non-empty: {}", files.len());
+        let root = keel_fs::test_support::repo_root();
+        let files: Vec<std::path::PathBuf> = test_bearing_sources(&root).into_iter().filter(|(_, always_test)| !always_test).map(|(p, _)| p).collect();
+        assert!(files.len() > 40, "keel-cli/src and every member's src are the population, asserted non-empty: {}", files.len());
+        assert!(files.iter().any(|f| f.ends_with("keel-cli/src/touched.rs") || f.ends_with("keel-cli\\src\\touched.rs")), "keel-cli/src is in the population");
         let mut offenders = Vec::new();
         for f in &files {
-            let src = std::fs::read_to_string(f).expect("a member source is readable");
+            let src = std::fs::read_to_string(f).expect("a source is readable");
             for (line, anchor) in cwd_relative_anchors(&src) {
                 offenders.push(format!("{}:{line} {anchor}", f.strip_prefix(&root).unwrap_or(f).display()));
             }
         }
         assert!(
             offenders.is_empty(),
-            "member tests keyed on a cwd-relative anchor break when the crate sits two levels down (sprints 714, 718); resolve the repo root from CARGO_MANIFEST_DIR's ancestors instead:\n{}",
+            "a test keyed on a cwd-relative anchor breaks when its crate sits two levels down (sprints 714, 718); use keel_fs::test_support::repo_root() instead:\n{}",
             offenders.join("\n")
         );
     }

@@ -341,6 +341,7 @@ fn process_exists(root: &Path, name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use keel_fs::test_support::repo_root;
     use super::{Activation, GuardState};
     use std::path::Path;
 
@@ -349,16 +350,6 @@ mod tests {
     /// processes, and refusing the other 12 as "not a declared process unit" told them those did not
     /// exist. The unit set is deliberately narrower - activation switches guards - so the two must be
     /// separately observable rather than one standing in for the other.
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
-
     #[test]
     fn declared_processes_is_every_file_not_only_the_guard_bearing_units() {
         let root = &repo_root();

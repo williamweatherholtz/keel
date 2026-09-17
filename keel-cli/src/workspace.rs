@@ -610,7 +610,7 @@ mod tests {
     fn a_single_project_repo_is_unchanged_by_any_of_this() {
         // The whole design rests on this: everything workspace-aware must be a no-op for the repos
         // that exist today, or the feature is a migration rather than an addition.
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = keel_fs::test_support::repo_root();
         let ws = discover(&root);
         assert!(is_project(&ws.root), "this repo's root is itself a project");
         assert_eq!(ws.projects.len(), 1, "discovery must find exactly one project here, got {:?}", ws.projects);

@@ -3735,17 +3735,8 @@ pub fn days_between_pub(from: &str, to: &str) -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use keel_fs::test_support::repo_root;
     use super::*;
-
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` no longer names this repo (sprints 714, 718, 732).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
 
     #[test]
     fn critique_policy_default_is_core3() {

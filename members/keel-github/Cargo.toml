@@ -8,3 +8,6 @@ description = "GitHub gesture parsing and receipts (D0263/D0264) - the reading s
 
 [dependencies]
 
+[dev-dependencies]
+# keel_fs::test_support::repo_root, the one repository-root walk for tests (issue557); a leaf depending on a leaf, downward.
+keel-fs = { path = "../keel-fs" }

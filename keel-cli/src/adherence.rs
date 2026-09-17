@@ -439,7 +439,7 @@ mod tests {
     /// empty-prefix path that keeps every existing pathspec byte-identical.
     #[test]
     fn this_repo_yields_the_empty_prefix() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = keel_fs::test_support::repo_root();
         assert_eq!(super::project_prefixes(&root), vec![String::new()]);
     }
 }

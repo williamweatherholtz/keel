@@ -3059,7 +3059,7 @@ mod tests {
             .collect();
         assert!(bound.len() > 10, "the binding table should be substantial, saw {bound:?}");
 
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = keel_fs::test_support::repo_root();
         // The registry, not a directory of files: `.engine/views/viewpoint-registry.sysml`.
         let dir = root.join(".engine").join("views");
         let mut advertised: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();

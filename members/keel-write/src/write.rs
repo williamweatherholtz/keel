@@ -2369,18 +2369,9 @@ mod atomic_write_tests {
 
 #[cfg(test)]
 mod tests {
+    use keel_fs::test_support::repo_root;
     use super::{gen_uuid, looks_like_tool_output, reject_injected_output, sanitize_field, WriteError};
     use std::collections::HashSet;
-
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
 
     fn k6_root(tag: &str) -> std::path::PathBuf {
         let root = keel_fs::scratch(&format!("keel-k6-{tag}"));
@@ -3239,17 +3230,8 @@ fn sanitize_name(v: &str) -> String {
 
 #[cfg(test)]
 mod write_path_registry_tests {
+    use keel_fs::test_support::repo_root;
     use super::{write_path_refusal, WRITE_PATH_REFUSALS};
-
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
 
     /// Every `refuses` token is in the source that owns it: a `WriteError::X` is a variant this module
     /// declares and returns; a bare name is a `fn` in main.rs whose body calls `ledger_refused` with

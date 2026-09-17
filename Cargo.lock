@@ -1079,6 +1079,9 @@ dependencies = [
 [[package]]
 name = "keel-github"
 version = "0.4.1"
+dependencies = [
+ "keel-fs",
+]
 
 [[package]]
 name = "keel-guards"
@@ -1143,6 +1146,7 @@ name = "keel-schema"
 version = "0.4.1"
 dependencies = [
  "include_dir",
+ "keel-fs",
 ]
 
 [[package]]

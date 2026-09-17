@@ -1833,7 +1833,7 @@ mod tests {
     /// precondition of travelling).
     #[test]
     fn catalogue_reports_every_declared_process_not_only_guard_bearing_units() {
-        let root = Path::new("..");
+        let root = &keel_fs::test_support::repo_root();
         let all = super::rows(root);
         let declared = crate::activation::declared_processes(root);
         assert_eq!(all.len(), declared.len(), "the catalogue must cover every declared process");
@@ -1853,7 +1853,7 @@ mod tests {
     /// process file and no SKILL.md: srPortModularProcessUnit half-met in the other direction.
     #[test]
     fn a_guardless_process_still_carries_its_deploying_skill() {
-        let root = Path::new("..");
+        let root = &keel_fs::test_support::repo_root();
         let all = super::rows(root);
         let intake = all.iter().find(|r| r.name == "intake").expect("intake is declared");
         assert!(!intake.switchable, "intake asserts no guard - re-point this test if that changed");

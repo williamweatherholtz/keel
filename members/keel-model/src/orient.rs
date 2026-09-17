@@ -369,6 +369,7 @@ pub fn gate_name(phase: &str) -> String {
 
 #[cfg(test)]
 mod gate_order_tests {
+    use keel_fs::test_support::repo_root;
     use super::{gate_name, gate_order, linearise};
 
     #[test]
@@ -391,16 +392,6 @@ mod gate_order_tests {
     /// The order READ FROM THIS TREE is the six the sprint records declare - the replacement for the
     /// `include_str!` test that held a compiled constant to the file. If agile-workflow's bindings or
     /// delivery.sysml's chain move, this is where it shows.
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
-
     #[test]
     fn this_trees_ceremony_order_is_the_delivery_chain() {
         let root = repo_root();

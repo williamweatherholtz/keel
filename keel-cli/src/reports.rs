@@ -348,8 +348,8 @@ mod tests {
 
     #[test]
     fn report_produces_cards_and_rejects_unknown() {
-        // D0087: each report yields a non-empty cards array; unknown report errors. (cwd = crate dir.)
-        let root = std::path::Path::new("..");
+        // D0087: each report yields a non-empty cards array; unknown report errors.
+        let root = &keel_fs::test_support::repo_root();
         for name in ["assurance", "traceability", "quality-debt", "flow", "governance", "friction"] {
             let json = report(root, name, false).unwrap_or_else(|e| panic!("report {name}: {e}"));
             assert!(json.contains("\"cards\""), "{name} has cards");

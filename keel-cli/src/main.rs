@@ -6053,7 +6053,7 @@ mod tests {
         // refuses a root that is not a keel project, so a synthetic `/r` no longer reaches the caller.
         // The assertions below still test what they always did — that the positional is FOUND around a
         // declared flag — they just use a root that a caller could really pass.
-        let repo = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let repo = keel_fs::test_support::repo_root();
         let r = repo.to_string_lossy().to_string();
         let found = |v: &[&str], pos: usize| {
             root_arg(&a(v), "u", &["explain"], pos).ok().map(|p| p.to_string_lossy().to_string())

@@ -122,20 +122,11 @@ pub fn compute(root: &Path) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use keel_fs::test_support::repo_root;
     use super::*;
 
     /// The memo must not answer for a tree it was not asked about. Two roots in one epoch is the case
     /// a single-slot memo gets wrong, and getting it wrong returns another tree's answer.
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
-
     #[test]
     fn the_memo_is_keyed_by_root_not_only_by_epoch() {
         let repo = repo_root();

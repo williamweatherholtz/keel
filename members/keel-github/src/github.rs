@@ -110,18 +110,8 @@ pub fn decider_cmd(args: &[String], root: &Path) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use keel_fs::test_support::repo_root;
     use std::path::Path;
-
-    /// The checkout root: the first ancestor of this crate that holds `.git`. Not a fixed count of
-    /// `..` - the tests keyed on one when the module lived in keel-cli and broke when it became a
-    /// member two levels down (sprint 714).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("this crate sits inside a git checkout")
-            .to_path_buf()
-    }
 
     /// issue279: `--root` must override, because the channel runs at a repository root where there is
     /// no project and therefore no table — and it authorised NOBODY there.

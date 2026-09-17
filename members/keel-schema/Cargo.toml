@@ -8,3 +8,7 @@ description = "The engine's baked-in facts: the embedded .engine tree, the schem
 
 [dependencies]
 include_dir = "0.7"
+
+[dev-dependencies]
+# keel_fs::test_support::repo_root, the one repository-root walk for tests (issue557); a leaf depending on a leaf, downward.
+keel-fs = { path = "../keel-fs" }

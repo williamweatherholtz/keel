@@ -440,7 +440,7 @@ mod tests {
     fn the_census_separates_human_testimony_from_ai_claims() {
         // The whole point of the split: a human's `pass` needs no receipt, an AI's does. If the
         // census stopped distinguishing them, the number would blame the wrong party.
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = keel_fs::test_support::repo_root();
         let c = census(&root);
         assert!(!c.is_empty(), "population must be non-empty or this passes vacuously");
         let total: usize = c.values().map(|v| v.total).sum();

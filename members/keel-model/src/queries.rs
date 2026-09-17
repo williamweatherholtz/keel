@@ -753,21 +753,12 @@ mod narrowing_tests {
 
 #[cfg(test)]
 mod declared_tests {
+    use keel_fs::test_support::repo_root;
     use super::is_declared;
 
     /// THE CONTROL for issue177. Both directions, because the interesting failure is the FALSE NEGATIVE:
     /// my first scanner stopped at `:` and so kept the `;` from a bare `action foo;`, which made every
     /// backlog action look undeclared and broke `keel show item` for the most common item in this model.
-    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
-    /// own directory two levels down, so `..` and `src/...` no longer name this repo (sprint 714, 718).
-    fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("a member crate sits inside the keel repository")
-            .to_path_buf()
-    }
-
     #[test]
     fn a_bare_action_and_a_typed_part_are_both_declared() {
         // The repo root, not `.`: a unit test's cwd is the CRATE dir, which has no `.tracking` at
