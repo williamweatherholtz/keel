@@ -6098,8 +6098,8 @@ pub fn question_coverage(root: &Path) -> GuardReport {
 pub fn control_event_coverage(root: &Path) -> GuardReport {
     /// Every ledger event name the binary emits. A NEW `ledger_emit` call site must add its event
     /// here AND to the contract - this constant going stale is exactly what the two-way diff warns on.
-    const EMITTED_LEDGER: [&str; 14] = [
-        "post-edit", "stop", "user-prompt", "pre-bash", "pre-write", "subagent-stop",
+    const EMITTED_LEDGER: [&str; 15] = [
+        "post-edit", "stop", "user-prompt", "pre-bash", "pre-write", "subagent-start", "subagent-stop",
         "launch-dirty-refusal", "override-consumed", "override-obligation-UNSYNCED",
         "red-yield-obligation-UNSYNCED", "actor-rebind", "hook-watchdog-timeout",
         "advisory-issued", "advisory-repeated", // issue230: spoken vs silent, and the ignore signal

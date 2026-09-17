@@ -67,6 +67,19 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "K=\"${KEEL_BIN:-}\"; { [ -n \"$K\" ] && [ -x \"$K\" ]; } || { K=; for c in \"${CLAUDE_PROJECT_DIR:-.}/.keel/bin/keel\" \"${CLAUDE_PROJECT_DIR:-.}/.keel/bin/keel.exe\"; do [ -x \"$c\" ] && { K=\"$c\"; break; }; done; }; [ -n \"$K\" ] || { P=$(sed -n 's/^engine *= *\"\\(.*\\)\"/\\1/p' \"${CLAUDE_PROJECT_DIR:-.}/.engine/contracts/engine-version.toml\" 2>/dev/null | head -n1); [ -n \"$P\" ] && for c in \"${CLAUDE_PROJECT_DIR:-.}/.keel/bin/$P\"/keel-*; do [ -x \"$c\" ] && { K=\"$c\"; break; }; done; }; [ -n \"$K\" ] || K=$(command -v keel 2>/dev/null); [ -n \"$K\" ] || { echo '[keel] keel binary NOT FOUND - this gate did not run. Set KEEL_BIN or install: https://github.com/williamweatherholtz/sysmlv2-ai-toolkit/releases' >&2; exit 0; }; \"$K\" hook subagent-start",
+            "shell": "bash",
+            "statusMessage": "subagent own-start baseline (D0501)",
+            "timeout": 30,
+            "type": "command"
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [

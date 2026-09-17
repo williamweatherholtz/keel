@@ -66,8 +66,8 @@ package ProcessDelegatedCeremony {
     action dcyRedTreeIsARefusal : ProcessStep {
         :>> id = "e8a993d3-dd75-49d4-b0bf-91f44888d9c7";
         :>> title = "A recorder that leaves a red tree is a counted refusal, not a red the primary inherits silently";
-        :>> triggerCondition = "The subagent-stop hook fires for an agent of type recorder and the tree changed during its lifetime.";
-        :>> actionText = "The subagent-stop hook runs the turn gate over the changed tree (D0174). When it blocks for a recorder, the fire's ledger line is refused-class with control recorder:tree-red (keel-cli/src/main.rs subagent_block_control), so keel show control-census and enforcement-report count how often a recorder leaves a red tree - the frequency that decides whether this process's boundaries hold or the recorder needs a harder control. For any other agent type the block keeps the control the gate named.";
+        :>> triggerCondition = "The subagent-stop hook fires for an agent of type recorder or verifier and the tree changed during its lifetime - measured from the fingerprint at that agent's own start (D0501), never from the session's.";
+        :>> actionText = "For a recorder the subagent-stop hook runs the turn gate over the changed tree (D0174); when it blocks, the fire's ledger line is refused-class with control recorder:tree-red (keel-cli/src/main.rs subagent_block_control), so keel show control-census and enforcement-report count how often a recorder leaves a red tree. For a VERIFIER the hook never blocks (D0502): its receipt is its report and the tree's red is the primary's to fix at the turn gate; a verifier whose own fingerprint moved is one refused-class ledger line under verifier:tree-written (main.rs subagent_stop_route) - the one act the role forbids, counted beside recorder:tree-red. Either frequency decides whether this process's boundaries hold or the role needs a harder control. Any other agent type keeps the control the gate named.";
         :>> producedArtifact = "One ledger line per recorder red, countable by control name.";
         :>> owner = Owner::ai;
     }

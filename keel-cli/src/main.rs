@@ -340,6 +340,19 @@ fn cmd_hook(args: &[String]) -> i32 {
             let _ = std::fs::write(&bl, keel_cli::fingerprint::of(&root).to_string());
         }
     }
+    // D0501 / issue578: a subagent is gated against the tree at its OWN start, not the session's. Every
+    // hook fire inside a subagent carries `agent_id` (SubagentStart first, then its tool fires), so the
+    // first such fire that is not the agent's own stop stores its baseline; never overwritten, so a
+    // long agent's later fires cannot move it.
+    if event != "subagent-stop" {
+        if let Some(agent_id) = payload.get("agent_id").and_then(serde_json::Value::as_str) {
+            let bl = agent_baseline_path(&root, agent_id);
+            if !bl.exists() {
+                let _ = std::fs::create_dir_all(root.join(".keel").join("metrics"));
+                let _ = std::fs::write(&bl, keel_cli::fingerprint::of(&root).to_string());
+            }
+        }
+    }
     // D0414 / issue429: a hook fire collects its phases whether or not KEEL_PERF is set, so a slow
     // one can write what it spent its time on into its own ledger line.
     keel_cli::perf::collect_phases();
@@ -351,9 +364,10 @@ fn cmd_hook(args: &[String]) -> i32 {
         "pre-bash" => hook_pre_bash(&payload, &root, &session),
         "pre-write" => hook_pre_write(&payload, &root),
         "subagent-stop" => hook_subagent_stop(&payload, &root, &session),
+        "subagent-start" => 0, // D0501: the baseline write above is the whole event; the fire line counts it
         "config-change" => hook_config_change(&payload),
         other => {
-            eprintln!("unknown hook event '{other}' (expected stop|post-edit|pre-bash|user-prompt|pre-write|subagent-stop|config-change)");
+            eprintln!("unknown hook event '{other}' (expected stop|post-edit|pre-bash|user-prompt|pre-write|subagent-start|subagent-stop|config-change)");
             2
         }
     };
@@ -823,36 +837,96 @@ fn hook_pre_write(payload: &serde_json::Value, root: &Path) -> i32 {
     0
 }
 
-/// `SubagentStop` (D0174/P0.6): gate ONLY when the tree changed during the subagent's lifetime.
-/// Baseline = the fingerprint stored at the session's first hook fire; no baseline → a
-/// `systemMessage` advisory, never a block (a read-only subagent pays nothing).
-fn hook_subagent_stop(payload: &serde_json::Value, root: &Path, session: &str) -> i32 {
-    let bl = root.join(".keel").join("metrics").join(format!("baseline-{session}.fp"));
-    let Ok(baseline) = std::fs::read_to_string(&bl) else {
-        println!(
-            "{}",
-            serde_json::json!({"systemMessage": "[keel] subagent tree not gated: no baseline fingerprint for this session (first hook fire was this one)"})
-        );
-        return 0;
-    };
-    if baseline.trim() == keel_cli::perf::phase("hook:fingerprint", || keel_cli::fingerprint::of(root)).to_string() {
-        return 0; // wrote nothing — pays nothing
+/// Where an agent's own start fingerprint lives (D0501). The id is a harness string; anything that is
+/// not a filename character is folded to `_` so a hostile or odd id cannot name a path elsewhere.
+fn agent_baseline_path(root: &Path, agent_id: &str) -> PathBuf {
+    let safe: String = agent_id.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    root.join(".keel").join("metrics").join(format!("agent-{safe}.fp"))
+}
+
+/// The fingerprint a stopping subagent is measured against (D0501 / issue578): the tree at ITS OWN
+/// start when a fire recorded one, else the session's first-fire baseline - the pre-D0501 interval,
+/// kept so a payload without `agent_id` stays gated rather than silently ungated. `None` = no
+/// baseline at all.
+fn subagent_baseline(root: &Path, payload: &serde_json::Value, session: &str) -> Option<String> {
+    let own = payload
+        .get("agent_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|id| std::fs::read_to_string(agent_baseline_path(root, id)).ok());
+    own.or_else(|| std::fs::read_to_string(root.join(".keel").join("metrics").join(format!("baseline-{session}.fp"))).ok())
+}
+
+/// What a `SubagentStop` fire does, decided before the gate runs (D0501/D0502). Pure, so the D0388
+/// pair is pinned without a tree or a hook fire.
+#[derive(Debug, PartialEq, Eq)]
+enum SubagentStopRoute {
+    /// no baseline for this agent or session: a `systemMessage` advisory, never a block
+    NotGated,
+    /// the tree did not move during the agent's lifetime: exit 0, nothing said
+    Silent,
+    /// a VERIFIER moved the tree: never a block - one `systemMessage`, and the fire's ledger line is
+    /// refused-class under `verifier:tree-written` (D0502, beside `recorder:tree-red`)
+    VerifierTreeWritten,
+    /// any other agent moved the tree: the turn gate over the tree as it is (D0174/P0.6)
+    Gate,
+}
+
+fn subagent_stop_route(agent_type: Option<&str>, baseline: Option<&str>, now: &str) -> SubagentStopRoute {
+    let Some(baseline) = baseline else { return SubagentStopRoute::NotGated };
+    if baseline.trim() == now {
+        return SubagentStopRoute::Silent;
     }
-    // The tree changed under this subagent: same gate as the turn boundary. A block for a RECORDER
-    // (dcDelegatedCeremonyIsASkill clause d) is ledgered under `recorder:tree-red`, so the census
-    // counts how often the D0425 recorder role leaves a red tree; the payload's `agent_type` is the
-    // custom agent's name (Claude Code 2.1.270: SubagentStop carries agent_id, agent_type,
-    // agent_transcript_path, stop_hook_active). Any other agent keeps the control the gate named.
-    let code = hook_stop(payload, root);
-    if let Ok(mut g) = EMITTED_VERDICT.lock() {
-        if let Some((decision, control)) = g.as_mut() {
-            if decision == "block" {
-                let relabelled = subagent_block_control(payload.get("agent_type").and_then(serde_json::Value::as_str), control);
-                *control = relabelled;
+    if agent_type == Some("verifier") {
+        SubagentStopRoute::VerifierTreeWritten
+    } else {
+        SubagentStopRoute::Gate
+    }
+}
+
+/// `SubagentStop` (D0174/P0.6): gate ONLY when the tree changed during the subagent's lifetime.
+/// Baseline = the fingerprint stored at the agent's own start (D0501), else the session's first hook
+/// fire; no baseline → a `systemMessage` advisory, never a block (a read-only subagent pays nothing).
+/// A VERIFIER is never blocked (D0502): its receipt is its report and the tree's red is the primary's
+/// to fix at the turn gate; a verifier that moved the tree is the ledgered fact instead.
+fn hook_subagent_stop(payload: &serde_json::Value, root: &Path, session: &str) -> i32 {
+    let agent_type = payload.get("agent_type").and_then(serde_json::Value::as_str);
+    let baseline = subagent_baseline(root, payload, session);
+    let now = keel_cli::perf::phase("hook:fingerprint", || keel_cli::fingerprint::of(root)).to_string();
+    match subagent_stop_route(agent_type, baseline.as_deref(), &now) {
+        SubagentStopRoute::NotGated => {
+            println!(
+                "{}",
+                serde_json::json!({"systemMessage": "[keel] subagent tree not gated: no baseline fingerprint for this agent or session (first hook fire was this one)"})
+            );
+            0
+        }
+        SubagentStopRoute::Silent => 0, // wrote nothing — pays nothing
+        SubagentStopRoute::VerifierTreeWritten => {
+            note_verdict("refused", "verifier:tree-written");
+            println!(
+                "{}",
+                serde_json::json!({"systemMessage": "[keel] verifier:tree-written - the tree moved during a VERIFIER's lifetime; a verifier writes one receipt and nothing under the project (delegated-ceremony dcyVerifierReceipt, D0502). Not a block: ledgered for the census, and the tree is the primary's to read at the turn gate."})
+            );
+            0
+        }
+        SubagentStopRoute::Gate => {
+            // The tree changed under this subagent: same gate as the turn boundary. A block for a RECORDER
+            // (dcDelegatedCeremonyIsASkill clause d) is ledgered under `recorder:tree-red`, so the census
+            // counts how often the D0425 recorder role leaves a red tree; the payload's `agent_type` is the
+            // custom agent's name (Claude Code 2.1.270: SubagentStop carries agent_id, agent_type,
+            // agent_transcript_path, stop_hook_active). Any other agent keeps the control the gate named.
+            let code = hook_stop(payload, root);
+            if let Ok(mut g) = EMITTED_VERDICT.lock() {
+                if let Some((decision, control)) = g.as_mut() {
+                    if decision == "block" {
+                        let relabelled = subagent_block_control(agent_type, control);
+                        *control = relabelled;
+                    }
+                }
             }
+            code
         }
     }
-    code
 }
 
 /// The control a subagent-stop BLOCK is ledgered under: `recorder:tree-red` when the stopped agent's
@@ -5811,6 +5885,60 @@ mod subagent_block_control_tests {
         assert_eq!(subagent_block_control(Some("general-purpose"), "in-loop-gate"), "in-loop-gate");
         assert_eq!(subagent_block_control(Some("verifier"), "in-loop-gate"), "in-loop-gate");
         assert_eq!(subagent_block_control(None, "in-loop-gate"), "in-loop-gate");
+    }
+}
+
+#[cfg(test)]
+mod subagent_stop_route_tests {
+    use super::{agent_baseline_path, subagent_baseline, subagent_stop_route, SubagentStopRoute};
+
+    const SESSION_START: &str = "1111"; // the session's first-fire tree
+    const AGENT_START: &str = "2222"; // the tree when the agent began - the primary edited in between
+    const AGENT_MOVED: &str = "3333"; // the tree after the agent itself wrote
+
+    /// D0388 pair for dcVerifierStopIsNeverABlock (D0501/D0502), stated before the tree is read.
+    /// Known positive: a verifier over a tree that differs from the SESSION baseline but not from its
+    /// own start is silent - no block, no refused line; a verifier whose own fingerprint moved is the
+    /// ledgered control `verifier:tree-written`, still never the gate.
+    #[test]
+    fn a_verifier_is_never_gated_and_its_own_write_is_the_ledgered_fact() {
+        assert_eq!(subagent_stop_route(Some("verifier"), Some(AGENT_START), AGENT_START), SubagentStopRoute::Silent, "the primary's edits before the agent started are not the agent's");
+        assert_eq!(subagent_stop_route(Some("verifier"), Some(AGENT_START), AGENT_MOVED), SubagentStopRoute::VerifierTreeWritten);
+        // the pre-D0501 measurement would have gated this verifier over the primary's red (issue578)
+        assert_ne!(subagent_stop_route(Some("verifier"), Some(SESSION_START), AGENT_START), SubagentStopRoute::Gate, "a verifier never reaches the gate, whichever baseline it fell back to");
+    }
+
+    /// Known negative: a recorder over a moved tree still reaches the gate (whose block is relabelled
+    /// `recorder:tree-red` by `subagent_block_control`), a payload with no `agent_type` keeps the gate,
+    /// and an agent with no baseline at all is advised, not blocked.
+    #[test]
+    fn a_recorder_and_an_untyped_agent_keep_the_gate_over_a_moved_tree() {
+        assert_eq!(subagent_stop_route(Some("recorder"), Some(AGENT_START), AGENT_MOVED), SubagentStopRoute::Gate);
+        assert_eq!(subagent_stop_route(None, Some(AGENT_START), AGENT_MOVED), SubagentStopRoute::Gate);
+        assert_eq!(subagent_stop_route(Some("general-purpose"), Some(AGENT_START), AGENT_START), SubagentStopRoute::Silent);
+        assert_eq!(subagent_stop_route(Some("recorder"), None, AGENT_MOVED), SubagentStopRoute::NotGated);
+        assert_eq!(subagent_stop_route(Some("verifier"), None, AGENT_MOVED), SubagentStopRoute::NotGated);
+    }
+
+    /// D0501: the agent's own start file wins over the session baseline when it exists; a payload with
+    /// no `agent_id`, or whose agent left no file, reads the session baseline as before.
+    #[test]
+    #[allow(clippy::expect_used)] // test setup: a failed mkdir or write should abort the test loudly
+    fn the_agents_own_start_is_read_before_the_sessions() {
+        let root = keel_fs::scratch("subagent-stop-route");
+        let metrics = root.join(".keel").join("metrics");
+        std::fs::create_dir_all(&metrics).expect("metrics dir");
+        std::fs::write(metrics.join("baseline-s1.fp"), SESSION_START).expect("session baseline");
+        std::fs::write(agent_baseline_path(&root, "agent/one"), AGENT_START).expect("agent baseline");
+        assert!(agent_baseline_path(&root, "agent/one").ends_with("agent-agent_one.fp"), "a separator in the id is folded, never a path");
+        let own = serde_json::json!({"agent_id": "agent/one", "agent_type": "verifier"});
+        let no_file = serde_json::json!({"agent_id": "agent-two", "agent_type": "verifier"});
+        let no_id = serde_json::json!({"agent_type": "verifier"});
+        assert_eq!(subagent_baseline(&root, &own, "s1").as_deref(), Some(AGENT_START));
+        assert_eq!(subagent_baseline(&root, &no_file, "s1").as_deref(), Some(SESSION_START));
+        assert_eq!(subagent_baseline(&root, &no_id, "s1").as_deref(), Some(SESSION_START));
+        assert_eq!(subagent_baseline(&root, &no_id, "s2"), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

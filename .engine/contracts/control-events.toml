@@ -44,10 +44,15 @@ control = "ctlPreWriteTiers"
 record = "ledger"
 note = "protected-fact-surface tiers (D0176)"
 
+[subagent-start]
+control = "ctlTurnBoundaryGate"
+record = "ledger"
+note = "subagent own-start baseline write (D0501): the interval the stop gate measures begins here"
+
 [subagent-stop]
 control = "ctlTurnBoundaryGate"
 record = "ledger"
-note = "subagent tree gate (D0174)"
+note = "subagent tree gate (D0174); a verifier is never blocked, its moved tree is verifier:tree-written (D0502)"
 
 [launch-dirty-refusal]
 control = "ctlLaunchDirtyRefusal"

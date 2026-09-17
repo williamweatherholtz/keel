@@ -33,7 +33,10 @@ and it reported "All issues resolved ... ready for commit" over a tree whose gua
 
 The agent types are `.claude/agents/verifier.md` and `.claude/agents/recorder.md`. They carry the
 role into the SubagentStop hook's payload (`agent_type`), which is how a recorder that leaves a red
-tree becomes a `recorder:tree-red` refusal in the fire ledger (process step dcyRedTreeIsARefusal).
+tree becomes a `recorder:tree-red` refusal in the fire ledger, and a verifier that writes the tree a
+`verifier:tree-written` one (process step dcyRedTreeIsARefusal). The hook measures each agent from
+the tree at its OWN start (D0501), and a verifier is NEVER blocked (D0502): a red the primary left is
+the primary's, read at the turn gate, and the verifier's only answer to it is the receipt.
 
 ## Verifier brief — dispatch verbatim, filling the four slots
 
@@ -124,7 +127,8 @@ ladder at the probe rung).
 Reads it back from the tree, not from the report: `KEEL show verification . --pending`, the sprint
 file, `KEEL gate guard --no-receipt .`. A `REFUSED:` line is the primary's write to make (a `--fill`
 edge, a DoD sentence naming an obligation) - or its decision not to. A `recorder:tree-red` line in
-`.keel/metrics/hooks.jsonl` means a recorder left the tree red: the census counts them
+`.keel/metrics/hooks.jsonl` means a recorder left the tree red; a `verifier:tree-written` line means
+a verifier wrote under the project (issue578). The census counts both
 (`KEEL show control-census .`), and a rising count is this process's own trigger to harden.
 
 ## Anti-patterns - each one has happened
@@ -139,3 +143,4 @@ edge, a DoD sentence naming an obligation) - or its decision not to. A `recorder
 - "Record the ceremony" / "run the verifier and recorder" / "delegate the gate results"
 - "What may the recorder write?" - keel record verbs, nothing else
 - "Why did the Stop hook go red after a subagent?" - `recorder:tree-red` in the ledger, or not
+- "Did the verifier touch the tree?" - a `verifier:tree-written` line in the ledger, or not (never a block)

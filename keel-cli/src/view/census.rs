@@ -250,7 +250,7 @@ const WRITE_PATH_CHECKS: &[(&str, Subject, &str, &str, &[&str])] = &[
 
 /// Hook events whose refusals fall on the agent: a Claude Code hook fires on the agent's tool call or
 /// turn boundary; the human's shell never passes through one.
-const HOOK_EVENTS: &[&str] = &["pre-bash", "pre-write", "post-edit", "stop", "subagent-stop", "config-change", "user-prompt"];
+const HOOK_EVENTS: &[&str] = &["pre-bash", "pre-write", "post-edit", "stop", "subagent-start", "subagent-stop", "config-change", "user-prompt"];
 
 fn control_kind_for_event(event: &str) -> Option<&'static str> {
     match event {

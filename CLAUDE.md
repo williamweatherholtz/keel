@@ -146,7 +146,8 @@ Change Request cross-cuts and is itself frozen.
   report ends with the last line of `keel gate --fast .`. `references/check_report.py` refuses a report otherwise,
   one whose `WROTE:` names a non-`record` command or writes one gate/task twice (D0473), and one accounting for nothing
   or, under `--owed N` (the count the dispatch named), for fewer than N (D0492): a red after a write is
-  a `DISCREPANCIES:` line. A recorder that leaves the tree red is ledgered `recorder:tree-red`. Neither reads the
+  a `DISCREPANCIES:` line. A recorder that leaves the tree red is ledgered `recorder:tree-red`; a verifier that writes
+  the tree is ledgered `verifier:tree-written`, never blocked (D0501/D0502: each subagent is measured from its own start). Neither reads the
   other's conclusion as fact.
 
 **Git**

@@ -200,7 +200,7 @@ fn protected_path_command() -> String {
     )
 }
 
-/// The keel-owned `hooks` object — SIX events (D-P0a, then `ConfigChange` under D0296).
+/// The keel-owned `hooks` object — SEVEN events (D-P0a, `ConfigChange` under D0296, `SubagentStart` under D0501).
 fn keel_hooks() -> serde_json::Value {
     let r = resolver();
     let g = gating_resolver();
@@ -213,6 +213,7 @@ fn keel_hooks() -> serde_json::Value {
             { "matcher": "Bash", "hooks": [hook_entry(&format!("{r}\"$K\" hook pre-bash"), 30, "shell adaptation advisory")] },
             { "matcher": "Write|Edit", "hooks": [hook_entry(&protected_path_command(), 30, "protected-path check")] }
         ],
+        "SubagentStart": [{ "hooks": [hook_entry(&format!("{r}\"$K\" hook subagent-start"), 30, "subagent own-start baseline (D0501)")] }],
         "SubagentStop": [{ "hooks": [hook_entry(&format!("{r}\"$K\" hook subagent-stop"), 120, "subagent tree gate")] }]
     })
 }
@@ -222,7 +223,7 @@ fn keel_hooks() -> serde_json::Value {
 fn is_keel_hook(h: &serde_json::Value) -> bool {
     h.get("command")
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|c| c.contains("hook user-prompt") || c.contains("hook post-edit") || c.contains("hook stop") || c.contains("hook pre-bash") || c.contains("hook subagent-stop") || c.contains("hook pre-write") || c.contains("hook config-change") || c.contains("permissionDecision"))
+        .is_some_and(|c| c.contains("hook user-prompt") || c.contains("hook post-edit") || c.contains("hook stop") || c.contains("hook pre-bash") || c.contains("hook subagent-start") || c.contains("hook subagent-stop") || c.contains("hook pre-write") || c.contains("hook config-change") || c.contains("permissionDecision"))
 }
 
 /// The one settings key that silences EVERY hook from whichever scope sets it.
@@ -883,9 +884,9 @@ mod tests {
     }
 
     #[test]
-    fn generated_hooks_have_six_events_and_fail_loud_resolution() {
+    fn generated_hooks_have_seven_events_and_fail_loud_resolution() {
         let h = keel_hooks();
-        for ev in ["ConfigChange", "UserPromptSubmit", "PostToolUse", "Stop", "PreToolUse", "SubagentStop"] {
+        for ev in ["ConfigChange", "UserPromptSubmit", "PostToolUse", "Stop", "PreToolUse", "SubagentStart", "SubagentStop"] {
             assert!(h.get(ev).is_some(), "missing event {ev}");
         }
         let text = h.to_string();
