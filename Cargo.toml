@@ -10,6 +10,7 @@ members = [
     "members/keel-fs",
     "members/keel-model",
     "members/keel-write",
+    "members/keel-view",
     "keel-cli",
 ]
 resolver = "2"

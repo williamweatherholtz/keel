@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 #[allow(clippy::wildcard_imports)] // a view submodule: the parent's vocabulary is this file's vocabulary
 use super::*;
@@ -1446,7 +1446,7 @@ mod tests {
         // (new_epoch: the model memo is keyed by an explicit epoch - a test mutating files
         // directly must announce the write the way the CLI write paths do.)
         std::fs::remove_dir_all(dir.join(".knowledge")).expect("rm");
-        crate::fingerprint::new_epoch();
+        keel_model::fingerprint::new_epoch();
         let (scanned, violations) = knowledge_wellformedness(&dir).expect("model builds empty");
         assert_eq!((scanned, violations.len()), (0, 0));
     }

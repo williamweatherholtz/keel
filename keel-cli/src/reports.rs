@@ -16,8 +16,49 @@ use crate::view::*;
 #[must_use]
 pub fn orient(root: &Path) -> crate::orient::Output {
     let mut o = crate::orient::compute(root);
-    o.burndown = burndown_summary_json(root).unwrap_or_default();
+    let extras = BurndownExtras { guard_warnings: actionable_guard_warnings(root), proposed_results: crate::attestation::proposed_count(root) };
+    o.burndown = burndown_summary_json(root, extras).unwrap_or_default();
     o
+}
+
+/// ACTIONABLE GUARD WARNINGS in the burndown (issue404 / D0413).
+///
+/// The guard set's warnings a reader can act on - every warning that is not a counted-history line
+/// (`guards::is_history`) - per guard, with its first line as the sample and the command that lists the
+/// rest. Read from the guard receipt when the tree it judged is this one; orient does not run the
+/// guards, and a count computed over a different tree would be prose state, so with no receipt for this
+/// tree the value is `null` and `how` says what to run.
+fn actionable_guard_warnings(root: &Path) -> Json {
+    let receipt = crate::receipt::key(root)
+        .and_then(|k| crate::receipt::read(root, &k))
+        .filter(|r| r.covers_all(&[crate::receipt::GUARDS]));
+    let Some(receipt) = receipt else {
+        return Json::Obj(vec![
+            ("actionable".to_string(), Json::Null),
+            ("how".to_string(), Json::s("no green guard receipt for this tree - `keel gate guard .` runs the set and writes one; its summary states the actionable count".to_string())),
+        ]);
+    };
+    let n = |c: usize| Json::Int(i64::try_from(c).unwrap_or(i64::MAX));
+    let mut per_guard = Vec::new();
+    let mut total = 0;
+    for r in &receipt.guards {
+        let mut lines = r.actionable();
+        let Some(first) = lines.next() else { continue };
+        let count = 1 + lines.count();
+        total += count;
+        per_guard.push(Json::Obj(vec![
+            ("guard".to_string(), Json::s(r.name.to_string())),
+            ("count".to_string(), n(count)),
+            ("first".to_string(), Json::s(first.clone())),
+            ("detail".to_string(), Json::s(format!("keel gate guard {} .", r.name))),
+        ]));
+    }
+    Json::Obj(vec![
+        ("actionable".to_string(), n(total)),
+        ("counted_history".to_string(), n(receipt.guards.iter().map(|r| r.history().count()).sum())),
+        ("guards".to_string(), Json::Arr(per_guard)),
+        ("how".to_string(), Json::s("from the guard receipt for this tree (.keel/metrics/guard-receipt.toml); counted-history lines are immutable history and are not listed".to_string())),
+    ])
 }
 
 /// Compute a report's `(title, cards)`; shared by the JSON emitter and the HTML scorecard.

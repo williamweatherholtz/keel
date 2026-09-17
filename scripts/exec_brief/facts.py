@@ -1575,13 +1575,13 @@ for m in re.finditer(r"at ([0-9.]+)(?: and at ([0-9.]+))? (?:the rebase question
         if s:
             _hand[s] = {"on": int(m.group(4)), "reachable": int(m.group(6)), "bar": m.group(5), "d0129Position": int(m.group(3)) if m.group(3) else None}
 _ties = len(re.findall(r"COULD NOT CHOOSE on KEEL_RECALL_DOMINANCE", _research))
-_kn = read(os.path.join(REPO, "keel-cli", "src", "view", "knowledge.rs")) or ""
+_kn = read(_mh("view/knowledge") or "") or ""
 _const = re.search(r"const DOMINANCE: f64 = ([0-9.]+);", _kn)
 _bar = re.search(r'recallRanksLinkedRecordsAsWellAsGrepDoesDoD : Test \{[^}]*?procedureText = "(.*?)"', read(os.path.join(REPO, ".tracking", "backlog.sysml")) or "", re.DOTALL)
 SW_HOW = ("regex over the `// RESEARCH:` line of .engine/decisions/0464-*.sysml - the sweep that Decision records, one row per "
           "DOMINANCE setting per arm (hits/50, median position, top-3), the hand-set readings (injection ON n/8, bar MET or "
           "NOT MET, n/7 reachable, d0129's position where it arrived), and the count of COULD NOT CHOOSE tie lines; "
-          "`constant` = regex `const DOMINANCE: f64 = N;` over keel-cli/src/view/knowledge.rs (the value in force); "
+          "`constant` = regex `const DOMINANCE: f64 = N;` over view/knowledge.rs (module_home resolves the crate) (the value in force); "
           "`barText` = the procedureText of recallRanksLinkedRecordsAsWellAsGrepDoesDoD in .tracking/backlog.sysml. "
           "Quoted from the record and the source, never retyped; re-runnable with .engine/tools/recall_bench.py --sweep.")
 fact("dominanceSweep", {
@@ -1722,7 +1722,7 @@ _hand6 = {}
 for m in re.finditer(r"([0-9.]+) bar (MET|NOT MET) (\d)/(\d), (?:the rebase question's )?d0129 (?:at position (\d+)|absent)", _research6):
     _hand6[m.group(1)] = {"bar": m.group(2), "reachable": int(m.group(3)), "of": int(m.group(4)),
                           "d0129Position": int(m.group(5)) if m.group(5) else None}
-_kn6 = read(os.path.join(REPO, "keel-cli", "src", "view", "knowledge.rs")) or ""
+_kn6 = read(_mh("view/knowledge") or "") or ""
 _const6 = re.search(r"const DOMINANCE: f64 = ([0-9.]+);", _kn6)
 SS_HOW = ("regex over the `// RESEARCH:` line of .engine/decisions/0466-*.sysml: the 50-case block is the text between "
           "`Default sample, 50 cases, tree <sha>, one-hop then two-hop: ` and `. Verdict lines`; the 100-case block the "
@@ -1732,7 +1732,7 @@ SS_HOW = ("regex over the `// RESEARCH:` line of .engine/decisions/0466-*.sysml:
           "ruleAt50 / ruleAt100 apply D0464 option B IN CODE to those rows: admissible when one-hop hits >= setting 0's, "
           "one-hop mean rows equal where both stated, and the one-hop median moves by 0, or by exactly 1 where the two-hop arm "
           "gains >= 3 hits; winner = the admissible setting with the most two-hop hits (null on a tie). "
-          "`constant` = regex `const DOMINANCE: f64 = N;` over keel-cli/src/view/knowledge.rs. Re-runnable with "
+          "`constant` = regex `const DOMINANCE: f64 = N;` over view/knowledge.rs (module_home resolves the crate). Re-runnable with "
           ".engine/tools/recall_bench.py --sweep [--cases 100].")
 fact("sampleSplit", {
     "at50": {"tree": _blk50.group(1) if _blk50 else None, "rows": _r50, "rule": _weighted_rule(_r50)},
@@ -2180,7 +2180,7 @@ fact("rejectVerdictDecision", {
 
 # --- D0470: the three layers in source - the refusal inside each verdict's lock, and the two command lists
 _wr = read(os.path.join(REPO, "members", "keel-write", "src", "write.rs")) or ""
-_cs = read(os.path.join(REPO, "keel-cli", "src", "view", "control_structure.rs")) or ""
+_cs = read(_mh("view/control_structure") or "") or ""
 _gr = read(_mh("guards") or "") or ""
 
 
@@ -2349,7 +2349,8 @@ fact("cliReferenceDecision", {
 
 # --- D0471: the guard in source - its name in GUARD_NAMES, its dispatch arm, the shared walk, and the three declaration surfaces
 _gr = read(_mh("guards") or "") or ""
-_gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gr, re.S)
+_gl = read(_mh("guard_names") or "") or ""  # sprint 732: the list is keel-schema's, the arms stay in guards.rs
+_gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gl, re.S)
 _gnames = re.findall(r'"([a-z0-9-]+)"', _gn.group(2)) if _gn else []
 _gmd = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
 _gcs = read(os.path.join(REPO, ".engine", "rules", "guard-constraints.sysml")) or ""

@@ -1,12 +1,12 @@
 //! Load-bearing decisions, the traceability diagram, the scorecard vocabulary (D0087), indicators (D0089).
 //!
 //! Extracted from view.rs (sprint 418, dcViewRsRestructure: the panel's god-module finding); the report
-//! compositions themselves moved up to `crate::reports` (D0479) because they read orient and readiness.
+//! compositions themselves moved up to keel-cli's `reports` (D0479) because they read orient and readiness.
 
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 
 #[allow(clippy::wildcard_imports)] // a pure move-only split: the parent's vocabulary IS this file's vocabulary
@@ -77,7 +77,7 @@ pub fn decisions_report(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     // Decision-file texts keyed by decision name (for citation + supersede + retired scans).
     let mut texts: Vec<(String, String)> = Vec::new();
-    for path in crate::collect_sysml(&root.join(".engine").join("decisions")) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".engine").join("decisions")) {
         if let Ok(t) = std::fs::read_to_string(&path) {
             if let Some(name) = find_decision_name(&t) {
                 texts.push((name, t));
@@ -166,23 +166,27 @@ pub fn decisions_report(root: &Path) -> Result<String, ViewError> {
 /// authored nothing has done nothing, and a fresh scaffold reporting a clean sweep of 100% was the
 /// defect the human saw on every inheriting project. Callers that can tell "nothing yet" from "0 of
 /// many" should pair this with [`cov_tone_of`], which gives the empty case its own tone.
-pub(crate) fn pct(n: usize, d: usize) -> u32 {
+#[must_use]
+pub fn pct(n: usize, d: usize) -> u32 {
     n.saturating_mul(100).checked_div(d).map_or(0, |x| u32::try_from(x).unwrap_or(0))
 }
 
 /// Tone for a coverage-style percentage (higher is better).
-pub(crate) const fn cov_tone(p: u32) -> &'static str {
+#[must_use]
+pub const fn cov_tone(p: u32) -> &'static str {
     if p >= 90 { "good" } else if p >= 70 { "warn" } else { "bad" }
 }
 
 /// Tone for a ratio whose population may be empty: `empty` (neutral) when there is nothing to
 /// measure, so a fresh project reads "nothing yet" rather than "failing" - and never "complete".
-pub(crate) fn cov_tone_of(n: usize, d: usize) -> &'static str {
+#[must_use]
+pub fn cov_tone_of(n: usize, d: usize) -> &'static str {
     if d == 0 { "empty" } else { cov_tone(pct(n, d)) }
 }
 
 /// One scorecard metric card.
-pub(crate) fn card(label: &str, value: String, detail: String, tone: &str) -> Json {
+#[must_use]
+pub fn card(label: &str, value: String, detail: String, tone: &str) -> Json {
     Json::Obj(vec![
         ("label".to_string(), Json::s(label.to_string())),
         ("value".to_string(), Json::s(value)),
@@ -202,12 +206,13 @@ fn sampled_commits(root: &Path, n: usize) -> Vec<String> {
 /// Run `git -C root <args>` and capture stdout, or `None` on non-zero exit / failure.
 pub(super) fn git_out(root: &Path, args: &[&str]) -> Option<String> {
     // Count, argv tally and wall time all happen in gitx::Git (dcGuardsRunInParallelAndTimed).
-    let out = crate::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
+    let out = keel_git::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// The headline metric's display label per report.
-pub(crate) const fn headline_label(name: &str) -> &str {
+#[must_use]
+pub const fn headline_label(name: &str) -> &str {
     match name.as_bytes() {
         b"assurance" => "Verification coverage %",
         b"traceability" => "Requirements verified %",
@@ -233,7 +238,7 @@ pub fn metric_value(root: &Path, key: &str) -> Option<f64> {
             let (_, p90, _, _) = crate::pm::latency(&crate::pm::recent_event_ms(root, "stop", 25));
             return Some(f64::from(u32::try_from(p90).unwrap_or(u32::MAX)));
         }
-        "git_facts_bytes" => return Some(f64::from(u32::try_from(crate::gitfacts::cache_bytes(root)).unwrap_or(u32::MAX))),
+        "git_facts_bytes" => return Some(f64::from(u32::try_from(keel_model::gitfacts::cache_bytes(root)).unwrap_or(u32::MAX))),
         _ => {}
     }
     let model = Model::build(root).ok()?;
@@ -241,8 +246,8 @@ pub fn metric_value(root: &Path, key: &str) -> Option<f64> {
     match key {
         // coverage-family (the full tier pipeline)
         "coverage_pct" | "req_verified_pct" | "needs_verified_pct" => {
-            let done = crate::done::done_names(root);
-            let task_suspect: HashSet<String> = crate::suspect::suspect(root).into_iter().collect();
+            let done = keel_model::done::done_names(root);
+            let task_suspect: HashSet<String> = keel_model::suspect::suspect(root).into_iter().collect();
             let stale = compute_stale_verifications(root, &model);
             let cov = compute_coverage(&model, &done, &task_suspect, &stale);
             Some(f64::from(match key {
@@ -303,7 +308,7 @@ pub fn metric_value(root: &Path, key: &str) -> Option<f64> {
             }))
         }
         "open_findings" => {
-            let done = crate::done::done_names(root);
+            let done = keel_model::done::done_names(root);
             let (undisp, crit) = finding_blockers(&compute_issue_resolution(&model, &done), &model);
             Some(cnt(undisp.len() + crit.len()))
         }
@@ -322,7 +327,7 @@ pub fn metric_value(root: &Path, key: &str) -> Option<f64> {
 
 /// Compute a keyed metric ([`metric_value`]) at each sampled commit via a throwaway git worktree
 /// (reuses the whole pipeline unchanged at that commit). Commits that fail to check out are skipped.
-pub(crate) fn trend_series(root: &Path, key: &str) -> Vec<(String, f64)> {
+pub fn trend_series(root: &Path, key: &str) -> Vec<(String, f64)> {
     let mut out = Vec::new();
     // 12 recent commits balances a readable trendline against the per-commit worktree+pipeline cost.
     for sha in sampled_commits(root, 12) {
@@ -367,11 +372,11 @@ fn quoted_after(line: &str, key: &str) -> Option<String> {
 }
 
 /// Per-sprint flow facts pulled from one delivery file.
-pub(crate) struct SprintFlow {
-    pub(crate) points: i64,
-    pub(crate) created: Option<i64>,
-    pub(crate) refine: Option<i64>,
-    pub(crate) retro: Option<i64>,
+pub struct SprintFlow {
+    pub points: i64,
+    pub created: Option<i64>,
+    pub refine: Option<i64>,
+    pub retro: Option<i64>,
 }
 
 fn sprint_flow(text: &str) -> SprintFlow {
@@ -404,8 +409,9 @@ fn sprint_flow(text: &str) -> SprintFlow {
 
 /// Per-sprint flow facts for every delivery file. Shared by `metric_value` (velocity/throughput/
 /// burnup) and the flow scorecard (D0090) so the sprint set is parsed in exactly one place.
-pub(crate) fn collect_flows(root: &Path) -> Vec<SprintFlow> {
-    crate::collect_sysml(&root.join(".tracking").join("delivery"))
+#[must_use]
+pub fn collect_flows(root: &Path) -> Vec<SprintFlow> {
+    keel_model::corpus::collect_sysml(&root.join(".tracking").join("delivery"))
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok().map(|t| sprint_flow(&t)))
         .collect()
@@ -413,7 +419,8 @@ pub(crate) fn collect_flows(root: &Path) -> Vec<SprintFlow> {
 
 /// Mean delivered points per sprint (the canonical velocity, f64) over `flows`. The single velocity
 /// formula — shared by the velocity Indicator/metric and the flow scorecard card (D0090).
-pub(crate) fn velocity_of(flows: &[SprintFlow]) -> f64 {
+#[must_use]
+pub fn velocity_of(flows: &[SprintFlow]) -> f64 {
     if flows.is_empty() {
         return 0.0;
     }
@@ -650,7 +657,7 @@ mod trigger_tests {
     }
 }
 
-pub(crate) const REPORT_TEMPLATE: &str = r#"<!DOCTYPE html>
+pub const REPORT_TEMPLATE: &str = r#"<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>keel render report</title>
 <meta name="generator" content="keel render report (computed #View; regenerate, do not commit as truth)">
 /*STYLE*/
@@ -733,7 +740,7 @@ document.getElementById('search').addEventListener('input',function(e){var q=e.t
 document.getElementById('search').addEventListener('keydown',function(e){if(e.key==='Enter'){var hi=cy.nodes('.hi');if(hi.length)cy.fit(hi,50)}});
 </script></body></html>"#;
 
-pub(crate) const TABLE_STYLE: &str = r"<style>
+pub const TABLE_STYLE: &str = r"<style>
  body{margin:0;font:13px system-ui,sans-serif;color:#222}
  header{padding:10px 14px;background:#f7f7f7;border-bottom:1px solid #ccc}
  header h1{margin:0;font-size:15px} header p{margin:3px 0 0;color:#666;font-size:12px}

@@ -24,7 +24,7 @@ Import it from a scratch script run at the repository root:
     import sys; sys.path.insert(0, "scripts")
     from textpatch import replace_once, insert_after, insert_before, append
 
-    replace_once("keel-cli/src/guards.rs", 'pub const GUARD_NAMES: [&str; 65] =', 'pub const GUARD_NAMES: [&str; 67] =')
+    replace_once("members/keel-schema/src/guard_names.rs", 'pub const GUARD_NAMES: [&str; 65] =', 'pub const GUARD_NAMES: [&str; 67] =')
     insert_after("scripts/exec_brief/facts.py", "# ===== 11. control structure\n", NEW_SECTION)   # before the emit
     append("CHANGELOG.md", "\n## 0.4.2\n")                                                    # stated, not fallen into
 

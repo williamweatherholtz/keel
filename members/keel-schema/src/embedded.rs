@@ -17,3 +17,10 @@ pub static ENGINE_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../.e
 pub fn engine_text(rel: &str) -> Option<&'static str> {
     ENGINE_DIR.get_file(rel).and_then(include_dir::File::contents_utf8)
 }
+
+/// Where the repository carries the keel PLUGIN - the enforcement copy of the hook set (D0296).
+///
+/// Declared beside the embedded tree it is rendered from (sprint 732) so the control-structure view
+/// can read the plugin's hook file without reaching up into `claude_surface`; `claude_surface`
+/// re-exports it under its old path.
+pub const PLUGIN_DIR: &str = ".engine/claude-plugin";

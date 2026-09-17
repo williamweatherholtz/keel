@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 
 #[allow(clippy::wildcard_imports)] // a pure move-only split: the parent's vocabulary IS this file's vocabulary
@@ -279,7 +279,7 @@ pub(super) fn latest_results(model: &Model) -> HashMap<String, (String, String)>
 fn build_element_files(root: &Path) -> HashMap<String, String> {
     let mut out: HashMap<String, String> = HashMap::new();
     let dirs = [root.join(".tracking"), root.join(".engine").join("decisions")];
-    for path in dirs.iter().flat_map(|d| crate::collect_sysml(d)) {
+    for path in dirs.iter().flat_map(|d| keel_model::corpus::collect_sysml(d)) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         let Some(rel) = path.strip_prefix(root).ok().and_then(std::path::Path::to_str).map(|s| s.replace('\\', "/")) else {
             continue;
@@ -352,7 +352,7 @@ fn decode_string_body(rest: &str) -> String {
 
 /// Names of verify/critique Tests that are STALE: their target assurance element's semantic field
 /// changed since the Test's latest result commit, and the element existed at that commit (D0084).
-pub(crate) fn compute_stale_verifications(root: &Path, model: &Model) -> HashSet<String> {
+pub fn compute_stale_verifications(root: &Path, model: &Model) -> HashSet<String> {
     let elem_files = build_element_files(root);
     let mut work: Vec<(String, String, &'static str, String)> = Vec::new(); // (test, element, field, sha)
     let mut keys: HashSet<String> = HashSet::new();
@@ -371,7 +371,7 @@ pub(crate) fn compute_stale_verifications(root: &Path, model: &Model) -> HashSet
         keys.insert(format!("{sha}:{rel}"));
         work.push((e.from.clone(), e.to.clone(), field, sha));
     }
-    let blobs = crate::gitfacts::batch_cat_blobs(root, &keys.into_iter().collect::<Vec<_>>());
+    let blobs = keel_model::gitfacts::batch_cat_blobs(root, &keys.into_iter().collect::<Vec<_>>());
     let mut stale: HashSet<String> = HashSet::new();
     for (test, element, field, sha) in work {
         let Some(rel) = elem_files.get(&element) else { continue };
@@ -436,7 +436,7 @@ fn direct_verifiers<S: std::hash::BuildHasher>(
     vs
 }
 
-pub(crate) fn compute_coverage<S: std::hash::BuildHasher>(
+pub fn compute_coverage<S: std::hash::BuildHasher>(
     model: &Model,
     done: &HashSet<String, S>,
     task_suspect: &HashSet<String, S>,
@@ -501,9 +501,9 @@ pub(crate) fn compute_coverage<S: std::hash::BuildHasher>(
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn coverage(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
-    let done = crate::done::done_names(root);
-    let task_suspect: HashSet<String> = crate::suspect::suspect(root).into_iter().collect();
-    let stale = crate::perf::phase("staleVerifications", || compute_stale_verifications(root, &model));
+    let done = keel_model::done::done_names(root);
+    let task_suspect: HashSet<String> = keel_model::suspect::suspect(root).into_iter().collect();
+    let stale = keel_perf::perf::phase("staleVerifications", || compute_stale_verifications(root, &model));
     let cov = compute_coverage(&model, &done, &task_suspect, &stale);
     let gf = crate::govern::grandfathered_under(root, COVERAGE_DECISION);
 

@@ -1049,6 +1049,7 @@ dependencies = [
  "keel-parser",
  "keel-perf",
  "keel-schema",
+ "keel-view",
  "keel-write",
  "serde",
  "serde_json",
@@ -1121,6 +1122,25 @@ name = "keel-schema"
 version = "0.4.1"
 dependencies = [
  "include_dir",
+]
+
+[[package]]
+name = "keel-view"
+version = "0.4.1"
+dependencies = [
+ "keel-actor",
+ "keel-fs",
+ "keel-git",
+ "keel-github",
+ "keel-json",
+ "keel-model",
+ "keel-parser",
+ "keel-perf",
+ "keel-schema",
+ "keel-write",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]

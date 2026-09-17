@@ -11,8 +11,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use crate::algo::{is_word, story_names};
-use crate::json::Json;
+use keel_model::algo::{is_word, story_names};
+use keel_json::json::Json;
 
 /// Convention (D0069): a sprint `Story` is governed by the Delivery workflow — the FALLBACK when
 /// per-item resolution finds nothing more specific.
@@ -45,7 +45,7 @@ fn governing_def_for(repo: &Path, item: &str) -> String {
 /// Run `git -C <repo> <args>`; return non-empty trimmed stdout lines, or `[]` on failure.
 fn git_lines(repo: &Path, args: &[&str]) -> Vec<String> {
     // Count, argv tally and wall time all happen in gitx::Git (dcGuardsRunInParallelAndTimed).
-    let output = crate::gitx::git().arg("-C").arg(repo).args(args).output();
+    let output = keel_git::gitx::git().arg("-C").arg(repo).args(args).output();
     match output {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
             .lines()
@@ -140,7 +140,7 @@ fn descendants_from(children: &HashMap<String, Vec<String>>, marker: &str) -> Ha
 /// name appears. The log is newest-first, so the last sighting wins.
 fn intro_commits(repo: &Path, names: &HashSet<String>) -> HashMap<String, String> {
     const MARK: &str = "__keelcommit__";
-    let raw = crate::gitx::git()
+    let raw = keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["log", &format!("--format={MARK}%H"), "-p", "-U0", "--", ".tracking/delivery"])
@@ -172,7 +172,7 @@ fn intro_commits(repo: &Path, names: &HashSet<String>) -> HashMap<String, String
 /// facts, and the per-item resolver was grepping HEAD once per item to learn the same thing.
 fn charter_edges(root: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    for path in crate::collect_sysml(&root.join(".tracking")) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         for line in text.lines() {
             if let Some(rest) = line.trim().strip_prefix("#CharteredBy dependency from ") {
@@ -321,7 +321,7 @@ fn def_change_commits(repo: &Path, path: &str) -> Vec<String> {
 
 /// True if commit `a` is an ancestor of `b`.
 fn is_ancestor(repo: &Path, a: &str, b: &str) -> bool {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(repo)
         .args(["merge-base", "--is-ancestor", a, b])
@@ -342,7 +342,7 @@ struct ProcChange {
 /// minus the `governed_defs` field (unused by the governing-version resolver).
 fn proc_change_decisions(root: &Path) -> Vec<ProcChange> {
     let mut out = Vec::new();
-    for path in crate::collect_sysml(&root.join(".engine").join("decisions")) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".engine").join("decisions")) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         for (retro, dec) in scan_proc_change_markers(&text) {
             let effective_commit = acceptance_judged_against(&text, &dec);
@@ -357,7 +357,7 @@ fn proc_change_decisions(root: &Path) -> Vec<ProcChange> {
 fn scan_proc_change_markers(text: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for line in text.lines() {
-        let t = line.trim_start_matches(crate::algo::is_space);
+        let t = line.trim_start_matches(keel_model::algo::is_space);
         let (retro, rest) = if let Some(r) = t.strip_prefix("#ProspectiveChange") {
             ("prospective", r)
         } else if let Some(r) = t.strip_prefix("#SafetyChange") {
@@ -365,12 +365,12 @@ fn scan_proc_change_markers(text: &str) -> Vec<(String, String)> {
         } else {
             continue;
         };
-        let rest_ws = rest.trim_start_matches(crate::algo::is_space);
+        let rest_ws = rest.trim_start_matches(keel_model::algo::is_space);
         if rest_ws.len() == rest.len() {
             continue; // require whitespace after the marker
         }
         let Some(after_part) = rest_ws.strip_prefix("part") else { continue };
-        let after_part_ws = after_part.trim_start_matches(crate::algo::is_space);
+        let after_part_ws = after_part.trim_start_matches(keel_model::algo::is_space);
         if after_part_ws.len() == after_part.len() {
             continue; // require whitespace after `part`
         }
@@ -379,9 +379,9 @@ fn scan_proc_change_markers(text: &str) -> Vec<(String, String)> {
             continue;
         }
         let Some(r) = after_part_ws.strip_prefix(ident.as_str()) else { continue };
-        let r = r.trim_start_matches(crate::algo::is_space);
+        let r = r.trim_start_matches(keel_model::algo::is_space);
         let Some(r) = r.strip_prefix(':') else { continue };
-        let r = r.trim_start_matches(crate::algo::is_space);
+        let r = r.trim_start_matches(keel_model::algo::is_space);
         let Some(tail) = r.strip_prefix("Decision") else { continue };
         if tail.chars().next().is_none_or(|c| !is_word(c)) {
             out.push((retro.to_string(), ident));
@@ -490,7 +490,7 @@ fn names_present_at(repo: &Path, commit: &str) -> std::collections::HashSet<Stri
 /// blocks (conservative; matches the D0050 git-failure stance).
 #[must_use]
 pub fn grandfathered_under(root: &Path, decision: &str) -> Option<std::collections::HashSet<String>>{
-    crate::perf::add(&crate::perf::GF_CALLS, 1);
+    keel_perf::perf::add(&keel_perf::perf::GF_CALLS, 1);
     let commit = decision_intro_commit(root, decision)?;
     Some(names_present_at(root, &commit))
 }
@@ -532,7 +532,7 @@ fn govern_resolve(repo: &Path, pcs: &[ProcChange], item: &str) -> GovernData {
     let mut after: Vec<(String, String)> = Vec::new();
     for d in pcs {
         let Some(ec) = &d.effective_commit else { continue };
-        if !crate::gitfacts::git_sha_valid(ec, repo) {
+        if !keel_model::gitfacts::git_sha_valid(ec, repo) {
             continue;
         }
         if is_ancestor(repo, ec, &item_commit) {
@@ -645,7 +645,7 @@ pub fn reprocess_candidates(root: &Path) -> String {
 /// A deliberate SUPERSET of `query.py suspect` (NOT byte-parity), per D0076.
 #[must_use]
 pub fn suspect(root: &Path, explain: bool) -> String {
-    let out = crate::orient::compute(root);
+    let out = keel_model::orient::compute(root);
     // D0086: elements rendered suspect by an unresolved failing critique (a human review's finding).
     let crit = crate::view::critique_suspect(root).unwrap_or_default();
     let crit_json = Json::Arr(crit.iter().map(|s| Json::s(s.clone())).collect());
@@ -674,7 +674,7 @@ pub fn suspect(root: &Path, explain: bool) -> String {
 
 fn all_delivery_stories(root: &Path) -> Vec<String> {
     let mut out = Vec::new();
-    for path in crate::collect_sysml(&root.join(".tracking").join("delivery")) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".tracking").join("delivery")) {
         if let Ok(text) = std::fs::read_to_string(&path) {
             out.extend(story_names(&text));
         }

@@ -26,7 +26,7 @@ keel render control-structure --mode graph > diagram.html # the same picture on 
    is missing, fix the view or the authored residue, not the picture.
 2. The binary lays out rows by authority, assigns sides and directions, routes orthogonally with one
    channel per edge, places labels off other edges' verticals, and hops crossings (`sd1`–`sd5`) — by
-   construction, and each property is a unit test on the layout (`keel-cli/src/view/stpa_diagram.rs`).
+   construction, and each property is a unit test on the layout (`members/keel-view/src/view/stpa_diagram.rs`).
    There is nothing to do by hand here, and nothing may be done by hand here.
 3. **Look at it** (`sd6Verify`): render in a browser at full size and at a zoomed crop of the densest
    region; check the five properties. The two defects construction cannot rule out are a label hiding

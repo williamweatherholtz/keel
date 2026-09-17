@@ -238,12 +238,12 @@ fn keel_commands_in(text: &str) -> Vec<String> {
         while let Some(i) = rest.find("keel ") {
             let after = &rest[i + 5..];
             let mut token = word(after);
-            if crate::cli_surface::has_command(&token) {
+            if keel_schema::cli_surface::has_command(&token) {
                 let next = word(after[token.len()..].trim_start_matches(' '));
-                let routed = crate::cli_facts::CLI_FACTS
+                let routed = keel_schema::cli_facts::CLI_FACTS
                     .iter()
                     .find(|f| f.name == token)
-                    .is_some_and(|f| crate::cli_facts::sub_verbs_of(f.invocation).contains(&next));
+                    .is_some_and(|f| keel_schema::cli_facts::sub_verbs_of(f.invocation).contains(&next));
                 if routed {
                     token = format!("{token} {next}");
                 }
@@ -284,7 +284,7 @@ fn hook_actions(root: &Path, out: &mut Vec<Action>) {
     events.sort();
     // D0296: when the plugin rendering carries the same event, the action has two hosts - and a
     // settings edit cannot remove the second one, since hook lists merge across scopes.
-    let plugin_rel = format!("{}/hooks/hooks.json", crate::claude_surface::PLUGIN_DIR);
+    let plugin_rel = format!("{}/hooks/hooks.json", keel_schema::embedded::PLUGIN_DIR);
     let plugin_events: Vec<String> = std::fs::read_to_string(root.join(&plugin_rel))
         .ok()
         .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
@@ -380,7 +380,7 @@ fn workflow_actions(root: &Path, out: &mut Vec<Action>, fb: &mut Vec<Fb>) {
 fn cli_actions(root: &Path, out: &mut Vec<Action>, fb: &mut Vec<Fb>) {
     let path = root.join(".engine").join("cli").join("commands.sysml");
     let Ok(text) = std::fs::read_to_string(&path) else { return };
-    for f in crate::cli_facts::parse_cli_facts(&text) {
+    for f in keel_schema::cli_facts::parse_cli_facts(&text) {
         let src = ".engine/cli/commands.sysml".to_string();
         match f.effect.as_str() {
             "writes" | "both" => {
@@ -388,7 +388,7 @@ fn cli_actions(root: &Path, out: &mut Vec<Action>, fb: &mut Vec<Fb>) {
                 // D0454: a routing command (`record`, `process`, `library`) is one fact but several control
                 // actions - one per sub-verb its invocation declares - so folding writers under one verb
                 // (D0451) cannot collapse them out of the analysis (issue497). The segment is the data.
-                let subs = crate::cli_facts::sub_verb_segments(&f.invocation);
+                let subs = keel_schema::cli_facts::sub_verb_segments(&f.invocation);
                 if subs.is_empty() {
                     out.push(Action {
                         name: format!("cmd{}", camel(&f.name)),
@@ -466,7 +466,7 @@ fn remote_rules(root: &Path) -> Json {
 }
 
 fn github_slug(root: &Path) -> Option<String> {
-    let url = crate::gitx::git()
+    let url = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["config", "--get", "remote.origin.url"])
@@ -679,7 +679,7 @@ fn gather_local(root: &Path, actions: &mut Vec<Action>, feedback: &mut Vec<Fb>) 
         data: "prose: chat, a Statement recorded verbatim, a direction Decision; nothing parses it - the agent's routing is the only translation (D0166)".to_string(),
         source: "keel record statement (intake)".to_string(),
     });
-    let deciders = crate::github::deciders(root);
+    let deciders = keel_github::github::deciders(root);
     if !deciders.is_empty() {
         actions.push(Action {
             name: "humanDecidesOnChannel".to_string(),
@@ -692,7 +692,7 @@ fn gather_local(root: &Path, actions: &mut Vec<Action>, feedback: &mut Vec<Fb>) 
     }
     // The console's authority exists when `serve` does: the approve queue is where a human authorises
     // an ask-tier write (D0182), and the deck is where they judge.
-    if crate::cli_surface::has_command("serve") {
+    if keel_schema::cli_surface::has_command("serve") {
         actions.push(Action {
             name: "consoleApprovesWrite".to_string(),
             title: "a human approves an ask-tier write from the console queue".to_string(),
@@ -1366,7 +1366,7 @@ mod tests {
     fn human_authority_commands_refuse_an_ai_actor() {
         for c in HUMAN_AUTHORITY_COMMANDS {
             assert!(
-                crate::write::HUMAN_ONLY_WRITE_COMMANDS.contains(&c),
+                keel_write::write::HUMAN_ONLY_WRITE_COMMANDS.contains(&c),
                 "`{c}` is listed as the human's authority but the write layer does not refuse an AI actor for it"
             );
         }

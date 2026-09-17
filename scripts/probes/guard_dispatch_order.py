@@ -14,7 +14,7 @@ states its two known cases before it reads the real set:
     python scripts/probes/guard_dispatch_order.py --real perf_run_1.txt [perf_run_2.txt ...] [--workers 20]
 
 `--real` takes the output of `KEEL_PERF=2 keel gate guard --no-receipt .` (its `phase guard:<name> <n>ms` lines);
-several files are averaged per guard. Declaration order is read from GUARD_NAMES in guards.rs so the
+several files are averaged per guard. Declaration order is read from GUARD_NAMES in keel-schema's guard_names.rs so the
 simulation dispatches exactly what the binary dispatches.
 
 WHAT THE SIMULATION ASSUMES, AND WHAT MEASUREMENT FOUND (2026-09-10, sprint 657): the simulation treats
@@ -45,7 +45,7 @@ from collections import defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from module_home import module_home  # noqa: E402  (issue559: a module home is resolved, never anchored)
-GUARDS_RS = module_home("guards")
+GUARDS_RS = module_home("guard_names")  # sprint 732: the list is keel-schema's
 
 
 def makespan(durations, workers):
@@ -97,7 +97,7 @@ def guard_names():
     src = open(GUARDS_RS, encoding="utf-8").read()
     m = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[(.*?)\];", src, re.S)
     if not m:
-        sys.exit("GUARD_NAMES not found in guards.rs")
+        sys.exit("GUARD_NAMES not found in guard_names.rs")
     names = re.findall(r'"([^"]+)"', m.group(2))
     assert len(names) == int(m.group(1)), (len(names), m.group(1))
     return names

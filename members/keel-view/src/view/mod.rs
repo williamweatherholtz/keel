@@ -16,12 +16,12 @@ use std::path::Path;
 use serde::Deserialize;
 use keel_parser::ast::{Item, Value};
 
-use crate::json::Json;
+use keel_json::json::Json;
 // The model and the predicates over it live in keel-model (D0479, sprint 718); the view is a reader.
-pub use crate::model::{has_outgoing, Edge, ItemInfo, Model, ViewError};
-use crate::model::{display_label, known_edges, model_dirs, value_to_string};
-pub use crate::queries::{all_issue_names, blocked_on_acceptance, blocked_on_items, claim_ids, claim_rows, compute_issue_resolution, item_exists, open_issue_names, pending_acceptances, resolves_edges, superseded_names, untriaged_issues, ClaimRow, IssueStatus, ResolverStatus};
-use crate::queries::{days_between, issue_disposition, repo_today};
+pub use keel_model::model::{has_outgoing, Edge, ItemInfo, Model, ViewError};
+use keel_model::model::{display_label, known_edges, model_dirs, value_to_string};
+pub use keel_model::queries::{all_issue_names, blocked_on_acceptance, blocked_on_items, claim_ids, claim_rows, compute_issue_resolution, item_exists, open_issue_names, pending_acceptances, resolves_edges, superseded_names, untriaged_issues, ClaimRow, IssueStatus, ResolverStatus};
+use keel_model::queries::{days_between, issue_disposition, repo_today};
 
 // ── the split (sprint 418, dcViewRsRestructure): leaf lenses live in cohesive submodules; the
 // model core (spec, Model build, traversal, JSON emit) stays here. `pub use` keeps every
@@ -232,9 +232,13 @@ pub struct Project {
 /// # Errors
 /// Propagates model-build failures.
 /// `(edges scanned, forward misses as (issue, resolver), pre-cutoff miss count)`.
-pub(crate) type UnnamedResolutions = (usize, Vec<(String, String)>, usize);
+pub type UnnamedResolutions = (usize, Vec<(String, String)>, usize);
 
-pub(crate) fn unnamed_resolutions(root: &Path, cutoff: &str) -> Result<UnnamedResolutions, ViewError> {
+/// The `#Resolves` edges whose resolver is not a name in the model, split at `cutoff` (doc above the type).
+///
+/// # Errors
+/// Returns [`ViewError`] if a tracking/instance file fails to parse.
+pub fn unnamed_resolutions(root: &Path, cutoff: &str) -> Result<UnnamedResolutions, ViewError> {
     let model = Model::build(root)?;
     let mut scanned = 0usize;
     let mut forward = Vec::new();
@@ -291,7 +295,7 @@ pub(crate) fn unnamed_resolutions(root: &Path, cutoff: &str) -> Result<UnnamedRe
 /// apart from not-hex (mnemonic suffixes, typed ids): counted, never enumerated (D0261), because an
 /// id is immutable (section 1.3) and a list of 5,600 would be the migration nobody asked for.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct IdShapeCensus {
+pub struct IdShapeCensus {
     pub scanned: usize,
     pub forward: Vec<(String, String, String, String)>,
     pub history_not_hex: usize,
@@ -302,7 +306,7 @@ pub(crate) struct IdShapeCensus {
 ///
 /// # Errors
 /// Propagates model-build failures.
-pub(crate) fn id_shape_census(root: &Path, cutoff: &str) -> Result<IdShapeCensus, ViewError> {
+pub fn id_shape_census(root: &Path, cutoff: &str) -> Result<IdShapeCensus, ViewError> {
     let model = Model::build(root)?;
     Ok(id_shape_census_of(model.items.iter().map(|(n, i)| (n.as_str(), i)), cutoff))
 }
@@ -312,7 +316,7 @@ fn id_shape_census_of<'a>(items: impl Iterator<Item = (&'a str, &'a ItemInfo)>, 
     for (name, info) in items {
         let Some(id) = info.attrs.get("id") else { continue };
         out.scanned += 1;
-        if crate::ident::is_v4_uuid(id) {
+        if keel_model::ident::is_v4_uuid(id) {
             continue;
         }
         let date = ["judgedAt", "createdAt", "saidAt", "acceptedAt"]
@@ -321,7 +325,7 @@ fn id_shape_census_of<'a>(items: impl Iterator<Item = (&'a str, &'a ItemInfo)>, 
             .map(|d| d.chars().take(10).collect::<String>());
         match date {
             Some(d) if d.as_str() >= cutoff => out.forward.push((name.to_string(), info.file.clone(), id.clone(), d)),
-            _ if crate::ident::uuid_hex_shaped(id) => out.history_hex_not_v4 += 1,
+            _ if keel_model::ident::uuid_hex_shaped(id) => out.history_hex_not_v4 += 1,
             _ => out.history_not_hex += 1,
         }
     }
@@ -357,7 +361,7 @@ fn element_neighbourhood(model: &Model, element: &str) -> HashSet<String> {
 
 /// Traversal direction for a configurable slice (viewerConfigurableSlice, N-2/N-4/N-10).
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SliceDir {
+pub enum SliceDir {
     /// Follow edges FROM the node (`from == node` -> `to`); the "downstream" reach.
     Down,
     /// Follow edges INTO the node (`to == node` -> `from`); the "what depends on this" reach (change-impact).
@@ -368,7 +372,8 @@ pub(crate) enum SliceDir {
 
 impl SliceDir {
     /// Parse `down` / `up` / `both` (default `both`).
-    pub(crate) fn parse(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s {
             "down" => Self::Down,
             "up" => Self::Up,
@@ -432,7 +437,7 @@ fn configurable_slice(model: &Model, seed: &str, depth: usize, edges: &HashSet<S
 ///
 /// # Errors
 /// Returns [`ViewError`] if the model cannot be built.
-pub(crate) fn change_impact_json(root: &Path, seed: &str, edges: &HashSet<String>, dir: SliceDir) -> Result<String, ViewError> {
+pub fn change_impact_json(root: &Path, seed: &str, edges: &HashSet<String>, dir: SliceDir) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     let dir_label = match dir { SliceDir::Down => "down", SliceDir::Up => "up", SliceDir::Both => "both" };
     let mut dist: HashMap<String, usize> = HashMap::new();
@@ -501,7 +506,7 @@ pub(crate) fn change_impact_json(root: &Path, seed: &str, edges: &HashSet<String
 ///
 /// # Errors
 /// Returns [`ViewError`] if the model cannot be built.
-pub(crate) fn snapshot_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir, commit: &str, as_of: &str) -> Result<String, ViewError> {
+pub fn snapshot_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir, commit: &str, as_of: &str) -> Result<String, ViewError> {
     const CAP: usize = 500;
     let model = Model::build(root)?;
     let mut names: Vec<String> = configurable_slice(&model, seed, depth, edges, dir).into_iter().collect();
@@ -557,8 +562,8 @@ fn model_at_commit(root: &Path, commit: &str, tag: &str) -> Result<std::sync::Ar
     let root_s = root.to_string_lossy().to_string();
     let tmp = std::env::temp_dir().join(format!("keel-bl-{tag}-{}", commit.replace(|c: char| !c.is_alphanumeric(), "")));
     let tmp_s = tmp.to_string_lossy().to_string();
-    let _ = crate::gitx::git().args(["-C", &root_s, "worktree", "remove", "--force", &tmp_s]).output();
-    let added = crate::gitx::git()
+    let _ = keel_git::gitx::git().args(["-C", &root_s, "worktree", "remove", "--force", &tmp_s]).output();
+    let added = keel_git::gitx::git()
         .args(["-C", &root_s, "worktree", "add", "--detach", "--quiet", &tmp_s, commit])
         .output()
         .is_ok_and(|o| o.status.success());
@@ -566,7 +571,7 @@ fn model_at_commit(root: &Path, commit: &str, tag: &str) -> Result<std::sync::Ar
         return Err(ViewError::Track("baseline-compare".to_string(), format!("cannot check out commit '{commit}' (unknown ref?)")));
     }
     let model = Model::build(&tmp);
-    let _ = crate::gitx::git().args(["-C", &root_s, "worktree", "remove", "--force", &tmp_s]).output();
+    let _ = keel_git::gitx::git().args(["-C", &root_s, "worktree", "remove", "--force", &tmp_s]).output();
     model
 }
 
@@ -577,7 +582,7 @@ fn model_at_commit(root: &Path, commit: &str, tag: &str) -> Result<std::sync::Ar
 ///
 /// # Errors
 /// Returns [`ViewError`] if either commit cannot be checked out or a model fails to build.
-pub(crate) fn baseline_compare_json(root: &Path, seed: &str, from: &str, to: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir) -> Result<String, ViewError> {
+pub fn baseline_compare_json(root: &Path, seed: &str, from: &str, to: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir) -> Result<String, ViewError> {
     let m_from = model_at_commit(root, from, "from")?;
     let m_to = model_at_commit(root, to, "to")?;
     let s_from = configurable_slice(&m_from, seed, depth, edges, dir);
@@ -687,7 +692,7 @@ struct AttrAgg {
 fn scan_schema_defs(root: &Path) -> (Vec<SchemaTypeDef>, Vec<SchemaEnumDef>) {
     let mut types: Vec<SchemaTypeDef> = Vec::new();
     let mut enums: Vec<SchemaEnumDef> = Vec::new();
-    for path in crate::collect_sysml(&root.join(".engine").join("schema")) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".engine").join("schema")) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         let mut depth: i32 = 0;
         let mut cur: Option<DefAcc> = None;
@@ -789,7 +794,7 @@ fn attribute_stats(model: &Model, decl: &HashMap<(String, String), String>, enum
 
 /// # Errors
 /// Returns [`ViewError`] if the model cannot be built (for the instance-derived attribute stats).
-pub(crate) fn schema_json(root: &Path) -> Result<String, ViewError> {
+pub fn schema_json(root: &Path) -> Result<String, ViewError> {
     let (types, enums) = scan_schema_defs(root);
     let enum_names: HashSet<String> = enums.iter().map(|(n, _)| n.clone()).collect();
     let decl: HashMap<(String, String), String> = types
@@ -843,7 +848,7 @@ fn date_in_range(val: &str, since: Option<&str>, until: Option<&str>) -> bool {
 /// An optional date-range filter for a slice (N-5 time-as-query-filter): keep members whose `attr` date
 /// (e.g. `judgedAt`) is in `[since, until]`. `attr = None` disables the filter.
 #[derive(Default, Clone, Copy)]
-pub(crate) struct DateFilter<'a> {
+pub struct DateFilter<'a> {
     pub attr: Option<&'a str>,
     pub since: Option<&'a str>,
     pub until: Option<&'a str>,
@@ -858,7 +863,7 @@ pub(crate) struct DateFilter<'a> {
 /// # Errors
 /// Returns [`ViewError`] on a parse failure.
 #[allow(clippy::implicit_hasher)]
-pub(crate) fn slice_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir, df: DateFilter) -> Result<String, ViewError> {
+pub fn slice_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir, df: DateFilter) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     let mut names = configurable_slice(&model, seed, depth, edges, dir);
     if let Some(attr) = df.attr {
@@ -881,7 +886,7 @@ pub(crate) fn slice_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<
 ///
 /// # Errors
 /// Returns [`ViewError`] on a parse failure.
-pub(crate) fn relations_json(root: &Path, focus: &str, kind: &str) -> Result<String, ViewError> {
+pub fn relations_json(root: &Path, focus: &str, kind: &str) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     if !model.items.contains_key(focus) {
         return Ok(section_subgraph_json(&model, &HashSet::new(), focus, kind));
@@ -915,7 +920,7 @@ pub(crate) fn relations_json(root: &Path, focus: &str, kind: &str) -> Result<Str
 /// # Errors
 /// Returns [`ViewError`] on a parse failure.
 #[allow(clippy::implicit_hasher)]
-pub(crate) fn critique_plan_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir, lens: &str) -> Result<String, ViewError> {
+pub fn critique_plan_json(root: &Path, seed: &str, depth: usize, edges: &HashSet<String>, dir: SliceDir, lens: &str) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     let mut axis: Vec<String> = configurable_slice(&model, seed, depth, edges, dir).into_iter().collect();
     axis.sort();
@@ -1312,7 +1317,8 @@ fn traverse(model: &Model, seed: &HashSet<String>, tr: &Traverse, edge_kinds: &[
 
 // ── JSON emit (presentation-agnostic; rendering is a separate layer) ──────────
 
-pub(crate) fn json_esc(s: &str) -> String {
+#[must_use]
+pub fn json_esc(s: &str) -> String {
     s.chars()
         .flat_map(|c| match c {
             '"' => vec!['\\', '"'],
@@ -1414,7 +1420,8 @@ fn run_resolved(root: &Path, view_name: &str) -> Result<(ViewSpec, std::sync::Ar
 // passing acceptance event (`{dNNNN}AcceptR1 : TestResult, outcome=pass`). Algorithmic (a
 // naming + outcome correlation), so a Rust function — not a TOML filter.
 
-pub(crate) fn compute_attestation(model: &Model) -> (usize, Vec<String>) {
+#[must_use]
+pub fn compute_attestation(model: &Model) -> (usize, Vec<String>) {
     let mut accepted: Vec<&String> = model.standing("accepted").into_iter().collect();
     accepted.sort();
     let missing: Vec<String> = accepted
@@ -1463,7 +1470,7 @@ pub fn attestation_coverage(root: &Path) -> Result<String, ViewError> {
 ///
 /// # Errors
 /// Returns [`ViewError`] if the model cannot be built.
-pub(crate) fn review_queue_json(root: &Path) -> Result<String, ViewError> {
+pub fn review_queue_json(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
 
     let mut decisions: Vec<&String> = model.standing("proposed").into_iter().collect();
@@ -1728,8 +1735,8 @@ pub fn marker_census(root: &Path) -> Result<String, ViewError> {
         if !dir.is_dir() {
             continue;
         }
-        for path in crate::collect_sysml(&dir) {
-            if let Ok(pkg) = crate::parse_pkg(&path) {
+        for path in keel_model::corpus::collect_sysml(&dir) {
+            if let Ok(pkg) = keel_model::corpus::parse_pkg(&path) {
                 for item in &pkg.items {
                     if let Item::Dependency(d) = item {
                         *edges.entry(d.marker.clone()).or_default() += 1;
@@ -1737,7 +1744,7 @@ pub fn marker_census(root: &Path) -> Result<String, ViewError> {
                 }
             }
             if let Ok(text) = std::fs::read_to_string(&path) {
-                for m in crate::textscan::engine_markers() {
+                for m in keel_model::textscan::engine_markers() {
                     let n = text.matches(&format!("#{m}")).count();
                     if n > 0 {
                         *raw.entry(m.clone()).or_default() += n;
@@ -1817,8 +1824,8 @@ pub fn dangling_edge_endpoints(root: &Path) -> Result<Vec<String>, ViewError> {
     // and conflating them would have made a new hard guard fail every downstream project on day one —
     // the issue089/issue090 failure this engine has already paid for twice.
     let mut declared_elsewhere: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for path in crate::collect_sysml(&root.join(".engine").join("reference").join("decisions")) {
-        if let Ok(pkg) = crate::parse_pkg(&path) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".engine").join("reference").join("decisions")) {
+        if let Ok(pkg) = keel_model::corpus::parse_pkg(&path) {
             for item in &pkg.items {
                 if let Item::Part(p) = item {
                     declared_elsewhere.insert(p.name.clone());
@@ -1831,8 +1838,8 @@ pub fn dangling_edge_endpoints(root: &Path) -> Result<Vec<String>, ViewError> {
         if !dir.is_dir() {
             continue;
         }
-        for path in crate::collect_sysml(&dir) {
-            let Ok(pkg) = crate::parse_pkg(&path) else { continue };
+        for path in keel_model::corpus::collect_sysml(&dir) {
+            let Ok(pkg) = keel_model::corpus::parse_pkg(&path) else { continue };
             let rel = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
             for item in &pkg.items {
                 if let Item::Dependency(d) = item {
@@ -1859,7 +1866,7 @@ pub fn dangling_edge_endpoints(root: &Path) -> Result<Vec<String>, ViewError> {
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn open_issues(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
-    let done = crate::done::done_names(root);
+    let done = keel_model::done::done_names(root);
     let all = compute_issue_resolution(&model, &done);
     let total = all.len();
     let open_count = all.iter().filter(|i| i.open).count();
@@ -2447,10 +2454,10 @@ struct Verifier {
     suspect: bool,
 }
 
-pub(crate) struct Coverage {
-    pub(crate) element: String,
-    pub(crate) type_name: String,
-    pub(crate) tier: &'static str,          // D0082: verified | attested | addressed | suspect | uncovered
+pub struct Coverage {
+    pub element: String,
+    pub type_name: String,
+    pub tier: &'static str,          // D0082: verified | attested | addressed | suspect | uncovered
     basis: Option<&'static str>, // the strongest covering verifier kind
     verifiers: Vec<Verifier>,
 }
@@ -2483,14 +2490,16 @@ fn tier_for_kind(kind: &str) -> &'static str {
 /// only complete evidence is a stale verify-Test → `suspect`; nothing → `uncovered`.
 /// A tier the GATE accepts as covered (D0082): objective evidence or a defensible attestation.
 /// `addressed` (claim only), `suspect` (stale), and `uncovered` are gaps.
-pub(crate) fn is_covered_tier(tier: &str) -> bool {
+#[must_use]
+pub fn is_covered_tier(tier: &str) -> bool {
     matches!(tier, "verified" | "attested")
 }
 
 /// Gate-covered % over `cov`, optionally restricted to type `ty` (empty = all): the fraction whose
 /// tier is gate-covered (verified|attested). The single coverage-ratio formula (D0090) — `metric_value`
 /// AND the report scalar cards both source from here, so the number is computed in exactly one place.
-pub(crate) fn coverage_pct_of(cov: &[Coverage], ty: &str) -> u32 {
+#[must_use]
+pub fn coverage_pct_of(cov: &[Coverage], ty: &str) -> u32 {
     let rows: Vec<&Coverage> = cov.iter().filter(|c| ty.is_empty() || c.type_name == ty).collect();
     pct(rows.iter().filter(|c| is_covered_tier(c.tier)).count(), rows.len())
 }
@@ -2498,7 +2507,8 @@ pub(crate) fn coverage_pct_of(cov: &[Coverage], ty: &str) -> u32 {
 /// Verified % over `cov` restricted to type `ty` (empty = all): the fraction at the strongest
 /// (`verified`) tier — V&V traceability. Shared by `metric_value` (`req_verified_pct`/
 /// `needs_verified_pct`) and the traceability scorecard (D0090; single-source).
-pub(crate) fn verified_pct_of(cov: &[Coverage], ty: &str) -> u32 {
+#[must_use]
+pub fn verified_pct_of(cov: &[Coverage], ty: &str) -> u32 {
     let rows: Vec<&Coverage> = cov.iter().filter(|c| ty.is_empty() || c.type_name == ty).collect();
     pct(rows.iter().filter(|c| c.tier == "verified").count(), rows.len())
 }
@@ -2715,7 +2725,7 @@ fn arming_evidence(arming_rows: &[Json]) -> Json {
 /// The inner `Err` carries the probe's reason the control cannot fire.
 fn probe_armed(root: &Path, probe: &str) -> Option<Result<(), String>> {
     match probe {
-        "commit-gate-armed" => Some(crate::gitx::commit_gate_armed(root).map(|_| ())),
+        "commit-gate-armed" => Some(keel_git::gitx::commit_gate_armed(root).map(|_| ())),
         _ => None,
     }
 }
@@ -2944,9 +2954,13 @@ pub fn tier_satisfaction(root: &Path) -> Result<String, ViewError> {
 /// structural pcts + rootedness counts. Detail lives in `keel tier-satisfaction` / `keel rootedness` /
 /// `keel gate assured` / `keel critique-coverage`.
 ///
+/// The two readings come from above the view layer (the guard receipt and the attestation census,
+/// both keel-cli's) and are passed in as [`BurndownExtras`] by `reports::orient` (sprint 732): the
+/// view composes them, it does not reach up for them.
+///
 /// # Errors
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
-pub fn burndown_summary_json(root: &Path) -> Result<String, ViewError> {
+pub fn burndown_summary_json(root: &Path, extras: BurndownExtras) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     let tiers = compute_tier_satisfaction(&model);
     let need = tiers.iter().find(|t| t.tier == "Need");
@@ -2983,58 +2997,30 @@ pub fn burndown_summary_json(root: &Path) -> Result<String, ViewError> {
     triggered.sort_by_key(Json::dump);
     Ok(Json::Obj(vec![
         ("need_decomposed_pct".to_string(), Json::Int(i64::from(pct_of(need)))),
-        ("guard_warnings".to_string(), actionable_guard_warnings(root)),
+        ("guard_warnings".to_string(), extras.guard_warnings),
         ("sr_verified_pct".to_string(), Json::Int(i64::from(pct_of(sr)))),
         ("unrooted_capabilities".to_string(), n(unrooted_caps)),
         ("orphan_stories".to_string(), n(orphan_stories)),
         ("ungrounded_ratio_pct".to_string(), Json::Int(i64::from(pct(ungrounded, stories.len())))),
         // D0312 B: what an AI examined and no human has judged - its own count, never folded into done.
-        ("proposed_results".to_string(), n(crate::attestation::proposed_count(root))),
+        ("proposed_results".to_string(), n(extras.proposed_results)),
         ("triggers".to_string(), Json::Arr(triggered)),
         ("detail".to_string(), Json::s("keel tier-satisfaction | rootedness | assured | critique-coverage | show indicators (triggers)")),
     ])
     .dump())
 }
 
-/// ACTIONABLE GUARD WARNINGS in the burndown (issue404 / D0413).
-///
-/// The guard set's warnings a reader can act on - every warning that is not a counted-history line
-/// (`guards::is_history`) - per guard, with its first line as the sample and the command that lists the
-/// rest. Read from the guard receipt when the tree it judged is this one; orient does not run the
-/// guards, and a count computed over a different tree would be prose state, so with no receipt for this
-/// tree the value is `null` and `how` says what to run.
-fn actionable_guard_warnings(root: &Path) -> Json {
-    let receipt = crate::receipt::key(root)
-        .and_then(|k| crate::receipt::read(root, &k))
-        .filter(|r| r.covers_all(&[crate::receipt::GUARDS]));
-    let Some(receipt) = receipt else {
-        return Json::Obj(vec![
-            ("actionable".to_string(), Json::Null),
-            ("how".to_string(), Json::s("no green guard receipt for this tree - `keel gate guard .` runs the set and writes one; its summary states the actionable count".to_string())),
-        ]);
-    };
-    let n = |c: usize| Json::Int(i64::try_from(c).unwrap_or(i64::MAX));
-    let mut per_guard = Vec::new();
-    let mut total = 0;
-    for r in &receipt.guards {
-        let mut lines = r.actionable();
-        let Some(first) = lines.next() else { continue };
-        let count = 1 + lines.count();
-        total += count;
-        per_guard.push(Json::Obj(vec![
-            ("guard".to_string(), Json::s(r.name.to_string())),
-            ("count".to_string(), n(count)),
-            ("first".to_string(), Json::s(first.clone())),
-            ("detail".to_string(), Json::s(format!("keel gate guard {} .", r.name))),
-        ]));
-    }
-    Json::Obj(vec![
-        ("actionable".to_string(), n(total)),
-        ("counted_history".to_string(), n(receipt.guards.iter().map(|r| r.history().count()).sum())),
-        ("guards".to_string(), Json::Arr(per_guard)),
-        ("how".to_string(), Json::s("from the guard receipt for this tree (.keel/metrics/guard-receipt.toml); counted-history lines are immutable history and are not listed".to_string())),
-    ])
+/// What the burndown reads from above the view layer (sprint 732): the actionable guard warnings
+/// from the guard receipt and the count of AI-examined results no human has judged (D0312 B).
+/// Computed by `reports::orient` in keel-cli, which owns the receipt and attestation readers.
+/// Taken by value: `Json` derives nothing, and the object is composed straight into the burndown.
+pub struct BurndownExtras {
+    /// The `guard_warnings` object: `actionable`, `counted_history`, per-guard rows and `how`.
+    pub guard_warnings: Json,
+    /// The `proposed_results` count.
+    pub proposed_results: usize,
 }
+
 
 /// Append a parsed commit to the recent-activity timeline (helper for [`recent`]).
 fn recent_flush(cur: Option<&(String, String, String)>, files: &[String], out: &mut Vec<Json>) {
@@ -3112,7 +3098,8 @@ fn at_least_high(sev: &str) -> bool {
 /// so "outranks" is simply "appears earlier". Returns `(outranking item, high item, its severity)`.
 /// An outranking item in `recorded` - one carrying a `#PrioritizedBy` edge to the Statement or
 /// Decision that ranks it (D0429) - is a deliberate inversion and is not reported.
-pub(crate) fn inversion_pairs(ready: &[(String, Option<String>)], recorded: &HashSet<String>) -> Vec<(String, String, String)> {
+#[must_use]
+pub fn inversion_pairs(ready: &[(String, Option<String>)], recorded: &HashSet<String>) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for (i, (high, sev)) in ready.iter().enumerate() {
         let Some(s) = sev.as_deref().filter(|s| at_least_high(s)) else { continue };
@@ -3215,16 +3202,16 @@ pub fn readiness(root: &Path, task_suspect: Vec<String>, invariant_violations: V
     // PHASE-TIMED (dcSharedParsedModel): `assured` is 7-9s of which fingerprint, parse and git are
     // ~1.4s, so the remaining 6s is in-view computation and a total cannot say which step. Each step
     // is now named, so the next optimisation is aimed rather than guessed.
-    let done = crate::perf::phase("doneNames", || crate::done::done_names(root));
+    let done = keel_perf::perf::phase("doneNames", || keel_model::done::done_names(root));
     let suspect_vec = task_suspect;
     let task_suspect: HashSet<String> = suspect_vec.iter().cloned().collect();
     let stale = compute_stale_verifications(root, &model);
 
     // Charter-time scoping (D0081): only GOVERNED elements (created after the governing decision)
     // count as gaps — grandfathered elements are out of the gate.
-    let gf_cov = crate::perf::phase("grandfatherCoverage", || crate::govern::grandfathered_under(root, COVERAGE_DECISION));
-    let gf_crit = crate::perf::phase("grandfatherCritique", || crate::govern::grandfathered_under(root, CRITIQUE_DECISION));
-    let coverage_rows = crate::perf::phase("computeCoverage", || compute_coverage(&model, &done, &task_suspect, &stale));
+    let gf_cov = keel_perf::perf::phase("grandfatherCoverage", || crate::govern::grandfathered_under(root, COVERAGE_DECISION));
+    let gf_crit = keel_perf::perf::phase("grandfatherCritique", || crate::govern::grandfathered_under(root, CRITIQUE_DECISION));
+    let coverage_rows = keel_perf::perf::phase("computeCoverage", || compute_coverage(&model, &done, &task_suspect, &stale));
     let governed_n = coverage_rows.iter().filter(|c| governed(gf_cov.as_ref(), &c.element)).count();
     let coverage_gaps: Vec<String> = coverage_rows
         .into_iter()
@@ -3232,7 +3219,7 @@ pub fn readiness(root: &Path, task_suspect: Vec<String>, invariant_violations: V
         .map(|c| c.element)
         .collect();
     let policy = CritiquePolicy::load(root)?;
-    let critique_gaps: Vec<String> = crate::perf::phase("computeCritiqueCoverage", || compute_critique_coverage(&model, &stale, &policy))
+    let critique_gaps: Vec<String> = keel_perf::perf::phase("computeCritiqueCoverage", || compute_critique_coverage(&model, &stale, &policy))
         .into_iter()
         .filter(|c| !c.covered && governed(gf_crit.as_ref(), &c.element))
         .map(|c| c.element)
@@ -3567,7 +3554,7 @@ pub type AiJudgedDisposition = (String, String, String);
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn ai_judged_high_dispositions(root: &Path) -> Result<(usize, Vec<AiJudgedDisposition>), ViewError> {
     let model = Model::build(root)?;
-    let policy = crate::activation::attestation_policy(root, "findingDisposition");
+    let policy = keel_model::activation::attestation_policy(root, "findingDisposition");
     let mut scanned = 0usize;
     let mut bad = Vec::new();
     let mut edges: Vec<&Edge> = model.edges.iter().filter(|e| e.kind == "dispositions").collect();
@@ -3595,7 +3582,7 @@ pub fn ai_judged_high_dispositions(root: &Path) -> Result<(usize, Vec<AiJudgedDi
             })
         });
         let role = actor.and_then(|a| a.attrs.get("role")).cloned();
-        if let Some(gap) = crate::activation::authority_gap(kind.as_deref(), role.as_deref(), &policy) {
+        if let Some(gap) = keel_model::activation::authority_gap(kind.as_deref(), role.as_deref(), &policy) {
             bad.push((e.from.clone(), e.to.clone(), format!("{judged_by} ({gap})")));
         }
     }
@@ -3749,6 +3736,16 @@ pub fn days_between_pub(from: &str, to: &str) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` no longer names this repo (sprints 714, 718, 732).
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
+    }
 
     #[test]
     fn critique_policy_default_is_core3() {
@@ -4326,9 +4323,9 @@ mod tests {
 
     #[test]
     fn render_dispatches_modes_and_rejects_unknown() {
-        // D0086: graph/table/review render; unknown mode errors. (cwd = crate dir in tests; the
-        // declared view files live one level up at the repo root.)
-        let root = std::path::Path::new("..");
+        // D0086: graph/table/review render; unknown mode errors. The declared view files live at the
+        // repo root, found from the manifest (a member's test cwd is two levels down).
+        let root = &repo_root();
         let g = render_html(root, "model", "graph").expect("graph");
         assert!(g.contains("Cytoscape Consortium"), "graph uses the inlined cytoscape lib");
         let t = render_html(root, "decisions", "table").expect("table");
@@ -4719,7 +4716,7 @@ mod tests {
 
     #[test]
     fn marker_scan_ignores_prose_and_catches_a_misspelling() {
-        use crate::textscan::{markers_declared as declared, markers_used as used};
+        use keel_model::textscan::{markers_declared as declared, markers_used as used};
 
         // Real syntactic positions are picked up; a marker QUOTED IN PROSE is not. That distinction is
         // load-bearing: procedureText fields legitimately discuss markers (`#Marker dependency from a
@@ -5034,7 +5031,7 @@ mod tests {
         // for the wrong reason: the elements array lists every element and marks its scope per row,
         // which is what makes the view auditable. Asserting absence would have driven a fix that hid
         // retired elements instead of descoping them.
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = repo_root();
         let Ok(model) = Model::build(&root) else { return };
         let superseded: Vec<String> =
             model.edges.iter().filter(|e| e.kind == "supersede").map(|e| e.to.clone()).collect();
@@ -5075,7 +5072,7 @@ mod tests {
 ///
 /// # Errors
 /// Returns [`ViewError`] if the registry cannot be read.
-pub(crate) fn surfaces_json(root: &Path) -> Result<String, ViewError> {
+pub fn surfaces_json(root: &Path) -> Result<String, ViewError> {
     let model = Model::build(root)?;
     let mut by_surface: BTreeMap<String, Vec<Json>> = BTreeMap::new();
     let mut unsurfaced: Vec<Json> = Vec::new();
@@ -5089,7 +5086,7 @@ pub(crate) fn surfaces_json(root: &Path) -> Result<String, ViewError> {
     // An INACTIVE viewpoint is not offered (D0164). Filtering here rather than in each consumer means the
     // console nav, the act-surface obligation bar and anything else derived from surfaces all agree, and a
     // project that deactivated a lens does not keep being invited to look through it.
-    let act = crate::activation::Activation::load(root);
+    let act = keel_model::activation::Activation::load(root);
     for n in names {
         if !act.is_viewpoint_active(n) {
             continue;

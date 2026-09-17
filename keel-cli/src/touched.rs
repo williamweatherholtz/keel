@@ -766,13 +766,9 @@ fn millis_of(seconds: &str) -> u64 {
     whole.saturating_mul(1000).saturating_add(frac.parse().unwrap_or(0))
 }
 
-/// The `[workspace] members` of a root manifest, as written (pure over its text): `keel-parser`,
-/// `members/keel-git`, ... Empty when the text declares none.
-#[must_use]
-pub fn workspace_members(root_manifest: &str) -> Vec<String> {
-    let Some(list) = root_manifest.split("members = [").nth(1).and_then(|s| s.split(']').next()) else { return Vec::new() };
-    list.split(',').map(|m| m.trim().trim_matches('"').to_string()).filter(|m| !m.is_empty()).collect()
-}
+/// The `[workspace] members` reader lives with the corpus walk (sprint 732: the proof census in
+/// keel-view reads it too); re-exported so `crate::touched::workspace_members` keeps resolving.
+pub use crate::corpus::workspace_members;
 
 /// The package names of every workspace member other than keel-cli (sprint 714).
 ///

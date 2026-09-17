@@ -10,8 +10,8 @@ two crates is REFUSED, never guessed; a module found nowhere is None, so the cal
 
     sys.path.insert(0, "<repo>/scripts"); from module_home import module_home, rust_sources
     module_home("reverify")   -> <repo>/members/keel-write/src/reverify.rs
-    module_home("view/mod")   -> <repo>/keel-cli/src/view/mod.rs
-    module_home("view")       -> <repo>/keel-cli/src/view/mod.rs   (a directory module)
+    module_home("view/mod")   -> <repo>/members/keel-view/src/view/mod.rs
+    module_home("view")       -> <repo>/members/keel-view/src/view/mod.rs   (a directory module)
     module_home("no_such")    -> None
     rust_sources()            -> every .rs under every crate's src/ (the census walkers' corpus)
 
@@ -19,7 +19,7 @@ two crates is REFUSED, never guessed; a module found nowhere is None, so the cal
     python scripts/module_home.py --probe                # the known cases + the anchor scan; exit 1 on any failure
 
 The probe also scans scripts/**/*.py and .engine/tools/*.py for a path EXPRESSION that anchors a .rs
-file under keel-cli/src (`join(..., "keel-cli", "src", "x.rs")` or `/ "keel-cli/src/x.rs"`) - the
+file under keel-cli/src (`join(..., "keel-cli", "src", "x.rs")`, nested segments included, or `/ "keel-cli/src/x.rs"`) - the
 shape that broke - so the next such anchor fails in CI before the next move breaks it (D0047).
 """
 from __future__ import annotations
@@ -101,7 +101,9 @@ def rust_sources(root: str | None = None) -> list[str]:
 
 
 # --- the anchor scan: a path expression naming a .rs file under keel-cli/src -----------------------------------
-ANCHOR = re.compile(r'''join\([^)\n]*["']keel-cli["'],\s*["']src["'],\s*["'][\w/]+\.rs["']|/\s*["']keel-cli/src/[\w/]+\.rs["']''')
+# `(?:"seg",\s*)*` admits a nested module path (join(..., "src", "view", "knowledge.rs")): the shape that
+# passed the scan as none while sprint 732 moved the file it named.
+ANCHOR = re.compile(r'''join\([^)\n]*["']keel-cli["'],\s*["']src["'],\s*(?:["']\w+["'],\s*)*["'][\w/]+\.rs["']|/\s*["']keel-cli/src/[\w/]+\.rs["']''')
 # a resolver call naming a module every crate has, with no crate= - the shape that died at HEAD (issue560)
 BARE_EVERY_CRATE = re.compile(r'''(?:module_home|_mh|_module_home)\(\s*["'](?:lib|main)["']\s*(?:,\s*[^,)]*)?\)''')
 SCAN_GLOBS = ("scripts/**/*.py", ".engine/tools/*.py")
@@ -172,10 +174,12 @@ def probe() -> int:
     # The scan's own pair, chosen before the tree is read: the line that broke, and its replacement.
     broke = 'REVERIFY_RS = os.path.join(ROOT, "keel-cli", "src", "reverify.rs")'
     pathlib_shape = '(REPO / "keel-cli/src/guards.rs").read_text(encoding="utf-8"),'
+    nested = '_kn = read(os.path.join(REPO, "keel-cli", "src", "view", "knowledge.rs")) or ""'
     fixed = 'REVERIFY_RS = module_home("reverify")'
     prose = 'Every top-level module under keel-cli/src (a file `X.rs` or a directory `X/`) is a node'
     check("known-positive: the os.path.join anchor that broke CI is caught", bool(ANCHOR.search(broke)), broke)
     check("known-positive: the pathlib anchor shape is caught", bool(ANCHOR.search(pathlib_shape)), pathlib_shape)
+    check("known-positive: a nested os.path.join anchor is caught", bool(ANCHOR.search(nested)), nested)
     check("known-negative: the resolver call is not", not ANCHOR.search(fixed), fixed)
     check("known-negative: prose naming the directory is not", not ANCHOR.search(prose), prose[:60])
 
@@ -183,7 +187,8 @@ def probe() -> int:
     root = repo_root()
     for name, tail in (("reverify", os.path.join("members", "keel-write", "src", "reverify.rs")),
                        ("guards", os.path.join("keel-cli", "src", "guards.rs")),
-                       ("view", os.path.join("keel-cli", "src", "view", "mod.rs"))):
+                       ("view", os.path.join("members", "keel-view", "src", "view", "mod.rs")),
+                       ("guard_names", os.path.join("members", "keel-schema", "src", "guard_names.rs"))):
         home = module_home(name, root)
         check(f"this tree: {name} resolves", home is not None and home.endswith(tail), home or "MISSING")
     hits = anchored_lines(root)

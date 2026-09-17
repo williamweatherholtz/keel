@@ -368,3 +368,11 @@ pub fn collect_sysml_uncached(dir: &Path) -> Vec<PathBuf> {
     out.sort();
     out
 }
+
+/// The `[workspace] members` of a root manifest, as written (pure over its text): `keel-parser`,
+/// `members/keel-git`, ... Empty when the text declares none.
+#[must_use]
+pub fn workspace_members(root_manifest: &str) -> Vec<String> {
+    let Some(list) = root_manifest.split("members = [").nth(1).and_then(|s| s.split(']').next()) else { return Vec::new() };
+    list.split(',').map(|m| m.trim().trim_matches('"').to_string()).filter(|m| !m.is_empty()).collect()
+}

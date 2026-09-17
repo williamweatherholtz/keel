@@ -1186,7 +1186,9 @@ fn is_process_def(p: &str) -> bool {
 /// gate). Kept identical to the real set by `enforcement_surface_covers_every_guard_source` — that
 /// test fails CI if a new guard-defining file appears outside this list, which is the D0209-clause-2
 /// "diff `is_process_def` against the actual guard-definition paths" audit made executable.
-const GUARD_SOURCE_FILES: &[&str] = &["keel-cli/src/guards.rs", "keel-cli/src/adherence.rs"];
+// guard_names.rs holds GUARD_NAMES (sprint 732): removing a name there disarms a guard as surely as
+// deleting its arm here would, so the list is locked with the source that dispatches it.
+const GUARD_SOURCE_FILES: &[&str] = &["keel-cli/src/guards.rs", "keel-cli/src/adherence.rs", "members/keel-schema/src/guard_names.rs"];
 
 /// The ENFORCEMENT SURFACE (D0209 clause 2, dcFreezeEnforcementSurface): the paths a guard reads its
 /// own DEFINITION or CONFIG from. issue236 proved a control could be silently disarmed by editing its
@@ -3601,18 +3603,10 @@ fn total_guard_count_claim(line: &str) -> Option<String> {
     None
 }
 
-/// The ENFORCED forward guards, in CLI/runner order.
-///
-/// `issues` joined the enforced set at IRL-d (D0077). HONEST-STATE doctrine (D0098): the enforced set
-/// holds only INTEGRITY guards — the recorded model must not lie, be malformed, or be untraceable.
-/// COMPLETENESS / self-assurance (`assured` composite readiness + `critique`-COVERAGE) was DEMOTED
-/// from this set: it is computed as a NON-BLOCKING burndown (`keel gate guard assured` / `keel critique-
-/// coverage` stay runnable, surfaced in orient), never a hard commit gate — incomplete implementation
-/// flagged AS incomplete is honest state, not a failure. NOTE: critique INDEPENDENCE stays enforced
-/// (critic-independence — honesty); only critique COVERAGE demoted. The requirement-rootedness hard
-/// guard (D0098 honesty: a chartered capability with no driving Need) joins next (requirementRootednessGuard).
-pub const GUARD_NAMES: [&str; 75] =
-    ["evidence-cited", "gating-workflow-history", "process-applicability", "doc-guard-count", "actors", "acceptance-events", "sprint-coverage", "ceremony", "charter", "process-change", "issues", "viewpoint-renderer", "manifest-coverage", "critic-independence", "process-skill", "requirement-rootedness", "decision-rationale", "attestation-substance", "marker-vocabulary", "duplicate-identity", "decision-requirement-link", "verification-trace", "priority-inversion", "retro-backlog", "confirmation-authenticity", "engine-lint", "doc-sync", "hook-config-integrity", "activation-manifest", "sequence-multiplicity", "parser-coverage", "base-first-justification", "edge-endpoints", "ownership", "attestation-authority", "type-collision", "attribute-vocabulary", "resolver-kind", "stale-gate-prose", "impossible-evidence-date", "identity-present", "identity-well-formed", "tool-reference", "scaffold-placeholder", "claude-surface-drift", "decision-scaffolding", "release-recorded", "enrollment-binding", "control-event-coverage", "question-coverage", "claim-ancestry", "judgment-request-quality", "manifest-key-portability", "control-map-reconciled", "sprint-closure", "untrusted-routing", "control-defect-registry", "cli-surface-declared", "decision-amends-process", "unit-extras-present", "acceptance-binds-to-text", "stpa-currency", "untrusted-taint", "gate-environment-parity", "instruments-declared", "release-checksums-published", "wrapper-pin-checksummed", "plan-covers-step", "id-is-a-uuid", "step-check-resolves", "consent-scope", "working-tree-eol", "direction-cited", "cli-reference", "custom-harness-routed"];
+/// The ENFORCED forward guards, in CLI/runner order - declared in `keel_schema::guard_names` (sprint 732)
+/// so the view layer's proof census reads it without reaching up into this file; the list's doctrine
+/// (D0077, D0098) is documented there. Re-exported here so every caller keeps `crate::guards::GUARD_NAMES`.
+pub use keel_schema::guard_names::GUARD_NAMES;
 
 
 // ── control-map-reconciled guard (issue304, chartered by D0255) ──────────────────────────────────

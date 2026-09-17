@@ -28,7 +28,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 /// The three computed proof states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,7 +138,7 @@ impl ProofCensus {
 /// The proof census of every enforced guard (`GUARD_NAMES`) over the test corpus under `root`.
 #[must_use]
 pub fn census(root: &Path) -> ProofCensus {
-    census_over(root, &crate::guards::GUARD_NAMES)
+    census_over(root, &keel_schema::guard_names::GUARD_NAMES)
 }
 
 /// The census for an explicit guard list - the fixture entry point, and what [`census`] calls.
@@ -191,7 +191,7 @@ fn corpus_bodies(root: &Path) -> (Vec<(String, String, String)>, bool) {
         present = true;
         files.extend(rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "rs")));
     }
-    let members = std::fs::read_to_string(root.join("Cargo.toml")).map(|m| crate::touched::workspace_members(&m)).unwrap_or_default();
+    let members = std::fs::read_to_string(root.join("Cargo.toml")).map(|m| keel_model::corpus::workspace_members(&m)).unwrap_or_default();
     let crates: Vec<PathBuf> = if members.is_empty() { vec![root.join("keel-cli")] } else { members.iter().map(|m| root.join(m)).collect() };
     for src in crates.iter().map(|c| c.join("src")) {
         if src.is_dir() {

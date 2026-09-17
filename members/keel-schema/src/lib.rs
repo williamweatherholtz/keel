@@ -8,3 +8,4 @@ pub mod cli_facts;
 pub mod cli_surface;
 pub mod control_defects;
 pub mod embedded;
+pub mod guard_names;

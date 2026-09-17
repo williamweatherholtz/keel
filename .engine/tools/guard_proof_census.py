@@ -8,7 +8,7 @@ FIRST RUN, 2026-09-06: of 64 guards, 16 are named in a test body that asserts a 
 only around passing assertions, and 27 are named in no test body at all.
 
 HOW THIS SCRIPT LIED TO ME FIRST, kept here because the lesson is the point: version one searched a
-text window around each occurrence of a guard's name. Every name occurs in GUARD_NAMES inside
+text window around each occurrence of a guard's name. Every name occurs in GUARD_NAMES (keel-schema's guard_names.rs) inside
 guards.rs, and that file is full of the words "violation" and "FAIL", so all 64 matched and the
 answer came back 64/64 - a number produced by the instrument rather than by the tree, caught only
 because it was too good. This version looks inside TEST FUNCTION BODIES only.
@@ -30,7 +30,7 @@ from module_home import module_home, rust_sources  # noqa: E402  (issue559: the 
 
 names_block = re.search(
     r"pub const GUARD_NAMES: \[&str; \d+\] =\s*(\[[^\]]*\]);",
-    Path(module_home("guards", str(REPO))).read_text(encoding="utf-8"),
+    Path(module_home("guard_names", str(REPO))).read_text(encoding="utf-8"),
     re.S,
 )
 guards = re.findall(r'"([a-z0-9-]+)"', names_block.group(1))

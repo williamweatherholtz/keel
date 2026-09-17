@@ -1764,4 +1764,37 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcVerifierStopIsNeverABlock to issue578;
+
+    part issue579 : Issue {
+        :>> id = "0f068aa2-1852-430e-9bec-c8c59acd8eb2";
+        :>> title = "module_home's anchor scan passed a nested keel-cli/src path as none";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "module_home's anchor scan (sprint 719's control for issue559) matched a keel-cli/src path expression only when the .rs token followed 'src' directly: join(..., 'keel-cli', 'src', 'x.rs'). A nested path passed it as none. Found by reading scripts/module_home.py:104 during sprint 732 against the three anchors the scan should have named: scripts/exec_brief/facts.py:1578 and :1725 (join(REPO, 'keel-cli', 'src', 'view', 'knowledge.rs')) and, once the regex was widened and re-run, facts.py:2183 (view/control_structure.rs) - each naming a file this very sprint moved to members/keel-view, so python scripts/module_home.py --probe was green at 397e49c while the brief's knowledge-domain and control-structure facts would have read an absent file after the move and reported null. The control: ANCHOR admits any number of quoted segments between 'src' and the .rs token, and the probe carries the nested line as a known-positive beside the flat one; the three anchors resolve through _mh('view/knowledge') and _mh('view/control_structure'). Resolved in sprint 732 - the story's DoD names the widened scan and its probe case.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from storyViewIsAMember to issue579;
+
+    part issue580 : Issue {
+        :>> id = "e7bf9d9a-a31d-4584-9991-cedf6005d63c";
+        :>> title = "modgraph --check is vacuous once its forbidden sources are members";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "scripts/modgraph.py --check (the D0479 layering rung: nothing in view, orient, write or scaffold references guards; nothing in view references orient) reads only keel-cli/src. A module re-exported from a member is a node with no files (modgraph.py:51-56), so it has no outgoing edges to check. Sprint 718 moved orient, write and scaffold into members and sprint 732 moves view: every forbidden SOURCE is now a fileless node, and the line 'layering holds - 74 modules, 184 edges' (down from 214 at 397e49c) is vacuous for all five forbidden pairs - the check cannot fail on the thing it names. Read from scripts/modgraph.py:30 and :51-56 and from running it on the sprint 732 tree. Nothing broke: Cargo's acyclic crate graph forbids keel-view depending on keel-cli by construction, and the move script asserted no crate:: reference in keel-view named a module outside it. But a control that went silent when its subject moved is a defect of D0388's class - a check with no reachable known-positive - and DoD texts still cite the rung as evidence. The resolver is the crate-level layering guard dcWorkspaceLayeringIsGuarded (chartered by D0483, held): a guard that reads every member's Cargo.toml against workspace-layers.toml is the check that can fail on a member, and modgraph's --check retires into it. Until D0483 is accepted, the honest statement of a sprint's layering proof is the release build under deny(warnings) plus the member's dependency list, not the modgraph line.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcWorkspaceLayeringIsGuarded to issue580;
+
+    part issue581 : Issue {
+        :>> id = "03dd2857-f3ac-415b-9bec-9c888a5cae0e";
+        :>> title = "A quoted probe line is split on whitespace and reported as a red no check produced";
+        :>> createdAt = "2026-09-16";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel verify splits each probe line on whitespace and runs it shell-free (keel-cli/src/verify.rs:238 and :390-392, read after the run), so quoting inside a line has no meaning - yet nothing refuses a quoted line, and the pair-file shape check (D0500) counts lines only. Sprint 732's second verifier dispatch carried a negative side written as python -c with a quoted program: the ladder passed the program's fragments to the interpreter as separate arguments, the interpreter failed with SyntaxError: unterminated string literal, and the ladder reported probe=fail - a red no check produced, the class D0500 was recorded to end, arriving through a different door. The fix in the sprint was to move the check into a script run by absolute path; the receipt for that dispatch cost one full ladder climb. The control is the shape check refusing a quote character in either line before any rung runs, naming the rule, and the two dispatch skills saying it in one sentence: a probe line is bare tokens; a check that needs arguments is a script by path.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcQuotedProbeLineIsRefused to issue581;
 }

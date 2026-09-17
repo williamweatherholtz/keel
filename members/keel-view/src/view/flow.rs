@@ -25,7 +25,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 use super::ViewError;
 
@@ -113,7 +113,7 @@ pub fn is_sprint(text: &str) -> bool {
 /// The retro gate has a RECORDED result in `text` - `pass` or `proposed` (D0312 B).
 #[must_use]
 pub fn retro_recorded(text: &str) -> bool {
-    crate::textscan::gate_recorded(text, "Retro")
+    keel_model::textscan::gate_recorded(text, "Retro")
 }
 
 /// The first `estimatedPoints = N;` in `text`, else 0.
@@ -149,7 +149,7 @@ pub fn parse_touch_log(text: &str) -> Vec<Touch> {
 
 /// `git -C root <args>` stdout, or the failure as text.
 fn git_text(root: &Path, args: &[&str]) -> Result<String, String> {
-    let out = crate::gitx::git()
+    let out = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["-c", "core.quotepath=false"])
@@ -203,7 +203,7 @@ pub fn facts(root: &Path) -> Result<FlowFacts, String> {
 
     // The working tree's sprint files decide the population; git decides their spans.
     let mut files: Vec<(String, String, i64)> = Vec::new(); // (stem, git path, points)
-    for path in crate::collect_sysml(&root.join(".tracking").join("delivery")) {
+    for path in keel_model::corpus::collect_sysml(&root.join(".tracking").join("delivery")) {
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         if !is_sprint(&text) {
             continue;
@@ -217,7 +217,7 @@ pub fn facts(root: &Path) -> Result<FlowFacts, String> {
         .iter()
         .flat_map(|(_, gp, _)| candidates_by.get(gp.as_str()).into_iter().flatten().map(move |(sha, _)| format!("{sha}:{gp}")))
         .collect();
-    let blobs = crate::gitfacts::batch_cat_blobs(root, &keys);
+    let blobs = keel_model::gitfacts::batch_cat_blobs(root, &keys);
 
     let mut spans: Vec<SprintSpan> = Vec::new();
     for (stem, gp, points) in files {

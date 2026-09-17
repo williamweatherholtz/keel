@@ -11,7 +11,7 @@
 // the fourth attempt is the last.
 //
 // THE RENDERER IS THE ENFORCEMENT. `keel show control-structure --svg` (and `keel render
-// control-structure --mode graph`, the same picture on a page; `keel-cli/src/view/stpa_diagram.rs`)
+// control-structure --mode graph`, the same picture on a page; `members/keel-view/src/view/stpa_diagram.rs`)
 // takes the computed structure and cannot draw a diagonal, a shared segment, an unlabelled edge or a
 // junction where a crossing belongs: each convention below is a property of its layout, not an
 // instruction to the person drawing, and each is a unit test on that layout (D0221: deterministic

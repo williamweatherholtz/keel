@@ -35,7 +35,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 use super::{Model, ViewError};
 
@@ -138,7 +138,7 @@ pub struct Row {
 /// controls gatekept them, and a control that was dissolved for doing so is the answer's exemplar.
 ///
 /// A row that is not dissolved is a CLAIM that the write path refuses something, and the claim is
-/// held to `crate::write::WRITE_PATH_REFUSALS` by `tests::every_live_row_has_a_refusal_and_every_refusal_a_row`
+/// held to `keel_write::write::WRITE_PATH_REFUSALS` by `tests::every_live_row_has_a_refusal_and_every_refusal_a_row`
 /// (issue449: `append-result:ran-receipt` sat here active for two days before the write refused it).
 const WRITE_PATH_CHECKS: &[(&str, Subject, &str, &str, &[&str])] = &[
     (
@@ -730,12 +730,12 @@ mod tests {
         let mut rows_without_refusal = Vec::new();
         for name in &live {
             let (verb, check) = name.split_once(':').expect("a write-path row is verb:check");
-            if crate::write::write_path_refusal(verb, check).is_none() {
+            if keel_write::write::write_path_refusal(verb, check).is_none() {
                 rows_without_refusal.push(*name);
             }
         }
         assert!(rows_without_refusal.is_empty(), "census rows declared live with no registered refusal behind them: {rows_without_refusal:?}");
-        let refusals_without_row: Vec<String> = crate::write::WRITE_PATH_REFUSALS
+        let refusals_without_row: Vec<String> = keel_write::write::WRITE_PATH_REFUSALS
             .iter()
             .map(|r| format!("{}:{}", r.verb, r.check))
             .filter(|n| !live.contains(&n.as_str()))

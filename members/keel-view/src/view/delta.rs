@@ -25,7 +25,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 use super::{display_label, Model, ViewError};
 

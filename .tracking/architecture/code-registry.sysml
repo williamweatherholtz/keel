@@ -266,7 +266,7 @@ package ProjectCodeRegistry {
         :>> title = "view/ - the model core (mod.rs) plus the split lens submodules";
         :>> createdAt = "2026-08-22"; :>> createdBy = "claudeFable5";
         :>> kind = "module";
-        :>> filePath = "keel-cli/src/view/mod.rs";
+        :>> filePath = "members/keel-view/src/view/mod.rs";
         :>> riskClass = RiskClass::correctness;
         :>> invariantSafety = InvariantSafety::checked;
         :>> stpaRole = StpaRole::sensor;
@@ -324,5 +324,20 @@ package ProjectCodeRegistry {
         :>> codeHash = "11f99b7330e345db";
     }
     #Supersede dependency from ceClaimHolderRuleMember to ceClaimHolderRule;
+    // sprint 732 (D0479): the view layer - view/, govern, pm, arch, control_proof - moved into member
+    // keel-view. ceViewCore is claudeFable5's, so its path was edited in place; ceArchViews is claudeOpus5's,
+    // so the path follows the file by a new element and a #Supersede edge (D0108), as sprints 714 and 718 did.
+    part ceArchViewsMember : CodeElement {
+        :>> id = "9081111f-74ec-4c26-b663-686a9ea4116b";
+        :>> title = "Arch views (member keel-view)";
+        :>> createdAt = "2026-09-16"; :>> createdBy = "claudeFable5";
+        :>> kind = "module";
+        :>> filePath = "members/keel-view/src/arch.rs";
+        :>> riskClass = RiskClass::correctness;
+        :>> invariantSafety = InvariantSafety::checked;
+        :>> designPattern = DesignPattern::facade;
+        :>> abstractness = "0.2";
+    }
+    #Supersede dependency from ceArchViewsMember to ceArchViews;
 
 }

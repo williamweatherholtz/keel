@@ -261,7 +261,7 @@ pub fn text_sets_kill_switch(text: &str) -> bool {
 /// source and two renderings; `sync-claude --check` reports drift in either. A launch passes
 /// `--plugin-dir` at this path (or a marketplace install of it), which a repo-scope settings file
 /// cannot remove: hook lists merge across scopes.
-pub const PLUGIN_DIR: &str = ".engine/claude-plugin";
+pub use keel_schema::embedded::PLUGIN_DIR;
 /// The marketplace manifest at the repository root, so a project's settings can carry the plugin in
 /// `extraKnownMarketplaces` / `enabledPlugins` (both are settable from any scope).
 pub const MARKETPLACE_MANIFEST: &str = ".claude-plugin/marketplace.json";

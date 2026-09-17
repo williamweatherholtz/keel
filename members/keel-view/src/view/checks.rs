@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 
 #[allow(clippy::wildcard_imports)] // a pure move-only split: the parent's vocabulary IS this file's vocabulary
@@ -27,7 +27,7 @@ fn rc_matches_subject(info: &ItemInfo, subject: &str) -> bool {
 /// Repo-relative, forward-slashed files git reports as newly-ADDED in the staged index — the `newlyAdded`
 /// scope set (matches the charter/sprint-coverage guards' forward-only semantics). Empty if git fails.
 fn staged_added_files(root: &Path) -> std::collections::HashSet<String> {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C").arg(root)
         .args(["diff", "--cached", "--name-only", "--diff-filter=A"])
         .output()

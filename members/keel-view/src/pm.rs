@@ -22,7 +22,7 @@
 //! launcher-fraction hypothesis and the dirty-tree-refusal rate report here once P5's run records
 //! exist; until then those rows say so rather than reading as zero.
 
-use crate::json::Json;
+use keel_json::json::Json;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -49,7 +49,7 @@ pub fn slow_fire_phases(total_ms: u64) -> Option<serde_json::Value> {
     if total_ms < SLOW_FIRE_MS {
         return None;
     }
-    let rows = crate::perf::attribution(total_ms)
+    let rows = keel_perf::perf::attribution(total_ms)
         .into_iter()
         .map(|(name, ms)| serde_json::json!({"name": name, "ms": ms}))
         .collect::<Vec<_>>();
@@ -139,7 +139,7 @@ pub fn recent_event_ms(root: &Path, event: &str, last_n: usize) -> Vec<u64> {
 /// extracted from [`enforcement_report`] for the line budget; behavior identical.
 fn tracked_counts(root: &Path) -> (usize, usize, usize) {
     let mut process_defects = 0usize;
-    for f in crate::collect_sysml(&root.join(".tracking")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         if let Ok(t) = std::fs::read_to_string(&f) {
             process_defects += t.matches("#ProcessDefect").count();
         }

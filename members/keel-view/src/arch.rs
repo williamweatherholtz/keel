@@ -24,7 +24,7 @@ use std::path::Path;
 /// real downstream data: `SelfSync`'s 15 `durability` and 8 `concurrency` elements ranked below
 /// `cosmetic` and printed as `unclassified` in the view whose whole job is what-to-audit-first.
 fn risk_order(root: &Path) -> Vec<String> {
-    crate::schema::project_enum_members(root, "RiskClass")
+    keel_schema::schema::project_enum_members(root, "RiskClass")
 }
 
 /// Rank of a risk class, lower = worse. Unknown/absent sorts last, never first: an element whose
@@ -39,7 +39,7 @@ fn risk_rank(order: &[String], risk: &str) -> usize {
 /// drift when the toolchain moved and every element would report as changed after an upgrade. Lines
 /// are trimmed and blanks dropped so a CRLF checkout does not read as drift — this repo is developed
 /// on Windows and consumed on CI, and a hash that disagrees between the two would be worse than none.
-pub(crate) fn stable_hash(text: &str) -> String {
+pub fn stable_hash(text: &str) -> String {
     let norm: String =
         text.lines().map(str::trim_end).filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join("\n");
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -463,8 +463,14 @@ mod tests {
     /// repo's own registry and produce output. Deliberately a floor rather than golden-output asserts —
     /// a golden file over 12 authored elements would fail on every honest registry edit and be deleted
     /// within a sprint, which is worse than a floor that survives.
+    /// The repository root, found from the crate manifest: a member's cwd under `cargo test` is its
+    /// own directory two levels down, so `..` no longer names this repo (sprints 714, 718, 732).
     fn repo_root() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf()
     }
 
     #[test]
@@ -525,7 +531,7 @@ mod tests {
         // issue128: ranking a downstream project against the ENGINE's RiskClass sorted its
         // `durability` elements below `cosmetic` and printed them as `unclassified`, in the one view
         // whose purpose is what-to-audit-first. A project's risk taxonomy is its own judgement.
-        let engine = crate::schema::enum_members("RiskClass");
+        let engine = keel_schema::schema::enum_members("RiskClass");
         assert!(!engine.contains(&"durability".to_string()), "the engine does not declare durability");
         let o = risk_order(&repo_root());
         assert_eq!(o.first().map(String::as_str), Some("dataLoss"), "this repo declares no override");

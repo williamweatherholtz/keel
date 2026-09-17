@@ -6,7 +6,7 @@
 
   (1) A census of which enforced guards have a test constructing their defect scored 64 of 64 - it searched
       a text window around each guard's NAME across every .rs file for the words FAIL / violation, and every
-      guard name occurs in the GUARD_NAMES registry inside guards.rs, which is full of both words. It was
+      guard name occurs in the GUARD_NAMES registry (guards.rs then; keel-schema's guard_names.rs since sprint 732), which is full of both words. It was
       measuring its own registry. The real answer, from a version that reads test function bodies, was 16.
   (2) A check for controllers lacking a process model reported the HUMAN's missing - it compared the role
       name to the anchor name case-sensitively, `human` against `ctHuman`, so every anchor read as absent.
@@ -44,7 +44,7 @@ def verdict(name: str, ok: bool, detail: str) -> None:
 
 # ------------------------------------------------------------------ (1) the guard-test census
 def guard_names() -> list[str]:
-    src = open(module_home("guards", REPO), encoding="utf-8").read()
+    src = open(module_home("guard_names", REPO), encoding="utf-8").read()
     m = re.search(r"pub const GUARD_NAMES: \[&str; \d+\] =\s*\[([^\]]+)\];", src)
     return re.findall(r'"([a-z0-9-]+)"', m.group(1))
 
