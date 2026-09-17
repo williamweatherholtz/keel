@@ -1907,4 +1907,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcSourceCitationsOnTheLivingDocsResolve to issue591;
+
+    part issue592 : Issue {
+        :>> id = "01c69d64-7a9c-4a54-8e36-0994bbde465a";
+        :>> title = "verify --wait reports a ladder that finished between its two reads as KILLED";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "`keel verify --wait` reads the receipt, then asks whether the writer's pid is alive (members/keel-suite/src/verify.rs:623-627: read_to_string, then wait_state(&text, pid_alive)). A writer that rewrites the final receipt and exits between those two reads leaves the reader holding a `running` stub and a dead pid, which wait_state names Killed, and the ladder that just passed is printed as `KILLED during <rung>`, exit 2 - the same words issue575 reserved for a writer that died. Observed in sprint 737's close-out at 9e4e79c6: the ladder's own stdout ended `keel verify: pass - every rung green in 1070 s` (exit 0) and the receipt read `outcome = pass` at 1789658057, while `keel verify --wait .` running beside it printed `KILLED during touched - .keel/metrics/verify-receipt.toml says running and its writer (pid 52848) is gone` in the same second. The command's own instruction is `Relaunch keel verify`, which would have discarded an 18-minute green run; the previous window's relaunch of a run whose verifier agent had stalled was the same command read the same way, and it is not certain that one was dead either. The class: a two-read liveness check with no confirmation read. Resolver: dcWaitRereadsBeforeKilled - a Killed answer is confirmed by re-reading the receipt once after the liveness answer; a re-read that is Finished is reported as the ladder's verdict.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcWaitRereadsBeforeKilled to issue592;
 }

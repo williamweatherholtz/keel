@@ -17,7 +17,7 @@
 use std::path::{Path, PathBuf};
 
 use keel_model::ident::gen_uuid;
-use crate::write::{with_file_lock, write_atomic, WriteError};
+use keel_write::write::{with_file_lock, write_atomic, WriteError};
 
 /// A human's words, verbatim.
 pub struct NewStatement<'a> {
@@ -170,7 +170,7 @@ pub fn record_statement(root: &Path, s: &NewStatement) -> Result<(String, String
         // nothing while reporting success is the failure mode `keel deactivate` once had.
         if let Some(url) = s.source_url {
             let corpus = all_tracking_text(root);
-            if corpus.contains(&format!("sourceUrl = \"{}\"", crate::write::sanitize_public(url))) {
+            if corpus.contains(&format!("sourceUrl = \"{}\"", keel_write::write::sanitize_public(url))) {
                 return Err(WriteError::Parse(format!(
                     "an utterance from {url} is already recorded — re-ingesting would store the same                      words twice under two ids. Nothing was written."
                 )));
@@ -187,7 +187,7 @@ pub fn record_statement(root: &Path, s: &NewStatement) -> Result<(String, String
              \x20       :>> saidBy = \"{}\"; :>> saidAt = \"{}\"; :>> channel = StatementChannel::{};{}{}\n\
              \x20   }}\n",
             gen_uuid(),
-            crate::write::sanitize_public(s.title),
+            keel_write::write::sanitize_public(s.title),
             s.created_at,
             s.author,
             escape_verbatim(s.text),
@@ -195,7 +195,7 @@ pub fn record_statement(root: &Path, s: &NewStatement) -> Result<(String, String
             s.said_at,
             s.channel,
             s.source_url.map_or_else(String::new, |u| {
-                format!("\n\x20       :>> sourceUrl = \"{}\";", crate::write::sanitize_public(u))
+                format!("\n\x20       :>> sourceUrl = \"{}\";", keel_write::write::sanitize_public(u))
             }),
             s.source_trust
                 .map_or_else(String::new, |t| format!("\n\x20       :>> sourceTrust = SourceTrust::{t};")),
@@ -231,13 +231,13 @@ pub fn record_story(root: &Path, s: &NewStory) -> Result<(String, String), Write
             .so_that
             .filter(|v| !v.trim().is_empty())
             .map_or_else(String::new, |v| {
-                format!("\x20       :>> soThat = \"{}\";\n", crate::write::sanitize_public(v))
+                format!("\x20       :>> soThat = \"{}\";\n", keel_write::write::sanitize_public(v))
             });
         let triage = s
             .triage_note
             .filter(|v| !v.trim().is_empty())
             .map_or_else(String::new, |v| {
-                format!("\x20       :>> triageNote = \"{}\";\n", crate::write::sanitize_public(v))
+                format!("\x20       :>> triageNote = \"{}\";\n", keel_write::write::sanitize_public(v))
             });
         let block = format!(
             "\n\x20   part {name} : UserStory {{\n\
@@ -252,11 +252,11 @@ pub fn record_story(root: &Path, s: &NewStory) -> Result<(String, String), Write
              \x20   }}\n\
              \x20   #DerivedFrom dependency from {name} to {};\n",
             gen_uuid(),
-            crate::write::sanitize_public(s.title),
+            keel_write::write::sanitize_public(s.title),
             s.created_at,
             s.author,
-            crate::write::sanitize_public(s.as_a),
-            crate::write::sanitize_public(s.i_want),
+            keel_write::write::sanitize_public(s.as_a),
+            keel_write::write::sanitize_public(s.i_want),
             s.implication,
             s.from_statement,
         );
@@ -286,7 +286,7 @@ mod tests {
         // title and destroys a quote: a human's double space or line break is part of what they wrote.
         let messy = "line one\n  and   two";
         assert_eq!(escape_verbatim(messy), "line one\\n  and   two", "spacing and the break survive");
-        assert_eq!(crate::write::sanitize_public(messy), "line one and two", "a title is collapsed - and must not be used for text");
+        assert_eq!(keel_write::write::sanitize_public(messy), "line one and two", "a title is collapsed - and must not be used for text");
         // A quote becomes '' so the reader still sees it was a quote.
         assert_eq!(escape_verbatim("he said \"no\""), "he said ''no''");
     }

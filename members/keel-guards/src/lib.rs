@@ -539,31 +539,8 @@ fn field_of(text: &str, key: &str) -> Option<String> {
     saw_any.then_some(value)
 }
 
-/// All `action <name>;` task names declared in .tracking/{backlog,delivery} (not `action def`).
-#[must_use]
-pub fn declared_task_names(root: &Path) -> HashSet<String> {
-    let mut names = HashSet::new();
-    for sub in ["backlog.sysml", "delivery"] {
-        let base = root.join(".tracking").join(sub);
-        let files = if base.is_dir() { keel_model::corpus::collect_sysml(&base) } else { vec![base] };
-        for f in files {
-            let Ok(text) = keel_model::corpus::read_to_string(&f) else { continue };
-            for line in text.lines() {
-                let t = line.trim_start();
-                if let Some(rest) = t.strip_prefix("action ") {
-                    if rest.starts_with("def ") {
-                        continue;
-                    }
-                    let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-                    if !name.is_empty() {
-                        names.insert(name);
-                    }
-                }
-            }
-        }
-    }
-    names
-}
+// The resolver predicate is the read model's (sprint 737, D0508); the guards and `record issue` read one function.
+pub use keel_model::resolvers::declared_task_names;
 
 /// Readiness, composed (D0079 c): the suspect walk, the guard suite and the view's own categories.
 ///

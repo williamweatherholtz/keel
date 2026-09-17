@@ -21,7 +21,7 @@ use keel_json::json::Json;
 pub use keel_model::model::{has_outgoing, Edge, ItemInfo, Model, ViewError};
 use keel_model::model::{display_label, known_edges, model_dirs, value_to_string};
 pub use keel_model::queries::{all_issue_names, blocked_on_acceptance, blocked_on_items, claim_ids, claim_rows, compute_issue_resolution, item_exists, open_issue_names, pending_acceptances, resolves_edges, superseded_names, untriaged_issues, ClaimRow, IssueStatus, ResolverStatus};
-use keel_model::queries::{days_between, issue_disposition, repo_today};
+use keel_model::queries::{at_least_medium, days_between, issue_disposition, repo_today};
 
 // ── the split (sprint 418, dcViewRsRestructure): leaf lenses live in cohesive submodules; the
 // model core (spec, Model build, traversal, JSON emit) stays here. `pub use` keeps every
@@ -1860,47 +1860,6 @@ pub fn dangling_edge_endpoints(root: &Path) -> Result<Vec<String>, ViewError> {
     Ok(out)
 }
 
-/// Open-issues view (D0077) as JSON: every OPEN issue + its resolvers + completeness, with counts.
-///
-/// # Errors
-/// Returns [`ViewError`] if a tracking/instance file fails to parse.
-pub fn open_issues(root: &Path) -> Result<String, ViewError> {
-    let model = Model::build(root)?;
-    let done = keel_model::done::done_names(root);
-    let all = compute_issue_resolution(&model, &done);
-    let total = all.len();
-    let open_count = all.iter().filter(|i| i.open).count();
-    let open_list: Vec<Json> = all
-        .iter()
-        .filter(|i| i.open)
-        .map(|i| {
-            let resolvers: Vec<Json> = i
-                .resolvers
-                .iter()
-                .map(|r| {
-                    Json::Obj(vec![
-                        ("name".to_string(), Json::s(r.name.clone())),
-                        ("kind".to_string(), Json::s(r.kind)),
-                        ("complete".to_string(), Json::Bool(r.complete)),
-                    ])
-                })
-                .collect();
-            Json::Obj(vec![
-                ("issue".to_string(), Json::s(i.issue.clone())),
-                ("untriaged".to_string(), Json::Bool(i.resolvers.is_empty())),
-                ("resolvers".to_string(), Json::Arr(resolvers)),
-            ])
-        })
-        .collect();
-    let out = Json::Obj(vec![
-        ("total_issues".to_string(), Json::Int(i64::try_from(total).unwrap_or(i64::MAX))),
-        ("open".to_string(), Json::Int(i64::try_from(open_count).unwrap_or(i64::MAX))),
-        ("resolved".to_string(), Json::Int(i64::try_from(total - open_count).unwrap_or(i64::MAX))),
-        ("open_issues".to_string(), Json::Arr(open_list)),
-    ]);
-    Ok(out.dump())
-}
-
 /// One declared `Viewpoint`, as every consumer of the registry needs it.
 pub struct ViewpointRow {
     /// The declaration's element name.
@@ -2111,48 +2070,6 @@ pub fn decision_follow_through(root: &Path) -> Result<String, ViewError> {
         ("gapCount".to_string(), Json::Int(i64::try_from(gaps.len()).unwrap_or(i64::MAX))),
         ("gaps".to_string(), Json::Arr(gaps)),
         ("decisions".to_string(), Json::Arr(rows)),
-    ]);
-    Ok(out.dump())
-}
-
-/// Dispositions view (D0092): every >= Medium finding + its typed disposition verdict.
-///
-/// Each verdict is `act`/`acceptRisk`/`dismiss` or `undispositioned` — the computed read of the
-/// human-judgment gate (reads the typed verdict, not prose/proxy). `undispositioned` is what `assured`
-/// enforces.
-///
-/// # Errors
-/// Returns [`ViewError`] if a tracking/instance file fails to parse.
-pub fn dispositions(root: &Path) -> Result<String, ViewError> {
-    let model = Model::build(root)?;
-    let mut findings: Vec<(&String, &ItemInfo)> = model
-        .items
-        .iter()
-        .filter(|(_, i)| i.type_name == "Issue" && i.attrs.get("severity").is_some_and(|s| at_least_medium(s)))
-        .collect();
-    findings.sort_by(|a, b| a.0.cmp(b.0));
-    let mut undisp = 0usize;
-    let rows: Vec<Json> = findings
-        .iter()
-        .map(|(name, info)| {
-            let verdict = issue_disposition(&model, name);
-            if verdict.is_none() {
-                undisp += 1;
-            }
-            Json::Obj(vec![
-                ("finding".to_string(), Json::s((*name).clone())),
-                ("severity".to_string(), Json::s(info.attrs.get("severity").cloned().unwrap_or_default())),
-                ("dispositioned".to_string(), Json::Bool(verdict.is_some())),
-                ("disposition".to_string(), verdict.map_or_else(|| Json::s("undispositioned".to_string()), Json::s)),
-            ])
-        })
-        .collect();
-    let total = rows.len();
-    let out = Json::Obj(vec![
-        ("ge_medium_findings".to_string(), Json::Int(i64::try_from(total).unwrap_or(i64::MAX))),
-        ("dispositioned".to_string(), Json::Int(i64::try_from(total - undisp).unwrap_or(i64::MAX))),
-        ("undispositioned".to_string(), Json::Int(i64::try_from(undisp).unwrap_or(i64::MAX))),
-        ("findings".to_string(), Json::Arr(rows)),
     ]);
     Ok(out.dump())
 }
@@ -3079,12 +2996,6 @@ pub fn recent(root: &Path) -> Result<String, ViewError> {
 // is dispositioned (no open >= Medium finding Issue), (5) no Critical finding left open, and
 // (6) invariants green (all enforced guards pass). NOT-READY lists the exact blockers per category.
 // Nothing stored — recomputed from authored facts + git.
-
-/// `true` if a severity string is >= Medium (the human-disposition tier, D0079).
-#[allow(clippy::missing_const_for_fn)] // cannot match on `str` in a const fn
-fn at_least_medium(sev: &str) -> bool {
-    matches!(sev, "Critical" | "High" | "Medium")
-}
 
 /// `true` if a severity string is >= High — the tier a priority inversion is reported against.
 #[allow(clippy::missing_const_for_fn)] // cannot match on `str` in a const fn

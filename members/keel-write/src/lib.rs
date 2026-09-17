@@ -25,7 +25,6 @@ pub mod write;
 pub mod scaffold;
 pub mod reverify;
 pub mod claim;
-pub mod intake_write;
 pub mod claude_surface;
 
 use std::path::Path;

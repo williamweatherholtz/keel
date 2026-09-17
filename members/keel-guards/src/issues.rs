@@ -392,16 +392,8 @@ pub fn resolver_kind(root: &Path) -> GuardReport {
     }
 }
 
-/// THE ONE PREDICATE behind `resolver-kind`: a `#Resolves` source is a declared action or a `Decision`.
-///
-/// An action is work that closes the issue; a Decision moots it. `record issue --resolver` reads this
-/// same function before it writes the edge, so the write refuses exactly what the commit gate would
-/// (issue558): the first triage of issue556 pointed at a Story, the write printed "triaged on
-/// arrival", and the pre-commit guard was the first thing to say otherwise.
-#[must_use]
-pub fn resolver_kind_holds<S: std::hash::BuildHasher>(actions: &HashSet<String, S>, from: &str, ty: &str) -> bool {
-    actions.contains(from) || ty == "Decision"
-}
+// THE ONE PREDICATE behind `resolver-kind` is keel_model::resolvers' (sprint 737, D0508); re-exported so `guards::issues::resolver_kind_holds` resolves.
+pub use keel_model::resolvers::resolver_kind_holds;
 
 #[cfg(test)]
 mod taint_tests {

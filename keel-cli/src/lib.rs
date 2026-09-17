@@ -46,10 +46,10 @@ pub use keel_suite::touched;
 pub use keel_suite::verify;
 pub use keel_git::eol;
 pub use keel_github::github;
-pub mod github_ingest;
+pub use keel_issues::github_ingest;
 pub use keel_process::adoption_check;
 pub mod attestation;
-pub use keel_write::intake_write;
+pub use keel_issues::intake_write;
 pub use keel_process::workspace;
 pub use keel_model::onboard;
 pub mod proactive;
@@ -98,8 +98,17 @@ pub mod serve;
 pub use keel_process::status;
 pub use keel_process::sync;
 pub mod shellcheck;
-pub use keel_view::view;
-pub use keel_write::write;
+// The item views and the issue write are member keel-issues' (D0480, sprint 737): `view` and `write` are
+// wrapper modules so `crate::view::open_issues` and `crate::write::record_issue` keep resolving.
+pub mod view {
+    pub use keel_issues::views::{dispositions, intake, open_issues};
+    pub use keel_view::view::*;
+}
+pub mod write {
+    pub use keel_issues::issue_write::{record_issue, NewIssue};
+    pub use keel_write::write::*;
+}
+pub use keel_issues as issues;
 pub use keel_model::claims;
 pub use keel_model::model;
 

@@ -1,0 +1,14 @@
+[package]
+name = "keel-issues"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The item and issue processes (D0480): recording an issue, a statement or a story, the GitHub intake, and the open-issues, dispositions and intake views - apart from the processes that govern keel itself."
+
+[dependencies]
+keel-json = { path = "../keel-json" }
+keel-schema = { path = "../keel-schema" }
+keel-model = { path = "../keel-model" }
+keel-write = { path = "../keel-write" }
+serde_json = "1"

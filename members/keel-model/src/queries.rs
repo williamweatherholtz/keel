@@ -259,6 +259,13 @@ pub struct IssueStatus {
     pub open: bool,
 }
 
+/// `true` if a severity string is >= Medium (the human-disposition tier, D0079).
+#[allow(clippy::missing_const_for_fn)] // cannot match on `str` in a const fn
+#[must_use]
+pub fn at_least_medium(sev: &str) -> bool {
+    matches!(sev, "Critical" | "High" | "Medium")
+}
+
 /// The latest recorded disposition verdict on a finding Issue (D0092): the `disposition` attr of a
 /// `#Dispositions`-linked confirmation Test (`act` | `acceptRisk` | `dismiss`), or `None` if
 /// undispositioned. Reads the TYPED verdict — not a prose/proxy inference.

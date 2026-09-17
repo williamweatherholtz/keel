@@ -14,6 +14,7 @@ members = [
     "members/keel-guards",
     "members/keel-suite",
     "members/keel-process",
+    "members/keel-issues",
     "keel-cli",
 ]
 resolver = "2"

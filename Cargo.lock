@@ -1045,6 +1045,7 @@ dependencies = [
  "keel-git",
  "keel-github",
  "keel-guards",
+ "keel-issues",
  "keel-json",
  "keel-model",
  "keel-parser",
@@ -1103,6 +1104,17 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+]
+
+[[package]]
+name = "keel-issues"
+version = "0.4.1"
+dependencies = [
+ "keel-json",
+ "keel-model",
+ "keel-schema",
+ "keel-write",
+ "serde_json",
 ]
 
 [[package]]
