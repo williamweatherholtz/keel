@@ -47,7 +47,7 @@ pub use keel_serve::attestation;
 pub use keel_issues::intake_write;
 pub use keel_process::workspace;
 pub use keel_model::onboard;
-pub mod proactive;
+pub use keel_hooks::proactive;
 pub use keel_write::claim;
 pub use keel_serve::deck;
 pub use keel_actor::device;
@@ -92,7 +92,9 @@ pub use keel_write::scaffold;
 pub use keel_serve::serve;
 pub use keel_process::status;
 pub use keel_process::sync;
-pub mod shellcheck;
+// The Claude hooks are member keel-hooks (D0479, sprint 739): cmd_hook and its ledger, shellcheck, proactive; the old paths keep resolving.
+pub use keel_hooks as hooks;
+pub use keel_hooks::shellcheck;
 // The item views and the issue write are member keel-issues' (D0480, sprint 737): `view` and `write` are
 // wrapper modules so `crate::view::open_issues` and `crate::write::record_issue` keep resolving.
 pub mod view {

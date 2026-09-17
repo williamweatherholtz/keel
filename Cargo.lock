@@ -1043,6 +1043,7 @@ dependencies = [
  "keel-git",
  "keel-github",
  "keel-guards",
+ "keel-hooks",
  "keel-issues",
  "keel-json",
  "keel-model",
@@ -1105,6 +1106,23 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+]
+
+[[package]]
+name = "keel-hooks"
+version = "0.4.1"
+dependencies = [
+ "keel-actor",
+ "keel-fs",
+ "keel-git",
+ "keel-guards",
+ "keel-model",
+ "keel-perf",
+ "keel-process",
+ "keel-suite",
+ "keel-view",
+ "keel-write",
+ "serde_json",
 ]
 
 [[package]]

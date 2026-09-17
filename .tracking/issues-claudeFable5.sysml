@@ -1995,4 +1995,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcTouchedReceiptNamesItsBaseSha to issue599;
+
+    part issue600 : Issue {
+        :>> id = "a8fc9b2e-4328-4c3e-a461-3df2ad9a3a65";
+        :>> title = "record task appends at the end of the def, so a split item cannot be written at its rank (D0052) and was moved by hand";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel record task appends the new action and its DoD at the end of the def, and declaration order IS priority (D0052), so an item that must outrank an existing one cannot be written at its rank by the API. Sprint 739 split dcHooksAreAMember out of dcKeelCliIsThinDispatch (rank 2 on keel show whats-next at 2ffa64b4) and made the parent depend on it; record task landed the slice at rank 26, below twenty-four items it now gates, and a hand script (move739.py, scratchpad) cut its two lines out of .tracking/backlog.sysml and pasted them before the parent. The move was legal (my own item, D0108) and validated clean, but it is a backlog write the write lock, the provenance check and the record verb's own validation never saw - the class D0224 and D0309 exist to keep out of the tree. Every future split (one remains: thin dispatch may split again) and every resolver that must precede the item it unblocks meets the same gap. Resolver: dcRecordTaskPlacesTheItemBeforeANamedOne - a --before <task> flag on record task that declares the item at its position inside the def and refuses a name not in the def.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcRecordTaskPlacesTheItemBeforeANamedOne to issue600;
 }

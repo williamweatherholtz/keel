@@ -40,6 +40,8 @@ keel-process = { path = "../members/keel-process" }
 keel-issues = { path = "../members/keel-issues" }
 # D0479 console (sprint 738): serve, deck, launcher, console_registry, reports, attestation; re-exported under their old paths in lib.rs.
 keel-serve = { path = "../members/keel-serve" }
+# D0479 Claude hooks (sprint 739): cmd_hook and its ledger, shellcheck, proactive; re-exported as `hooks` and under the old module paths in lib.rs.
+keel-hooks = { path = "../members/keel-hooks" }
 # OS CSPRNG for UUID v4 identity (issue075/D0129) — already in the lock tree transitively.
 getrandom = "0.3"
 # HMAC-SHA256 for device-bound deck taps (D0201 B) - already in the lock tree via keel-parser.

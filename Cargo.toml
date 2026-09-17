@@ -15,6 +15,7 @@ members = [
     "members/keel-suite",
     "members/keel-process",
     "members/keel-issues",
+    "members/keel-hooks",
     "members/keel-serve",
     "keel-cli",
 ]

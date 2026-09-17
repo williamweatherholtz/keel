@@ -16,7 +16,7 @@ use std::path::Path;
 /// The HEAD blob of a repo-relative path, or empty when it is new / unreadable (a new file has no
 /// prior criterion to drift, so empty is the correct "nothing to compare" answer).
 fn head_blob(root: &Path, rel: &str) -> String {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["show", &format!("HEAD:{rel}")])
@@ -88,7 +88,7 @@ pub fn post_edit_advisories(root: &Path, edited_rel: &str) -> Vec<String> {
     // (a) Broken edges. The committed tree carries ZERO dangling endpoints (edge-endpoints is a hard
     // commit gate), so any dangling endpoint NOW is attributable to the working edit — "that change
     // broke X". Capped so a huge accidental breakage cannot flood the advisory.
-    if let Ok(dangling) = crate::view::dangling_edge_endpoints(root) {
+    if let Ok(dangling) = keel_view::view::dangling_edge_endpoints(root) {
         let total = dangling.len();
         for d in dangling.iter().take(10) {
             out.push(format!("broken edge — {d}"));

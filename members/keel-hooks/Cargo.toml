@@ -1,0 +1,26 @@
+[package]
+name = "keel-hooks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Claude hooks (D0134): the Stop, PostToolUse, PreToolUse, UserPromptSubmit and SubagentStop entry points, their ledger, the override unlock, the bash and write classifiers, the pre-bash and post-edit advisories - the in-loop gates, in the binary, above every member they read and below keel-cli."
+# The console probe reports the binary's engine build (KEEL_BUILD_COMMIT); the script that bakes the commit is
+# keel-cli's, shared, not copied (sprint 736, as keel-guards, keel-write and keel-process).
+build = "../../keel-cli/build.rs"
+
+[dependencies]
+keel-perf = { path = "../keel-perf" }
+keel-git = { path = "../keel-git" }
+keel-actor = { path = "../keel-actor" }
+keel-model = { path = "../keel-model" }
+keel-write = { path = "../keel-write" }
+keel-view = { path = "../keel-view" }
+keel-guards = { path = "../keel-guards" }
+keel-suite = { path = "../keel-suite" }
+keel-process = { path = "../keel-process" }
+serde_json = "1"
+
+[dev-dependencies]
+# keel_fs::scratch, the one scratch dir for tests (issue557).
+keel-fs = { path = "../keel-fs" }

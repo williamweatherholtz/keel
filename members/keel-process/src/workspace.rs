@@ -601,6 +601,55 @@ pub fn gate_cmd(args: &[String]) -> i32 {
     }
 }
 
+// ── project discovery from the current directory (sprint 739, D0479) ─────────
+// Moved whole out of keel-cli/src/main.rs by `scripts/extract_hooks.py`: the hooks call both, and a
+// member cannot call into the binary. keel-cli imports them from here.
+
+// ── repo-root discovery ───────────────────────────────────────────────────────
+
+#[must_use]
+pub fn find_repo_root() -> Option<PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    loop {
+        if dir.join(".engine").is_dir() {
+            return Some(dir);
+        }
+        // STOP AT THE REPOSITORY BOUNDARY (issue281). This walk had none while workspace discovery
+        // did, so standing in a directory nested under an unrelated keel project, `keel gate validate`
+        // with no argument walked OUT of the repository and validated the OUTER repo's project —
+        // reporting it clean. A command that answers about a repository the caller is not in is worse
+        // than one that refuses: the answer looks right.
+        if dir.join(".git").exists() {
+            return None;
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+/// D0190: the engine-version parity warning. The DECLARED version (engine-version.toml, stamped by
+/// init and re-stamped by migrate) answers one question only: which binary's checks is this on-disk
+/// engine defined against? A mismatch WARNS and names `keel migrate` - never blocks, because skew is
+/// not dishonest state (D0098), and never gates or skips anything (migrate derives its vintage from
+/// the TREE, per its own no-stamp rule - this declaration exists for the warning, the two designs
+/// answer different questions). Absent declaration = pre-D0190 project, silent (forward-only, issue068).
+#[must_use]
+pub fn engine_version_skew(root: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(root.join(".engine").join("contracts").join("engine-version.toml")).ok()?;
+    let declared = text
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("engine").map(|r| r.trim_start_matches(['=', ' ']).trim_matches('"').to_string()))
+        .filter(|v| !v.is_empty())?;
+    let binary = env!("CARGO_PKG_VERSION");
+    if declared == binary {
+        return None;
+    }
+    Some(format!(
+        "[keel] engine-version SKEW: this binary is {binary} but this project PINS {declared} (engine-version.toml).          The pin is BINDING: writes and gates REFUSE under skew; reads warn and proceed. Run the pinned          version, or `keel migrate` to bring the tree to this one (it re-stamps the pin)."
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{discover, is_project, unowned_keystone_events, Workspace};
