@@ -28,7 +28,7 @@
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 /// Default console port. Deliberately rigid: silent port-hopping is the mechanism that produced the
 /// window proliferation this registry exists to end (D0245 clause 6).
@@ -121,7 +121,7 @@ fn write(reg: &Registry) -> Result<(), String> {
 
 /// The git repository name containing `root`, for disambiguating two projects with the same label.
 fn repo_of(root: &Path) -> String {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--show-toplevel"])
@@ -138,7 +138,7 @@ fn repo_of(root: &Path) -> String {
 /// # Errors
 /// Returns the reason the registry file could not be written.
 pub fn register(root: &Path, port: Option<u16>, today: &str) -> Result<(), String> {
-    let canon = crate::workspace::canon(root);
+    let canon = keel_process::workspace::canon(root);
     let mut reg = load();
     let label = canon.file_name().map_or_else(|| ".".to_string(), |n| n.to_string_lossy().into_owned());
     let repo = repo_of(&canon);
@@ -161,7 +161,7 @@ pub fn register(root: &Path, port: Option<u16>, today: &str) -> Result<(), Strin
 /// # Errors
 /// Returns the reason the registry file could not be written.
 pub fn deregister(root: &Path) -> Result<bool, String> {
-    let canon = crate::workspace::canon(root);
+    let canon = keel_process::workspace::canon(root);
     let mut reg = load();
     let before = reg.entries.len();
     reg.entries.retain(|e| e.root != canon);

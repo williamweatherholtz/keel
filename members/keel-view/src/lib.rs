@@ -31,4 +31,5 @@ pub mod control_proof;
 pub mod govern;
 pub mod pm;
 pub mod priority;
+pub mod verification;
 pub mod view;

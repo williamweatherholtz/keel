@@ -23,7 +23,7 @@ use axum::Router;
 use tokio::io::AsyncBufReadExt;
 use tokio_stream::Stream;
 
-use crate::json::Json;
+use keel_json::json::Json;
 
 /// The embedded single-page console frontend (self-contained, no CDN — the cytoscape precedent).
 const CONSOLE_HTML: &str = include_str!("../assets/console.html");
@@ -207,9 +207,9 @@ fn view_store() -> ViewStore {
 fn store_or_compute(
     root: &Path,
     key: &str,
-    compute: impl FnOnce(&Path) -> Result<String, crate::view::ViewError>,
+    compute: impl FnOnce(&Path) -> Result<String, keel_view::view::ViewError>,
 ) -> Option<String> {
-    let fp = crate::fingerprint::of(root);
+    let fp = keel_model::fingerprint::of(root);
     let store = view_store();
     let hit = {
         let g = store.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -240,13 +240,13 @@ fn spawn_watcher(state: &AppState) {
     let root = state.rootpath();
     let st = state.clone();
     tokio::spawn(async move {
-        let mut last = crate::fingerprint::compute(&root);
+        let mut last = keel_model::fingerprint::compute(&root);
         let _ = st.changes.send(last);
         loop {
             tokio::time::sleep(Duration::from_millis(1500)).await;
             let now = tokio::task::spawn_blocking({
                 let r = root.clone();
-                move || crate::fingerprint::compute(&r)
+                move || keel_model::fingerprint::compute(&r)
             })
             .await
             .unwrap_or(last);
@@ -254,7 +254,7 @@ fn spawn_watcher(state: &AppState) {
                 last = now;
                 // ORDER MATTERS: advance the epoch FIRST so the warmers below - and any request arriving
                 // while they run - read the tree rather than the memo of the old tree.
-                crate::fingerprint::new_epoch();
+                keel_model::fingerprint::new_epoch();
                 for (key, f) in HOT_VIEWS {
                     warm(&st, key, f, now);
                 }
@@ -271,9 +271,9 @@ async fn serve_async(root: PathBuf, port: u16) -> i32 {
     let root = root.canonicalize().unwrap_or(root);
     // Captured before `root` moves into the shared state, so the banner can name the tree.
     let served = display_path(&root);
-    let pairing = crate::device::pairing_code();
+    let pairing = keel_actor::device::pairing_code();
     let pairing_banner = pairing.clone();
-    let paired_at_start = crate::device::load(&root).len();
+    let paired_at_start = keel_actor::device::load(&root).len();
     let state = AppState { root: Arc::new(Mutex::new(root)), agents: Arc::new(AtomicUsize::new(0)), asks: Arc::new(Mutex::new(AskQueue::new())), cache: view_store(), changes: tokio::sync::watch::Sender::new(0), refreshing: Arc::new(Mutex::new(std::collections::HashSet::new())), pairing: Arc::new(pairing) };
     spawn_watcher(&state);
 
@@ -449,7 +449,7 @@ async fn log_request(req: Request, next: Next) -> Response {
     // expires on elapsed time, and an observation is not elapsed time.
     let writes = method != axum::http::Method::GET;
     if writes {
-        crate::fingerprint::new_epoch();
+        keel_model::fingerprint::new_epoch();
     }
     let start = std::time::Instant::now();
     let resp = next.run(req).await;
@@ -459,12 +459,12 @@ async fn log_request(req: Request, next: Next) -> Response {
         // next read would answer from the cache of a tree that no longer exists until the watcher caught
         // up 1.5s later. The human accepts a Decision and the count does not move - which is precisely
         // the "I click accept and nothing changes" report that started this work.
-        crate::fingerprint::new_epoch();
+        keel_model::fingerprint::new_epoch();
     }
     // With KEEL_PERF set, each request reports the cost of ITS OWN work. `perf::report` prints at process
     // exit, which never comes for a server, so before this the interactive surface was the one thing the
     // instrumentation could not see.
-    let cost = crate::perf::interval().map_or_else(String::new, |s| format!("  [{s}]"));
+    let cost = keel_perf::perf::interval().map_or_else(String::new, |s| format!("  [{s}]"));
     let line = format!(
         "[keel serve] {method} {path} -> {} ({}ms){cost}",
         resp.status().as_u16(),
@@ -526,7 +526,7 @@ async fn cors_localhost(req: Request, next: Next) -> Response {
 
 /// Current short HEAD of `root` (for a disposition's `judgedAgainst`); `"uncommitted"` if git fails.
 fn git_head(root: &Path) -> String {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--short", "HEAD"])
@@ -538,7 +538,7 @@ fn git_head(root: &Path) -> String {
 
 /// ISO-8601 commit date of HEAD (the snapshot's `as-of`); `"unknown"` if git fails.
 fn git_head_date(root: &Path) -> String {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["log", "-1", "--format=%cs", "HEAD"])
@@ -602,7 +602,7 @@ async fn api_deck_sitting(
     let root = s.rootpath();
     // One Person registry, one reader: the same actor::person_names the D0178 carve-out and the
     // run-answer check use — three surfaces disagreeing on who counts as a Person is its own defect.
-    let is_person = crate::actor::person_names(&root).iter().any(|n| n == &b.by);
+    let is_person = keel_actor::actor::person_names(&root).iter().any(|n| n == &b.by);
     if !is_person {
         return (
             StatusCode::BAD_REQUEST,
@@ -614,7 +614,7 @@ async fn api_deck_sitting(
             .into_response();
     }
     // D0201 B: a sitting-review tap is a human attestation too - its device receipt is recorded with it (D0426).
-    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &crate::device::canonical(&format!("sitting-{}", b.verdict), &b.story, &b.judged_at, &b.by, &b.note));
+    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &keel_actor::device::canonical(&format!("sitting-{}", b.verdict), &b.story, &b.judged_at, &b.by, &b.note));
     let severity = match b.verdict.as_str() {
         "accept" | "batch-ack" => None,
         "maybe" | "reject" => Some("Medium"),
@@ -639,14 +639,14 @@ async fn api_deck_sitting(
     };
     let rationale = format!("{rationale}{}", receipt.tag());
     // issue210: the sitting critique lands in the REVIEWER's per-actor file.
-    let critiques = match crate::write::per_actor_file(&root, "critiques", &b.by) {
+    let critiques = match keel_write::write::per_actor_file(&root, "critiques", &b.by) {
         Ok(p) => p,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     };
     // The judgment is made against HEAD - the same commit source api_disposition uses - never
     // against a date masquerading as a sha (guard 36 exists precisely for that confusion).
     let sha = git_head(&root);
-    let c = crate::write::Critique {
+    let c = keel_write::write::Critique {
         element: &b.story,
         method: "critique",
         lens: "completeness",
@@ -660,13 +660,13 @@ async fn api_deck_sitting(
         judged_at: &b.judged_at,
         judged_by: &b.by,
     };
-    match crate::write::append_critique(&critiques, &c) {
+    match keel_write::write::append_critique(&critiques, &c) {
         Ok(name) => {
             // A sitting review COUNTS only through its #Covers edge to the sprint story - that edge is
             // what `sitting-coverage` computes over, and the e2e test proved a critique alone leaves
             // the due count unchanged. The write API authors the edge; a failure here is reported
             // rather than leaving a critique that silently covers nothing.
-            if let Err(e) = crate::write::append_marker_edge(&critiques, "Covers", &name, &b.story) {
+            if let Err(e) = keel_write::write::append_marker_edge(&critiques, "Covers", &name, &b.story) {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     format!("{{\"error\":\"critique recorded but the Covers edge failed: {}\"}}", e.to_string().replace('"', "'")),
@@ -701,15 +701,15 @@ async fn api_disposition(State(s): State<AppState>, axum::Json(body): axum::Json
         return (StatusCode::BAD_REQUEST, "{\"error\":\"judged_by is required: the actor is data the gesture carries, never ambient state the server resolves (issue199/D0178)\"}".to_string()).into_response();
     };
     let judged_by = judged_by.to_string();
-    let receipt = tap_receipt(&s, body.device_id.as_deref(), body.hmac.as_deref(), &crate::device::canonical(&format!("disposition-{verdict}"), &body.finding, &body.judged_at, &judged_by, &body.rationale));
+    let receipt = tap_receipt(&s, body.device_id.as_deref(), body.hmac.as_deref(), &keel_actor::device::canonical(&format!("disposition-{verdict}"), &body.finding, &body.judged_at, &judged_by, &body.rationale));
     // issue210: the disposition lands in the JUDGE's per-actor file.
-    let critiques = match crate::write::per_actor_file(&s.rootpath(), "critiques", &judged_by) {
+    let critiques = match keel_write::write::per_actor_file(&s.rootpath(), "critiques", &judged_by) {
         Ok(p) => p,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     };
     let rationale = format!("{}{}", body.rationale, receipt.tag());
-    let d = crate::write::Disposition { finding: &body.finding, verdict, rationale: &rationale, sha: &sha, judged_at: &body.judged_at, judged_by: &judged_by };
-    match crate::write::append_disposition(&critiques, &d) {
+    let d = keel_write::write::Disposition { finding: &body.finding, verdict, rationale: &rationale, sha: &sha, judged_at: &body.judged_at, judged_by: &judged_by };
+    match keel_write::write::append_disposition(&critiques, &d) {
         Ok(name) => ok_json(format!("{{\"ok\":true,\"name\":\"{name}\",\"verdict\":\"{verdict}\"}}")),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -733,7 +733,7 @@ struct DecisionReq {
 /// acceptance event, and never auto-commits (the human reviews + commits). The generated UI proposes
 /// changes THROUGH the process, not by editing facts directly ("not going rogue").
 async fn api_decision(State(s): State<AppState>, axum::Json(b): axum::Json<DecisionReq>) -> Response {
-    let author = match crate::actor::resolve(&s.rootpath(), b.author.as_deref()) {
+    let author = match keel_actor::actor::resolve(&s.rootpath(), b.author.as_deref()) {
         Ok(a) => a,
         // D0129/issue072: an omitted actor used to default to a named HUMAN, silently forging a
         // human attestation and making confirmation-authenticity (D0106) meaningless. Refuse instead.
@@ -742,7 +742,7 @@ async fn api_decision(State(s): State<AppState>, axum::Json(b): axum::Json<Decis
     if b.slug.is_empty() || b.title.is_empty() || b.decision.is_empty() {
         return (StatusCode::BAD_REQUEST, "{\"error\":\"slug, title, and decision are required\"}".to_string()).into_response();
     }
-    match crate::write::record_decision(&s.rootpath(), &b.slug, &b.title, &b.date, &author, &b.context, &b.decision, &b.rationale, &b.consequences, None, None) {
+    match keel_write::write::record_decision(&s.rootpath(), &b.slug, &b.title, &b.date, &author, &b.context, &b.decision, &b.rationale, &b.consequences, None, None) {
         Ok((nnnn, path)) => ok_json(format!("{{\"ok\":true,\"decision\":\"D{nnnn}\",\"path\":\"{path}\",\"status\":\"proposed\"}}")),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -760,7 +760,7 @@ struct DeviceEnrollReq {
 /// POST /api/device/enroll (D0201 B) - pair this browser: the human types the pairing code the serving
 /// terminal printed; the browser's own key is stored machine-locally; every later tap is signed by it.
 async fn api_device_enroll(State(s): State<AppState>, axum::Json(b): axum::Json<DeviceEnrollReq>) -> Response {
-    match crate::device::enroll(&s.rootpath(), &s.pairing, &b.code, &b.device_id, &b.key, &b.label, &crate::scaffold::today()) {
+    match keel_actor::device::enroll(&s.rootpath(), &s.pairing, &b.code, &b.device_id, &b.key, &b.label, &keel_write::scaffold::today()) {
         Ok(()) => ok_json(format!("{{\"ok\":true,\"device\":\"{}\",\"binds\":\"this DEVICE, not a person's identity (D0201 B)\"}}", b.device_id.replace('"', "'"))),
         Err(e) => (StatusCode::UNAUTHORIZED, format!("{{\"error\":\"{}\"}}", e.replace('"', "'"))).into_response(),
     }
@@ -787,7 +787,7 @@ impl TapReceipt {
     /// The text appended to the recorded note.
     fn tag(&self) -> String {
         match self {
-            Self::Verified { device, hmac } => crate::device::receipt_tag(device, hmac),
+            Self::Verified { device, hmac } => keel_actor::device::receipt_tag(device, hmac),
             Self::Unverified(reason) => format!(" WARN: unsigned tap - {} (D0426).", reason.replace("; nothing written", "").replace(" - nothing written", "")),
         }
     }
@@ -795,7 +795,7 @@ impl TapReceipt {
 
 /// Classify a tap by its device signature (D0201 B). Never refuses: see [`TapReceipt`].
 fn tap_receipt(s: &AppState, device_id: Option<&str>, hmac: Option<&str>, canonical: &str) -> TapReceipt {
-    match crate::device::verify(&s.rootpath(), device_id, hmac, canonical) {
+    match keel_actor::device::verify(&s.rootpath(), device_id, hmac, canonical) {
         Ok(device) => TapReceipt::Verified { device, hmac: hmac.unwrap_or_default().to_string() },
         Err(reason) => TapReceipt::Unverified(reason),
     }
@@ -819,7 +819,7 @@ struct DecisionAcceptReq {
 /// the `{decision}Accept` event via `write::accept_decision`. The human's note IS the attestation
 /// (D0106 — `judged_by` is a Person, never AI-fabricated); never auto-commits.
 /// The console's own channel citation, appended to a human-recorded acceptance (issue287).
-const CONSOLE_GESTURE: &str = crate::device::CONSOLE_GESTURE;
+const CONSOLE_GESTURE: &str = keel_actor::device::CONSOLE_GESTURE;
 
 async fn api_decision_accept(State(s): State<AppState>, axum::Json(b): axum::Json<DecisionAcceptReq>) -> Response {
     let Some(path) = safe_repo_path(&s.rootpath(), &b.file) else {
@@ -840,7 +840,7 @@ async fn api_decision_accept(State(s): State<AppState>, axum::Json(b): axum::Jso
     // now says so in the record. Appended, never substituted: the human's own words are left exactly
     // as they wrote them, and this is a factual statement about the channel, not a paraphrase of them.
     // D0201 B / D0426: the tap's device receipt - verified, or a WARN naming why not - is recorded with it.
-    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &crate::device::canonical("accept", &b.decision, &b.judged_at, judged_by, &b.note));
+    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &keel_actor::device::canonical("accept", &b.decision, &b.judged_at, judged_by, &b.note));
     // The receipt is appended to EVERY console record (D0411): the tap signed `b.note`, the server
     // adds the gesture and the receipt, and `device::reverify` strips both to check the signature.
     let note = if b.note.contains(CONSOLE_GESTURE.trim()) {
@@ -850,7 +850,7 @@ async fn api_decision_accept(State(s): State<AppState>, axum::Json(b): axum::Jso
     };
     // The human recorded this themselves: recorder == judge, which is what lets the substance rule
     // scope itself to genuinely delegated records (issue287).
-    match crate::write::accept_decision(&path, &b.decision, &sha, &b.judged_at, judged_by, judged_by, &note) {
+    match keel_write::write::accept_decision(&path, &b.decision, &sha, &b.judged_at, judged_by, judged_by, &note) {
         Ok(_) => ok_json(format!("{{\"ok\":true,\"decision\":\"{}\",\"status\":\"accepted\"}}", b.decision)),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -889,22 +889,22 @@ async fn api_judge_set(State(s): State<AppState>, axum::Json(b): axum::Json<Judg
     }
     let proposals = crate::attestation::proposals_in(&root, &path);
     let rule = crate::attestation::sampling_rule(&root);
-    let items: Vec<crate::write::SetJudgment> = crate::attestation::sample(&proposals, rule)
+    let items: Vec<keel_write::write::SetJudgment> = crate::attestation::sample(&proposals, rule)
         .into_iter()
         .filter(|p| !p.judged)
-        .map(|p| crate::write::SetJudgment { test: p.test.clone(), verdict: b.verdict.clone() })
+        .map(|p| keel_write::write::SetJudgment { test: p.test.clone(), verdict: b.verdict.clone() })
         .collect();
     if items.is_empty() {
         return (StatusCode::BAD_REQUEST, "{\"error\":\"nothing in this file's sampled set awaits judgment\"}".to_string()).into_response();
     }
     let sha = git_head(&root);
-    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &crate::device::canonical(&format!("judge-set-{}", b.verdict), &b.file, &b.judged_at, judged_by, &b.note));
+    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &keel_actor::device::canonical(&format!("judge-set-{}", b.verdict), &b.file, &b.judged_at, judged_by, &b.note));
     let note = if b.note.contains(CONSOLE_GESTURE.trim()) {
         format!("{}{}", b.note, receipt.tag())
     } else {
         format!("{}{CONSOLE_GESTURE}{}", b.note, receipt.tag())
     };
-    match crate::write::judge_set(&path, &items, &sha, &b.judged_at, judged_by, judged_by, &note) {
+    match keel_write::write::judge_set(&path, &items, &sha, &b.judged_at, judged_by, judged_by, &note) {
         Ok(written) => ok_json(format!(
             "{{\"ok\":true,\"file\":\"{}\",\"verdict\":\"{}\",\"written\":[{}]}}",
             b.file.replace('"', "'"),
@@ -942,11 +942,11 @@ async fn api_decision_reject(State(s): State<AppState>, axum::Json(b): axum::Jso
     let Some(judged_by) = b.judged_by.as_deref().map(str::trim).filter(|a| !a.is_empty()) else {
         return (StatusCode::BAD_REQUEST, "{\"error\":\"judged_by is required: the signer is data the gesture carries, never ambient state the server resolves (issue199/D0178)\"}".to_string()).into_response();
     };
-    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &crate::device::canonical("reject", &b.decision, &b.judged_at, judged_by, &b.rationale));
+    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &keel_actor::device::canonical("reject", &b.decision, &b.judged_at, judged_by, &b.rationale));
     let sha = git_head(&s.rootpath());
     let rationale = format!("{}{}", b.rationale, receipt.tag());
     // D0299: the console tap is the human's own record - judge and recorder are the same person.
-    match crate::write::reject_decision(&path, &b.decision, &sha, &b.judged_at, judged_by, judged_by, &rationale) {
+    match keel_write::write::reject_decision(&path, &b.decision, &sha, &b.judged_at, judged_by, judged_by, &rationale) {
         Ok(_) => ok_json(format!("{{\"ok\":true,\"decision\":\"{}\",\"status\":\"rejected\"}}", b.decision)),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -984,11 +984,11 @@ async fn api_gate_result(State(s): State<AppState>, axum::Json(b): axum::Json<Ga
         Some("fail") => "fail",
         _ => "pass",
     };
-    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &crate::device::canonical(&format!("gate-{verdict}"), &b.gate, &b.judged_at, &judged_by, b.note.as_deref().unwrap_or("")));
+    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &keel_actor::device::canonical(&format!("gate-{verdict}"), &b.gate, &b.judged_at, &judged_by, b.note.as_deref().unwrap_or("")));
     let sha = git_head(&s.rootpath());
     let tagged = format!("{}{}", b.note.as_deref().unwrap_or(""), receipt.tag());
     let note = Some(tagged.as_str());
-    match crate::write::append_gate_result(&path, &b.gate, &sha, verdict, &b.judged_at, &judged_by, note, None) {
+    match keel_write::write::append_gate_result(&path, &b.gate, &sha, verdict, &b.judged_at, &judged_by, note, None) {
         Ok(_) => ok_json(format!("{{\"ok\":true,\"gate\":\"{}\",\"outcome\":\"{verdict}\"}}", b.gate)),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -1023,7 +1023,7 @@ async fn api_edge(State(s): State<AppState>, axum::Json(b): axum::Json<EdgeReq>)
     if safe_repo_path(&s.rootpath(), &file_rel).is_none() {
         return (StatusCode::BAD_REQUEST, "{\"error\":\"file must be a repo-relative .sysml path\"}".to_string()).into_response();
     }
-    match crate::write::author_edge(&s.rootpath(), &file_rel, &kind, &b.from, &b.to) {
+    match keel_write::write::author_edge(&s.rootpath(), &file_rel, &kind, &b.from, &b.to) {
         Ok(()) => ok_json(format!("{{\"ok\":true,\"edge\":\"{kind} {} -> {}\"}}", b.from, b.to)),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -1055,7 +1055,7 @@ async fn api_create_item(State(s): State<AppState>, axum::Json(b): axum::Json<Cr
     if ty.is_empty() || !ty.chars().all(|c| c.is_ascii_alphanumeric()) {
         return (StatusCode::BAD_REQUEST, "{\"error\":\"type must be a declared type name\"}".to_string()).into_response();
     }
-    let author = match crate::actor::resolve(&s.rootpath(), b.author.as_deref()) {
+    let author = match keel_actor::actor::resolve(&s.rootpath(), b.author.as_deref()) {
         Ok(a) => a,
         // D0129/issue072: an omitted actor used to default to a named HUMAN, silently forging a
         // human attestation and making confirmation-authenticity (D0106) meaningless. Refuse instead.
@@ -1063,11 +1063,11 @@ async fn api_create_item(State(s): State<AppState>, axum::Json(b): axum::Json<Cr
     };
     let strs: Vec<(String, String)> = b.string_attrs.into_iter().map(|a| (a.name, a.value)).collect();
     let enums: Vec<(String, String, String)> = b.enum_attrs.into_iter().map(|a| (a.name, a.enum_type, a.value)).collect();
-    let new_item = crate::write::NewItem {
+    let new_item = keel_write::write::NewItem {
         keyword: item_keyword(ty), type_name: ty, name_hint: b.name.as_deref().unwrap_or(""),
         string_attrs: &strs, enum_attrs: &enums, author: &author, created_at: &b.date,
     };
-    match crate::write::create_item(&s.rootpath(), &new_item) {
+    match keel_write::write::create_item(&s.rootpath(), &new_item) {
         Ok((name, path)) => ok_json(format!("{{\"ok\":true,\"name\":\"{name}\",\"type\":\"{ty}\",\"path\":\"{path}\"}}")),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -1106,7 +1106,7 @@ async fn api_set_attr(State(s): State<AppState>, axum::Json(b): axum::Json<SetAt
         Some(ty) if ty.chars().all(|c| c.is_ascii_alphanumeric()) && b.value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') => format!("{ty}::{}", b.value),
         _ => format!("\"{}\"", b.value.replace('"', "'").replace(['\n', '\r', '\t'], " ")),
     };
-    match crate::write::set_attr(&s.rootpath(), &b.item, &b.attr, &literal) {
+    match keel_write::write::set_attr(&s.rootpath(), &b.item, &b.attr, &literal) {
         Ok(path) => ok_json(format!("{{\"ok\":true,\"item\":\"{}\",\"attr\":\"{}\",\"path\":\"{path}\"}}", b.item, b.attr)),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -1122,15 +1122,15 @@ async fn api_check(State(s): State<AppState>) -> Response {
     let json = tokio::task::block_in_place(|| {
         let root = s.rootpath();
         let root = root.as_path();
-        let report = crate::validate_root(root);
+        let report = keel_model::validate::validate_root(root);
         let mut parse_errors: Vec<Json> = report.errors.iter()
             .map(|e| Json::s(format!("{}: {}", e.file.display(), e.message)))
             .collect();
         parse_errors.extend(report.diagnostics.iter().map(|(p, d)| Json::s(format!("{}: {}", p.display(), d.message))));
         let mut blocking: Vec<Json> = Vec::new();
         let mut warnings: Vec<Json> = Vec::new();
-        for name in crate::guards::GUARD_NAMES {
-            if let Some(rep) = crate::guards::run_one(name, root) {
+        for name in keel_guards::GUARD_NAMES {
+            if let Some(rep) = keel_guards::run_one(name, root) {
                 if !rep.violations.is_empty() {
                     blocking.push(Json::Obj(vec![
                         ("guard".to_string(), Json::s(name.to_string())),
@@ -1138,7 +1138,7 @@ async fn api_check(State(s): State<AppState>) -> Response {
                     ]));
                 }
                 // The read-mode note (D0440) is reported as `read`, never as a warning.
-                let real: Vec<Json> = rep.warnings.iter().filter(|w| !crate::guards::is_read(w)).map(|v| Json::s(v.clone())).collect();
+                let real: Vec<Json> = rep.warnings.iter().filter(|w| !keel_guards::is_read(w)).map(|v| Json::s(v.clone())).collect();
                 if !real.is_empty() {
                     let mut row = vec![
                         ("guard".to_string(), Json::s(name.to_string())),
@@ -1167,7 +1167,7 @@ async fn api_check(State(s): State<AppState>) -> Response {
 /// model moved underneath (a possible concurrent edit, D0108) — the viewer flags a conflict rather than
 /// silently overwriting. Cheap (stat-only), never cached.
 async fn api_fingerprint(State(s): State<AppState>) -> Response {
-    ok_json(format!("{{\"fingerprint\":\"{}\"}}", crate::fingerprint::of(&s.rootpath())))
+    ok_json(format!("{{\"fingerprint\":\"{}\"}}", keel_model::fingerprint::of(&s.rootpath())))
 }
 
 /// Resolve a repo-relative `.sysml` path safely (no absolute paths, no `..` traversal, stays under root).
@@ -1183,7 +1183,7 @@ fn safe_repo_path(root: &Path, rel: &str) -> Option<PathBuf> {
 }
 
 /// Wrap a `ViewError`-fallible HTML computation into a response (500 + message on error).
-fn view_html(r: Result<String, crate::view::ViewError>) -> Response {
+fn view_html(r: Result<String, keel_view::view::ViewError>) -> Response {
     match r {
         Ok(html) => Html(html).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("render error: {e}")).into_response(),
@@ -1197,13 +1197,13 @@ async fn view_report(State(s): State<AppState>, AxPath(name): AxPath<String>) ->
 
 /// GET /view/diagram (D0094 m2) — the whole-model interactive diagram HTML (render action).
 async fn view_diagram(State(s): State<AppState>) -> Response {
-    view_html(crate::view::diagram_html(&s.rootpath()))
+    view_html(keel_view::view::diagram_html(&s.rootpath()))
 }
 
 /// GET /view/control-structure (D0285) — the STPA step-2 diagram drawn in the binary, the safety
 /// viewpoint's picture; the console embeds it where that viewpoint's panel renders.
 async fn view_control_structure(State(s): State<AppState>) -> Response {
-    view_html(crate::view::stpa_diagram::control_structure_html(&s.rootpath()))
+    view_html(keel_view::view::stpa_diagram::control_structure_html(&s.rootpath()))
 }
 
 // ── m3 agent-bridge — drive the LOCALLY-AUTHENTICATED `claude` CLI, stream its work over SSE ───────
@@ -1273,7 +1273,7 @@ struct AgentReq {
 
 /// The identity of a reviewed plan: what the human saw is what the approval covers.
 fn plan_identity(action: &str, target: &str, prompt: &str) -> String {
-    crate::arch::stable_hash(&format!("{action}\u{1f}{target}\u{1f}{prompt}"))
+    keel_view::arch::stable_hash(&format!("{action}\u{1f}{target}\u{1f}{prompt}"))
 }
 
 /// sr19 black-box critique prompt: critique the INTERFACES (cut edges) of a Need-slice boundary for
@@ -1286,7 +1286,7 @@ fn build_blackbox_prompt(need: &str, interfaces: &[String]) -> String {
 }
 
 /// Parse a section seed string (`view:NAME` / `element:NAME`) into the `(view, element)` pair
-/// [`crate::view::section_json`] expects. A bare string with no prefix is treated as an element seed.
+/// [`keel_view::view::section_json`] expects. A bare string with no prefix is treated as an element seed.
 fn parse_section_seed(seed: &str) -> (Option<String>, Option<String>) {
     seed.strip_prefix("view:").map_or_else(
         || (None, Some(seed.strip_prefix("element:").unwrap_or(seed).to_string())),
@@ -1318,16 +1318,16 @@ fn build_launch_prompt(target: &str) -> String {
 /// same validity checks the stream enforces; `prompt` is exactly what the agent would receive.
 fn request_plan(root: &Path, q: &AgentReq) -> (bool, bool, String) {
     let action_ok = matches!(q.action.as_str(), "critique" | "launch");
-    let launch_undefined = q.action == "launch" && !crate::view::is_launchable(root, &q.target).unwrap_or(false);
+    let launch_undefined = q.action == "launch" && !keel_view::view::is_launchable(root, &q.target).unwrap_or(false);
     let prompt = if q.action == "launch" {
         build_launch_prompt(&q.target)
     } else if let Some(need) = q.boundary.as_deref() {
-        let interfaces = crate::view::boundary_interfaces(root, need).unwrap_or_default();
+        let interfaces = keel_view::view::boundary_interfaces(root, need).unwrap_or_default();
         build_blackbox_prompt(need, &interfaces)
     } else {
         let section_members = q.section.as_deref().and_then(|seed| {
             let (view, element) = parse_section_seed(seed);
-            crate::view::section_member_names(root, view.as_deref(), element.as_deref()).ok()
+            keel_view::view::section_member_names(root, view.as_deref(), element.as_deref()).ok()
         });
         build_agent_prompt(&q.target, section_members.as_deref())
     };
@@ -1425,16 +1425,16 @@ fn claude_in_dirs(path: &std::ffi::OsStr, pathext: Option<&std::ffi::OsStr>) -> 
 async fn api_agent_plan(State(s): State<AppState>, Query(q): Query<AgentReq>) -> Response {
     let (action_ok, launch_undefined, prompt) = request_plan(&s.rootpath(), &q);
     let plan_hash = plan_identity(&q.action, &q.target, &prompt);
-    let json = crate::json::Json::Obj(vec![
-        ("plan".to_string(), crate::json::Json::s("agent-request plan (srServeApproveGate) — review, then execute with approved=1")),
-        ("action".to_string(), crate::json::Json::s(q.action)),
-        ("target".to_string(), crate::json::Json::s(q.target)),
-        ("action_ok".to_string(), crate::json::Json::Bool(action_ok)),
-        ("launch_undefined".to_string(), crate::json::Json::Bool(launch_undefined)),
-        ("executable".to_string(), crate::json::Json::Bool(action_ok && !launch_undefined)),
-        ("planHash".to_string(), crate::json::Json::s(plan_hash)),
-        ("prompt".to_string(), crate::json::Json::s(prompt)),
-        ("requires_approval".to_string(), crate::json::Json::Bool(true)),
+    let json = keel_json::json::Json::Obj(vec![
+        ("plan".to_string(), keel_json::json::Json::s("agent-request plan (srServeApproveGate) — review, then execute with approved=1")),
+        ("action".to_string(), keel_json::json::Json::s(q.action)),
+        ("target".to_string(), keel_json::json::Json::s(q.target)),
+        ("action_ok".to_string(), keel_json::json::Json::Bool(action_ok)),
+        ("launch_undefined".to_string(), keel_json::json::Json::Bool(launch_undefined)),
+        ("executable".to_string(), keel_json::json::Json::Bool(action_ok && !launch_undefined)),
+        ("planHash".to_string(), keel_json::json::Json::s(plan_hash)),
+        ("prompt".to_string(), keel_json::json::Json::s(prompt)),
+        ("requires_approval".to_string(), keel_json::json::Json::Bool(true)),
     ])
     .dump();
     ok_json(json)
@@ -1483,7 +1483,7 @@ async fn api_agent_stream(State(s): State<AppState>, Query(q): Query<AgentReq>) 
         // arrives IN the gesture (issue199's class), and the approval binds to the EXACT reviewed
         // plan: an edited route hashes differently and needs a fresh review.
         let approver = q.approved_by.as_deref().map_or("", str::trim).to_string();
-        if !crate::actor::person_names(&root).contains(&approver) {
+        if !keel_actor::actor::person_names(&root).contains(&approver) {
             yield Ok(Event::default().event("error").data(format!("approval refused (srServeApproveGateHuman): `{approver}` is not a registered Person - execution needs a human approver named in the request (approved_by), and an AI actor is refused by KIND before role.")));
             return;
         }
@@ -1649,15 +1649,15 @@ struct LaunchFormReq {
 /// D0185's typed producedArtifact lands (the recorded trigger); breadth is demand-driven.
 async fn api_launch_form(State(s): State<AppState>, Query(q): Query<LaunchFormReq>) -> Response {
     let root = s.rootpath();
-    if !crate::view::is_launchable(&root, &q.target).unwrap_or(false) {
+    if !keel_view::view::is_launchable(&root, &q.target).unwrap_or(false) {
         return (StatusCode::NOT_FOUND, format!("{{\"error\":\"`{}` is not a declared launchable - see keel launchables\"}}", q.target.replace('"', "'"))).into_response();
     }
     // purpose + steps from the model text (the process/skill declaration), never hardcoded
     let mut purpose = String::new();
     let mut steps: Vec<String> = Vec::new();
-    for f in crate::collect_sysml(&root.join(".engine").join("processes"))
+    for f in keel_model::corpus::collect_sysml(&root.join(".engine").join("processes"))
         .into_iter()
-        .chain(crate::collect_sysml(&root.join(".engine").join("skills")))
+        .chain(keel_model::corpus::collect_sysml(&root.join(".engine").join("skills")))
     {
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         if !text.contains(&format!("part {} ", q.target)) && !text.contains(&format!("action {} ", q.target)) && !f.file_name().is_some_and(|n| n.to_string_lossy().contains(&q.target)) {
@@ -1698,7 +1698,7 @@ struct RunAskReq {
 /// POST /api/run/ask (D0182 headless-ask proxy): a launched run's pre-write hook registers an ask
 /// and receives an id to poll. The human answers from the console; hook-side expiry maps to deny.
 async fn api_run_ask(State(s): State<AppState>, axum::Json(b): axum::Json<RunAskReq>) -> Response {
-    let id = crate::ident::gen_uuid();
+    let id = keel_model::ident::gen_uuid();
     if let Ok(mut asks) = s.asks.lock() {
         asks.insert(id.clone(), (b.path, b.session, None));
     }
@@ -1764,7 +1764,7 @@ struct RunAnswerReq {
 /// protected write is a human judgment, and an AI must not be able to answer its own ask.
 async fn api_run_answer(State(s): State<AppState>, axum::Json(b): axum::Json<RunAnswerReq>) -> Response {
     let by = b.by.trim().to_string();
-    if !crate::actor::person_names(&s.rootpath()).contains(&by) {
+    if !keel_actor::actor::person_names(&s.rootpath()).contains(&by) {
         return (
             StatusCode::BAD_REQUEST,
             format!(
@@ -1798,16 +1798,16 @@ async fn api_commit(State(s): State<AppState>, axum::Json(b): axum::Json<CommitR
         return (StatusCode::BAD_REQUEST, "{\"error\":\"a commit message of at least 8 characters is required\"}".to_string()).into_response();
     }
     let root = s.rootpath();
-    let add = crate::gitx::git().arg("-C").arg(&root).args(["add", "-A"]).output();
+    let add = keel_git::gitx::git().arg("-C").arg(&root).args(["add", "-A"]).output();
     if !add.as_ref().is_ok_and(|o| o.status.success()) {
         return (StatusCode::INTERNAL_SERVER_ERROR, "{\"error\":\"git add failed\"}".to_string()).into_response();
     }
     let msg_file = root.join(".keel").join("console-commit-msg.txt");
     let _ = std::fs::create_dir_all(root.join(".keel"));
-    if crate::write::write_atomic(&msg_file, b.message.as_str()).is_err() {
+    if keel_write::write::write_atomic(&msg_file, b.message.as_str()).is_err() {
         return (StatusCode::INTERNAL_SERVER_ERROR, "{\"error\":\"cannot stage the commit message\"}".to_string()).into_response();
     }
-    let out = crate::gitx::git().arg("-C").arg(&root).args(["commit", "-F"]).arg(&msg_file).output();
+    let out = keel_git::gitx::git().arg("-C").arg(&root).args(["commit", "-F"]).arg(&msg_file).output();
     match out {
         Ok(o) if o.status.success() => ok_json("{\"ok\":true,\"committed\":true}".to_string()),
         Ok(o) => {
@@ -1843,12 +1843,12 @@ async fn api_resolver(State(s): State<AppState>, axum::Json(b): axum::Json<Resol
     let title = b.title.replace('\\', "/").replace('"', "'").replace(['\n', '\r', '\t'], " ");
     let backlog = s.rootpath().join(".tracking").join("backlog.sysml");
     let issues = s.rootpath().join(".tracking").join("issues.sysml");
-    match crate::write::add_task(&backlog, "NextWork", &resolver, &title, "inspect") {
+    match keel_write::write::add_task(&backlog, "NextWork", &resolver, &title, "inspect") {
         // Ok = created; TaskAlreadyExists = re-click (resolver exists) — both proceed to ensure the edge.
-        Ok(_) | Err(crate::write::WriteError::TaskAlreadyExists(_)) => {}
+        Ok(_) | Err(keel_write::write::WriteError::TaskAlreadyExists(_)) => {}
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
-    match crate::write::append_resolves_edge(&issues, &resolver, &b.finding) {
+    match keel_write::write::append_resolves_edge(&issues, &resolver, &b.finding) {
         Ok(()) => ok_json(format!("{{\"ok\":true,\"resolver\":\"{resolver}\"}}")),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -1907,11 +1907,11 @@ fn with_status(body: &str, status: &str, extra: &str) -> String {
 /// else is warmed - warming a view nobody opened spends the human's CPU to no purpose.
 const HOT_VIEWS: [(&str, ViewFn); 6] = [
     ("obligations", obligations_json),
-    ("surfaces", crate::view::surfaces_json),
+    ("surfaces", keel_view::view::surfaces_json),
     ("orient", |r| Ok(crate::reports::orient(r).to_json())),
-    ("computed:authority-queue", crate::view::authority_queue),
-    ("computed:dispositions", crate::view::dispositions),
-    ("review-queue", crate::view::review_queue_json),
+    ("computed:authority-queue", keel_view::view::authority_queue),
+    ("computed:dispositions", keel_issues::views::dispositions),
+    ("review-queue", keel_view::view::review_queue_json),
 ];
 
 /// Recompute `key` in the background and store it under fingerprint `fp`.
@@ -1945,7 +1945,7 @@ fn warm(state: &AppState, key: &str, compute: ViewFn, fp: u64) {
     });
 }
 
-type ViewFn = fn(&Path) -> Result<String, crate::view::ViewError>;
+type ViewFn = fn(&Path) -> Result<String, keel_view::view::ViewError>;
 
 /// `cached` for a view that CAPTURES something (a per-item detail keyed by name).
 ///
@@ -1955,9 +1955,9 @@ type ViewFn = fn(&Path) -> Result<String, crate::view::ViewError>;
 fn cached_owned(
     state: &AppState,
     key: &str,
-    compute: impl FnOnce(&Path) -> Result<String, crate::view::ViewError>,
+    compute: impl FnOnce(&Path) -> Result<String, keel_view::view::ViewError>,
 ) -> Response {
-    let fp = crate::fingerprint::of(&state.rootpath());
+    let fp = keel_model::fingerprint::of(&state.rootpath());
     let previous = {
         let guard = state.cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.get(key).cloned()
@@ -1990,7 +1990,7 @@ fn cached_owned(
 }
 
 fn cached(state: &AppState, key: &str, compute: ViewFn) -> Response {
-    let fp = crate::fingerprint::of(&state.rootpath());
+    let fp = keel_model::fingerprint::of(&state.rootpath());
     let previous = {
         let guard = state.cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.get(key).cloned()
@@ -2050,7 +2050,7 @@ async fn api_version() -> Response {
         ("apiVersion".to_string(), Json::s(KEEL_API_VERSION.to_string())),
         // D0190: the binary version is the one declared semver; the rest are derived facts beside it.
         ("binaryVersion".to_string(), Json::s(env!("CARGO_PKG_VERSION").to_string())),
-        ("surfaceVersion".to_string(), Json::s(crate::claude_surface::SURFACE_VERSION.to_string())),
+        ("surfaceVersion".to_string(), Json::s(keel_write::claude_surface::SURFACE_VERSION.to_string())),
         // The CONSOLE build, distinct from the API version (issue153): the API contract can hold steady
         // across many page changes, so a page cannot tell whether it is current by reading apiVersion.
         ("consoleBuild".to_string(), Json::s(console_build().to_string())),
@@ -2064,7 +2064,7 @@ async fn api_version() -> Response {
 /// generative UI builds forms from the model (paired with /api/launchables for actions). Cached per
 /// content fingerprint. New types/attributes appear automatically — nothing hardcoded.
 async fn api_schema(State(s): State<AppState>) -> Response {
-    cached(&s, "schema", crate::view::schema_json)
+    cached(&s, "schema", keel_view::view::schema_json)
 }
 
 /// GET /api/review-queue (D0121) — the human review queue: user-gated items awaiting judgment
@@ -2087,16 +2087,16 @@ async fn api_projects(State(s): State<AppState>) -> Response {
     let active = s.rootpath();
     let reg = crate::console_registry::load();
     let labels = crate::console_registry::display_labels(&reg.entries);
-    let mut rows: Vec<crate::json::Json> = Vec::new();
+    let mut rows: Vec<keel_json::json::Json> = Vec::new();
     let mut seen: Vec<PathBuf> = Vec::new();
     for (e, label) in reg.entries.iter().zip(labels) {
         seen.push(e.root.clone());
-        rows.push(crate::json::Json::Obj(vec![
-            ("root".to_string(), crate::json::Json::s(display_path(&e.root))),
-            ("name".to_string(), crate::json::Json::s(label)),
-            ("repo".to_string(), crate::json::Json::s(e.repo.clone())),
-            ("lastServed".to_string(), crate::json::Json::s(e.last_served.clone())),
-            ("active".to_string(), crate::json::Json::Bool(e.root == active)),
+        rows.push(keel_json::json::Json::Obj(vec![
+            ("root".to_string(), keel_json::json::Json::s(display_path(&e.root))),
+            ("name".to_string(), keel_json::json::Json::s(label)),
+            ("repo".to_string(), keel_json::json::Json::s(e.repo.clone())),
+            ("lastServed".to_string(), keel_json::json::Json::s(e.last_served.clone())),
+            ("active".to_string(), keel_json::json::Json::Bool(e.root == active)),
         ]));
     }
     if !seen.contains(&active) {
@@ -2104,24 +2104,24 @@ async fn api_projects(State(s): State<AppState>) -> Response {
         // selector that omits the very thing on screen.
         rows.insert(
             0,
-            crate::json::Json::Obj(vec![
-                ("root".to_string(), crate::json::Json::s(display_path(&active))),
+            keel_json::json::Json::Obj(vec![
+                ("root".to_string(), keel_json::json::Json::s(display_path(&active))),
                 (
                     "name".to_string(),
-                    crate::json::Json::s(
+                    keel_json::json::Json::s(
                         active.file_name().map_or_else(String::new, |n| n.to_string_lossy().to_string()),
                     ),
                 ),
-                ("repo".to_string(), crate::json::Json::s(String::new())),
-                ("lastServed".to_string(), crate::json::Json::s("unregistered".to_string())),
-                ("active".to_string(), crate::json::Json::Bool(true)),
+                ("repo".to_string(), keel_json::json::Json::s(String::new())),
+                ("lastServed".to_string(), keel_json::json::Json::s("unregistered".to_string())),
+                ("active".to_string(), keel_json::json::Json::Bool(true)),
             ]),
         );
     }
     ok_json(with_status(
-        &crate::json::Json::Obj(vec![
-            ("activeProject".to_string(), crate::json::Json::s(display_path(&active))),
-            ("projects".to_string(), crate::json::Json::Arr(rows)),
+        &keel_json::json::Json::Obj(vec![
+            ("activeProject".to_string(), keel_json::json::Json::s(display_path(&active))),
+            ("projects".to_string(), keel_json::json::Json::Arr(rows)),
         ])
         .dump(),
         "computed",
@@ -2159,8 +2159,8 @@ async fn api_scope(State(s): State<AppState>) -> Response {
     cached(&s, "scope", |root| {
         let coincident = root.join("keel-cli").join("Cargo.toml").is_file();
         let (mut engine, mut deliverable, mut unscoped) = (0i64, 0i64, 0i64);
-        let mut unscoped_names: Vec<crate::json::Json> = Vec::new();
-        for (name, file) in crate::view::item_files(root)? {
+        let mut unscoped_names: Vec<keel_json::json::Json> = Vec::new();
+        for (name, file) in keel_view::view::item_files(root)? {
             let f = file.replace('\\', "/");
             if f.starts_with(".engine/") {
                 engine += 1;
@@ -2169,29 +2169,29 @@ async fn api_scope(State(s): State<AppState>) -> Response {
             } else {
                 unscoped += 1;
                 if unscoped_names.len() < 25 {
-                    unscoped_names.push(crate::json::Json::s(format!("{name} ({f})")));
+                    unscoped_names.push(keel_json::json::Json::s(format!("{name} ({f})")));
                 }
             }
         }
-        Ok(crate::json::Json::Obj(vec![
+        Ok(keel_json::json::Json::Obj(vec![
             (
                 "scope_note".to_string(),
-                crate::json::Json::s(
+                keel_json::json::Json::s(
                     "which MODEL is in view. `coincident` means this repository builds the engine                      itself, so the engine's tracked work and the deliverable's are the same programme                      — stated rather than left to be inferred. Per-item scope follows the authoring                      file; anything outside .engine/ or .tracking/ is UNSCOPED and never defaulted.",
                 ),
             ),
             (
                 "modelsCoincide".to_string(),
-                crate::json::Json::Bool(coincident),
+                keel_json::json::Json::Bool(coincident),
             ),
             (
                 "activeScope".to_string(),
-                crate::json::Json::s(if coincident { "coincident" } else { "distinct" }),
+                keel_json::json::Json::s(if coincident { "coincident" } else { "distinct" }),
             ),
-            ("engineItems".to_string(), crate::json::Json::Int(engine)),
-            ("deliverableItems".to_string(), crate::json::Json::Int(deliverable)),
-            ("unscopedItems".to_string(), crate::json::Json::Int(unscoped)),
-            ("unscopedSample".to_string(), crate::json::Json::Arr(unscoped_names)),
+            ("engineItems".to_string(), keel_json::json::Json::Int(engine)),
+            ("deliverableItems".to_string(), keel_json::json::Json::Int(deliverable)),
+            ("unscopedItems".to_string(), keel_json::json::Json::Int(unscoped)),
+            ("unscopedSample".to_string(), keel_json::json::Json::Arr(unscoped_names)),
         ])
         .dump())
     })
@@ -2199,7 +2199,7 @@ async fn api_scope(State(s): State<AppState>) -> Response {
 
 /// GET /api/surfaces — navigation computed from the declared Viewpoint registry, never enumerated.
 async fn api_surfaces(State(s): State<AppState>) -> Response {
-    cached(&s, "surfaces", crate::view::surfaces_json)
+    cached(&s, "surfaces", keel_view::view::surfaces_json)
 }
 
 /// The full computed JSON for a declared viewpoint's `renderer` command — ONE dispatch table, shared by
@@ -2212,7 +2212,7 @@ async fn api_surfaces(State(s): State<AppState>) -> Response {
 ///
 /// `None` for a command with no binding, reported as NOT AVAILABLE naming the command — never as an empty
 /// result, which is the same rule the counter follows.
-type ComputedFn = fn(&Path) -> Result<String, crate::view::ViewError>;
+type ComputedFn = fn(&Path) -> Result<String, keel_view::view::ViewError>;
 
 /// The command -> view binding, resolved WITHOUT computing anything (issue146).
 ///
@@ -2231,12 +2231,12 @@ fn computed_binding(cmd: &str) -> Option<ComputedFn> {
         // failed identically. Each works on the CLI, so the model declared a surface the server could
         // not serve: the accepted-Decision-with-artifact-unbuilt class (issue174), on the console.
         // A test now derives the advertised set from the viewpoint renderers and fails on any gap.
-        "attestation-coverage" => crate::view::attestation_coverage,
-        "critique-policy" => crate::view::critique_policy,
-        "decisions" => crate::view::decisions_report,
-        "reprocess-candidates" => |root: &Path| Ok(crate::govern::reprocess_candidates(root)),
+        "attestation-coverage" => keel_view::view::attestation_coverage,
+        "critique-policy" => keel_view::view::critique_policy,
+        "decisions" => keel_view::view::decisions_report,
+        "reprocess-candidates" => |root: &Path| Ok(keel_view::govern::reprocess_candidates(root)),
         "whats-next" => |root: &Path| {
-            let ready = crate::whats_next_root(root);
+            let ready = keel_model::readiness::whats_next_root(root);
             let items: Vec<String> =
                 ready.iter().map(|n| format!("\"{}\"", n.replace('"', "'"))).collect();
             Ok(format!(
@@ -2246,7 +2246,7 @@ fn computed_binding(cmd: &str) -> Option<ComputedFn> {
             ))
         },
         "verification" => |root: &Path| {
-            crate::verification::rows(root).map(|rows| {
+            keel_view::verification::rows(root).map(|rows| {
                 let items: Vec<String> = rows
                     .iter()
                     .map(|r| {
@@ -2266,32 +2266,32 @@ fn computed_binding(cmd: &str) -> Option<ComputedFn> {
                 )
             })
         },
-        "dispositions" => crate::view::dispositions,
-        "decision-follow-through" => crate::view::decision_follow_through,
-        "enforcement-report" => crate::pm::enforcement_report,
-        "authority-queue" => crate::view::authority_queue,
-        "sitting-coverage" => crate::view::sitting_coverage,
-        "open-issues" => crate::view::open_issues,
-        "intake" => crate::view::intake,
-        "suspect" => |root: &Path| Ok(crate::govern::suspect(root, false)),
-        "critique-coverage" => crate::view::critique_coverage,
-        "concern-coverage" => crate::view::concern_coverage,
-        "coverage" => crate::view::coverage,
-        "rootedness" => crate::view::rootedness,
-        "tier-satisfaction" => crate::view::tier_satisfaction,
-        "control-census" => crate::view::census::control_census,
-        "control-structure" => crate::view::control_structure::control_structure,
-        "indicators" => |root: &Path| crate::view::indicators(root, false),
+        "dispositions" => keel_issues::views::dispositions,
+        "decision-follow-through" => keel_view::view::decision_follow_through,
+        "enforcement-report" => keel_view::pm::enforcement_report,
+        "authority-queue" => keel_view::view::authority_queue,
+        "sitting-coverage" => keel_view::view::sitting_coverage,
+        "open-issues" => keel_issues::views::open_issues,
+        "intake" => keel_issues::views::intake,
+        "suspect" => |root: &Path| Ok(keel_view::govern::suspect(root, false)),
+        "critique-coverage" => keel_view::view::critique_coverage,
+        "concern-coverage" => keel_view::view::concern_coverage,
+        "coverage" => keel_view::view::coverage,
+        "rootedness" => keel_view::view::rootedness,
+        "tier-satisfaction" => keel_view::view::tier_satisfaction,
+        "control-census" => keel_view::view::census::control_census,
+        "control-structure" => keel_view::view::control_structure::control_structure,
+        "indicators" => |root: &Path| keel_view::view::indicators(root, false),
         "orphans" => |root: &Path| {
-            crate::algo::orphans(root)
-                .map_err(|e| crate::view::ViewError::Track(String::from("orphans"), e.to_string()))
+            keel_model::algo::orphans(root)
+                .map_err(|e| keel_view::view::ViewError::Track(String::from("orphans"), e.to_string()))
         },
         _ => return None,
     })
 }
 
 /// Compute the view bound to `cmd`, or `None` when nothing is bound.
-fn computed_view(root: &Path, cmd: &str) -> Option<Result<String, crate::view::ViewError>> {
+fn computed_view(root: &Path, cmd: &str) -> Option<Result<String, keel_view::view::ViewError>> {
     computed_binding(cmd).map(|f| f(root))
 }
 
@@ -2357,7 +2357,7 @@ fn obligation_count(root: &Path, cmd: &str) -> Option<(i64, Option<String>)> {
     // can never disagree about which view a renderer names (one dispatch table, not two).
     // THROUGH THE SHARED STORE, not a private compute: these four views are the same four the console
     // fetches moments later, so computing them here also serves those requests.
-    let json = store_or_compute(root, cmd, |r| computed_view(r, cmd).unwrap_or_else(|| Err(crate::view::ViewError::NotFound(cmd.to_string()))))?;
+    let json = store_or_compute(root, cmd, |r| computed_view(r, cmd).unwrap_or_else(|| Err(keel_view::view::ViewError::NotFound(cmd.to_string()))))?;
     match cmd {
         "orient" => num(&json, "pendingAcceptances").map(|n| (n, None)),
         "dispositions" => num(&json, "undispositioned").map(|n| (n, None)),
@@ -2385,12 +2385,12 @@ fn obligation_count(root: &Path, cmd: &str) -> Option<(i64, Option<String>)> {
 /// the hook would advise about a different set than the console displays.
 ///
 /// # Errors
-/// Returns [`crate::view::ViewError`] if the surfaces view cannot be computed.
-pub fn obligations_json(root: &Path) -> Result<String, crate::view::ViewError> {
+/// Returns [`keel_view::view::ViewError`] if the surfaces view cannot be computed.
+pub fn obligations_json(root: &Path) -> Result<String, keel_view::view::ViewError> {
     // Through the store for the same reason as the counts below: /api/surfaces asks for this exact JSON
     // on the same page load, and it is what tells us which viewpoints are act-surface.
-    let surfaces = store_or_compute(root, "surfaces", crate::view::surfaces_json)
-        .map_or_else(|| crate::view::surfaces_json(root), Ok)?;
+    let surfaces = store_or_compute(root, "surfaces", keel_view::view::surfaces_json)
+        .map_or_else(|| keel_view::view::surfaces_json(root), Ok)?;
     let parsed: serde_json::Value = serde_json::from_str(&surfaces).unwrap_or(serde_json::Value::Null);
     let act = parsed
         .get("surfaces")
@@ -2400,7 +2400,7 @@ pub fn obligations_json(root: &Path) -> Result<String, crate::view::ViewError> {
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
-    let mut classes: Vec<crate::json::Json> = Vec::new();
+    let mut classes: Vec<keel_json::json::Json> = Vec::new();
     let mut total = 0i64;
     let mut uncountable = 0i64;
     for vp in &act {
@@ -2410,56 +2410,56 @@ pub fn obligations_json(root: &Path) -> Result<String, crate::view::ViewError> {
         // 35 of them. Binding on the verb would give every collapsed viewpoint the same key and the
         // console would serve one view for all of them — worse than the "no computed view is bound"
         // it replaced, because it would answer with the WRONG view instead of refusing.
-        let cmd = crate::cli_surface::renderer_command(&renderer).map_or_else(String::new, |(verb, lens)| {
+        let cmd = keel_schema::cli_surface::renderer_command(&renderer).map_or_else(String::new, |(verb, lens)| {
             if verb == "show" { lens.unwrap_or(verb).to_string() } else { verb.to_string() }
         });
         let mut row = vec![
             // The viewpoint's ELEMENT NAME, so a console can link the card to the place the work is
             // done by identity rather than by matching a title (srConsoleObligationActionable).
-            ("viewpoint".to_string(), crate::json::Json::s(get("viewpoint"))),
-            ("title".to_string(), crate::json::Json::s(get("title"))),
-            ("concern".to_string(), crate::json::Json::s(get("concern"))),
-            ("renderer".to_string(), crate::json::Json::s(renderer.clone())),
+            ("viewpoint".to_string(), keel_json::json::Json::s(get("viewpoint"))),
+            ("title".to_string(), keel_json::json::Json::s(get("title"))),
+            ("concern".to_string(), keel_json::json::Json::s(get("concern"))),
+            ("renderer".to_string(), keel_json::json::Json::s(renderer.clone())),
         ];
         if let Some(panel) = discharge_panel(&cmd) {
             // WHERE THE WORK IS DONE, so the card lands there in one click instead of via a bridge.
-            row.push(("dischargePanel".to_string(), crate::json::Json::s(panel.to_string())));
+            row.push(("dischargePanel".to_string(), keel_json::json::Json::s(panel.to_string())));
         }
         if let Some((n, caveat)) = obligation_count(root, &cmd) {
             {
                 total += n;
-                row.push(("count".to_string(), crate::json::Json::Int(n)));
-                row.push(("countable".to_string(), crate::json::Json::Bool(true)));
+                row.push(("count".to_string(), keel_json::json::Json::Int(n)));
+                row.push(("countable".to_string(), keel_json::json::Json::Bool(true)));
                 if let Some(c) = caveat {
-                    row.push(("caveat".to_string(), crate::json::Json::s(c)));
+                    row.push(("caveat".to_string(), keel_json::json::Json::s(c)));
                 }
             }
         } else {
             {
                 uncountable += 1;
-                row.push(("countable".to_string(), crate::json::Json::Bool(false)));
+                row.push(("countable".to_string(), keel_json::json::Json::Bool(false)));
                 row.push((
                     "why".to_string(),
-                    crate::json::Json::s(format!(
+                    keel_json::json::Json::s(format!(
                         "no counter bound to `{cmd}` — reported as NOT COUNTABLE rather than as zero (N-C2)"
                     )),
                 ));
             }
         }
-        classes.push(crate::json::Json::Obj(row));
+        classes.push(keel_json::json::Json::Obj(row));
     }
-    Ok(crate::json::Json::Obj(vec![
+    Ok(keel_json::json::Json::Obj(vec![
         (
             "obligations_note".to_string(),
-            crate::json::Json::s(
+            keel_json::json::Json::s(
                 "what is waiting on a HUMAN. Classes are derived from viewpoints declaring \
                  surface=\"act\" — declaring one adds a class with no console change. A class with no \
                  bound counter is reported NOT COUNTABLE, never as zero.",
             ),
         ),
-        ("total".to_string(), crate::json::Json::Int(total)),
-        ("classes".to_string(), crate::json::Json::Arr(classes)),
-        ("uncountableClasses".to_string(), crate::json::Json::Int(uncountable)),
+        ("total".to_string(), keel_json::json::Json::Int(total)),
+        ("classes".to_string(), keel_json::json::Json::Arr(classes)),
+        ("uncountableClasses".to_string(), keel_json::json::Json::Int(uncountable)),
     ])
     .dump())
 }
@@ -2469,7 +2469,7 @@ async fn api_obligations(State(s): State<AppState>) -> Response {
 }
 
 async fn api_review_queue(State(s): State<AppState>) -> Response {
-    cached(&s, "review-queue", crate::view::review_queue_json)
+    cached(&s, "review-queue", keel_view::view::review_queue_json)
 }
 
 async fn api_orient(State(s): State<AppState>) -> Response {
@@ -2477,27 +2477,27 @@ async fn api_orient(State(s): State<AppState>) -> Response {
 }
 
 async fn api_decisions(State(s): State<AppState>) -> Response {
-    cached(&s, "decisions", crate::view::decisions_report)
+    cached(&s, "decisions", keel_view::view::decisions_report)
 }
 
 // serveBusinessNeedsView: the Business layer (Brief/Personas/Needs/UseCases) — the "what/why".
 async fn api_business(State(s): State<AppState>) -> Response {
-    cached(&s, "business", crate::view::business)
+    cached(&s, "business", keel_view::view::business)
 }
 
 // srServeModelDrivenRegistry (Tier 1a): the model-declared launchable set (process-launcher foundation).
 async fn api_launchables(State(s): State<AppState>) -> Response {
-    cached(&s, "launchables", crate::view::launchables)
+    cached(&s, "launchables", keel_view::view::launchables)
 }
 
 async fn api_dispositions(State(s): State<AppState>) -> Response {
-    cached(&s, "dispositions", crate::view::dispositions)
+    cached(&s, "dispositions", keel_issues::views::dispositions)
 }
 
 /// GET /api/persons (issue200/issue201) — the registered `Person` set. Pages offer these as the
 /// judgedBy choices instead of shipping a hardcoded human name; the write endpoints still verify.
 async fn api_persons(State(s): State<AppState>) -> Response {
-    let names: Vec<String> = crate::actor::person_names(&s.rootpath())
+    let names: Vec<String> = keel_actor::actor::person_names(&s.rootpath())
         .into_iter()
         .map(|n| format!("\"{}\"", n.replace('"', "'")))
         .collect();
@@ -2520,7 +2520,7 @@ async fn api_history(State(s): State<AppState>) -> Response {
 /// GET /api/recent (sr15) — the git-derived recent-activity timeline. Reads git history (outside the
 /// model fingerprint), so it is computed fresh (uncached); a git failure yields an empty timeline.
 async fn api_recent(State(s): State<AppState>) -> Response {
-    match crate::view::recent(&s.rootpath()) {
+    match keel_view::view::recent(&s.rootpath()) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("recent error: {e}")).into_response(),
     }
@@ -2528,7 +2528,7 @@ async fn api_recent(State(s): State<AppState>) -> Response {
 
 /// GET /api/item/:name (D0094 serveItemIntrospect) — any item's detail (attrs + edges + neighbors).
 async fn api_item(State(s): State<AppState>, AxPath(name): AxPath<String>) -> Response {
-    cached_owned(&s, &format!("item:{name}"), |r| crate::view::item_detail(r, &name))
+    cached_owned(&s, &format!("item:{name}"), |r| keel_view::view::item_detail(r, &name))
 }
 
 /// A bounded-section request (sr18ServeSectionCritique): exactly one of `view` (a declared view name)
@@ -2542,7 +2542,7 @@ struct SectionReq {
 /// GET /api/section?view=NAME | ?element=NAME (sr18) — render a bounded section as JSON
 /// (`{seed, kind, count, items[], edges[]}`) for local, section-scoped critique. A computed `#View`.
 async fn api_section(State(s): State<AppState>, Query(q): Query<SectionReq>) -> Response {
-    match crate::view::section_json(&s.rootpath(), q.view.as_deref(), q.element.as_deref()) {
+    match keel_view::view::section_json(&s.rootpath(), q.view.as_deref(), q.element.as_deref()) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2575,13 +2575,13 @@ async fn api_slice(State(s): State<AppState>, Query(q): Query<SliceReq>) -> Resp
         .map(|e| e.trim().to_lowercase())
         .filter(|e| !e.is_empty())
         .collect();
-    let dir = crate::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
-    let df = crate::view::DateFilter {
+    let dir = keel_view::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
+    let df = keel_view::view::DateFilter {
         attr: q.dateattr.as_deref().filter(|a| !a.is_empty()),
         since: q.since.as_deref().filter(|d| !d.is_empty()),
         until: q.until.as_deref().filter(|d| !d.is_empty()),
     };
-    match crate::view::slice_json(&s.rootpath(), &q.seed, depth, &edges, dir, df) {
+    match keel_view::view::slice_json(&s.rootpath(), &q.seed, depth, &edges, dir, df) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2591,14 +2591,14 @@ async fn api_slice(State(s): State<AppState>, Query(q): Query<SliceReq>) -> Resp
 /// computed `displayLabel`, type, date, and edge degree; the viewer lists + filters it so a user finds
 /// elements without knowing an identifier. Cached per fingerprint like the other views.
 async fn api_index(State(s): State<AppState>) -> Response {
-    cached(&s, "index", crate::view::index_json)
+    cached(&s, "index", keel_view::view::index_json)
 }
 
 /// GET /api/grammar (srViewerRelationshipGrammar, D0126/D0127) — the computed relationship grammar:
 /// the observed (sourceType, edge, targetType) triples + per-type up/down summary. Drives scope-aware
 /// creation + valid-edge offers generically. Cached per fingerprint.
 async fn api_grammar(State(s): State<AppState>) -> Response {
-    cached(&s, "grammar", crate::view::grammar_json)
+    cached(&s, "grammar", keel_view::view::grammar_json)
 }
 
 #[derive(serde::Deserialize)]
@@ -2614,7 +2614,7 @@ async fn api_relations(State(s): State<AppState>, Query(q): Query<RelationsReq>)
         _ => "children",
     };
     let focus = q.focus;
-    cached_owned(&s, &format!("relations:{kind}:{focus}"), move |r| crate::view::relations_json(r, &focus, kind))
+    cached_owned(&s, &format!("relations:{kind}:{focus}"), move |r| keel_view::view::relations_json(r, &focus, kind))
 }
 
 #[derive(serde::Deserialize)]
@@ -2629,8 +2629,8 @@ struct ChangeImpactReq {
 /// (default) = dependents (edges pointing at the focus); `edges` empty = all.
 async fn api_change_impact(State(s): State<AppState>, Query(q): Query<ChangeImpactReq>) -> Response {
     let edges: std::collections::HashSet<String> = q.edges.as_deref().unwrap_or("").split(',').map(|e| e.trim().to_lowercase()).filter(|e| !e.is_empty()).collect();
-    let dir = crate::view::SliceDir::parse(q.dir.as_deref().unwrap_or("up"));
-    match crate::view::change_impact_json(&s.rootpath(), &q.seed, &edges, dir) {
+    let dir = keel_view::view::SliceDir::parse(q.dir.as_deref().unwrap_or("up"));
+    match keel_view::view::change_impact_json(&s.rootpath(), &q.seed, &edges, dir) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2641,10 +2641,10 @@ async fn api_change_impact(State(s): State<AppState>, Query(q): Query<ChangeImpa
 async fn api_snapshot(State(s): State<AppState>, Query(q): Query<SliceReq>) -> Response {
     let depth = q.depth.unwrap_or(2);
     let edges: std::collections::HashSet<String> = q.edges.as_deref().unwrap_or("").split(',').map(|e| e.trim().to_lowercase()).filter(|e| !e.is_empty()).collect();
-    let dir = crate::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
+    let dir = keel_view::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
     let commit = git_head(&s.rootpath());
     let as_of = git_head_date(&s.rootpath());
-    match crate::view::snapshot_json(&s.rootpath(), &q.seed, depth, &edges, dir, &commit, &as_of) {
+    match keel_view::view::snapshot_json(&s.rootpath(), &q.seed, depth, &edges, dir, &commit, &as_of) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2666,8 +2666,8 @@ struct BaselineReq {
 async fn api_baseline_compare(State(s): State<AppState>, Query(q): Query<BaselineReq>) -> Response {
     let depth = q.depth.unwrap_or(2);
     let edges: std::collections::HashSet<String> = q.edges.as_deref().unwrap_or("").split(',').map(|e| e.trim().to_lowercase()).filter(|e| !e.is_empty()).collect();
-    let dir = crate::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
-    match crate::view::baseline_compare_json(&s.rootpath(), &q.seed, &q.from, &q.to, depth, &edges, dir) {
+    let dir = keel_view::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
+    match keel_view::view::baseline_compare_json(&s.rootpath(), &q.seed, &q.from, &q.to, depth, &edges, dir) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2696,9 +2696,9 @@ async fn api_critique_plan(State(s): State<AppState>, Query(q): Query<CritiquePl
         .map(|e| e.trim().to_lowercase())
         .filter(|e| !e.is_empty())
         .collect();
-    let dir = crate::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
+    let dir = keel_view::view::SliceDir::parse(q.dir.as_deref().unwrap_or("both"));
     let lens = q.lens.as_deref().unwrap_or("best-practice");
-    match crate::view::critique_plan_json(&s.rootpath(), &q.seed, depth, &edges, dir, lens) {
+    match keel_view::view::critique_plan_json(&s.rootpath(), &q.seed, depth, &edges, dir, lens) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2713,7 +2713,7 @@ struct BoundaryReq {
 /// GET /api/boundary?need=NAME (sr19) — a Need-slice boundary: white-box internal elements + black-box
 /// interface cut edges + coupling count, as JSON. A computed `#View`.
 async fn api_boundary(State(s): State<AppState>, Query(q): Query<BoundaryReq>) -> Response {
-    match crate::view::boundary_json(&s.rootpath(), &q.need) {
+    match keel_view::view::boundary_json(&s.rootpath(), &q.need) {
         Ok(json) => ok_json(json),
         Err(e) => (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2722,13 +2722,13 @@ async fn api_boundary(State(s): State<AppState>, Query(q): Query<BoundaryReq>) -
 /// GET /api/boundary-sweep (sr19) — the tier-satisfaction white-box sweep: per Need, slice size, coupling,
 /// SR count, decomposed/verified status. A computed `#View`.
 async fn api_boundary_sweep(State(s): State<AppState>) -> Response {
-    cached(&s, "boundary-sweep", crate::view::boundary_sweep_json)
+    cached(&s, "boundary-sweep", keel_view::view::boundary_sweep_json)
 }
 
 /// The .tracking file declaring `action <task>;` (so a downstream `TestResult` can be appended to it).
 fn find_task_file(root: &Path, task: &str) -> Option<PathBuf> {
     let needle = format!("action {task};");
-    crate::collect_sysml(&root.join(".tracking")).into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains(&needle)))
+    keel_model::corpus::collect_sysml(&root.join(".tracking")).into_iter().find(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains(&needle)))
 }
 
 /// A request to append a downstream `TestResult` to an action task (D0094 serveItemActions).
@@ -2759,16 +2759,16 @@ async fn api_testresult(State(s): State<AppState>, axum::Json(b): axum::Json<TrR
     let Some(file) = find_task_file(&s.rootpath(), &b.task) else {
         return (StatusCode::NOT_FOUND, format!("{{\"error\":\"no `action {}` found in .tracking\"}}", b.task.replace('"', "'"))).into_response();
     };
-    let by = match crate::actor::resolve(&s.rootpath(), b.judged_by.as_deref()) {
+    let by = match keel_actor::actor::resolve(&s.rootpath(), b.judged_by.as_deref()) {
         Ok(a) => a,
         // D0129/issue072: an omitted actor used to default to a named HUMAN, silently forging a
         // human attestation and making confirmation-authenticity (D0106) meaningless. Refuse instead.
         Err(msg) => return (StatusCode::BAD_REQUEST, format!("{{\"error\":\"{}\"}}", msg.replace('"', "'").replace('\n', " "))).into_response(),
     };
-    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &crate::device::canonical(&format!("testresult-{verdict}"), &b.task, &b.judged_at, &by, b.evidence.as_deref().unwrap_or("")));
+    let receipt = tap_receipt(&s, b.device_id.as_deref(), b.hmac.as_deref(), &keel_actor::device::canonical(&format!("testresult-{verdict}"), &b.task, &b.judged_at, &by, b.evidence.as_deref().unwrap_or("")));
     let sha = git_head(&s.rootpath());
     let evidence = format!("{}{}", b.evidence.as_deref().unwrap_or("recorded in the keel console"), receipt.tag());
-    match crate::write::append_result(&file, &b.task, &sha, &verdict, &b.judged_at, &by, Some(&evidence)) {
+    match keel_write::write::append_result(&file, &b.task, &sha, &verdict, &b.judged_at, &by, Some(&evidence)) {
         Ok(name) => ok_json(format!("{{\"ok\":true,\"name\":\"{name}\",\"verdict\":\"{verdict}\"}}")),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{{\"error\":\"{}\"}}", e.to_string().replace('"', "'"))).into_response(),
     }
@@ -2809,7 +2809,7 @@ async fn api_events(State(s): State<AppState>) -> Sse<impl Stream<Item = Result<
 fn processes_json(root: &Path) -> String {
     let dir = root.join(".engine").join("processes");
     let mut rows: Vec<Json> = Vec::new();
-    for f in crate::collect_sysml(&dir) {
+    for f in keel_model::corpus::collect_sysml(&dir) {
         let name = f.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
         let text = std::fs::read_to_string(&f).unwrap_or_default();
         let attr = |key: &str| -> String {
@@ -2989,16 +2989,16 @@ mod tests {
                 assert_eq!(resp.status(), axum::http::StatusCode::OK);
             }
         };
-        let before = crate::fingerprint::epoch();
+        let before = keel_model::fingerprint::epoch();
         for _ in 0..50 {
             send(axum::http::Method::GET).await;
         }
-        let after_reads = crate::fingerprint::epoch();
+        let after_reads = keel_model::fingerprint::epoch();
         assert!(after_reads - before < 50, "fifty reads moved the epoch by {} - a read is not a point in time", after_reads - before);
         for _ in 0..50 {
             send(axum::http::Method::POST).await;
         }
-        let after_writes = crate::fingerprint::epoch();
+        let after_writes = keel_model::fingerprint::epoch();
         assert!(
             after_writes - after_reads >= 100,
             "fifty writes moved the epoch by {} - each must bump before AND after the handler",
@@ -3360,9 +3360,9 @@ mod view_status_tests {
             "srServeSingleSpawnPoint: the agent must be spawned from exactly ONE site in serve.rs"
         );
         for (name, src) in [
-            ("main.rs", include_str!("main.rs")),
+            ("main.rs", include_str!("../../../keel-cli/src/main.rs")),
             ("launcher.rs", include_str!("launcher.rs")),
-            ("orient.rs", include_str!("../../members/keel-model/src/orient.rs")),
+            ("orient.rs", include_str!("../../keel-model/src/orient.rs")),
             ("deck.rs", include_str!("deck.rs")),
         ] {
             assert_eq!(src.matches(marker).count(), 0, "unexpected agent spawn path in {name}");

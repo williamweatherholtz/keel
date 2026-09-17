@@ -7,6 +7,11 @@ license.workspace = true
 description = "GitHub gesture parsing and receipts (D0263/D0264) - the reading side of the intake router."
 
 [dependencies]
+# ci_runs (sprint 738): the CI-run receipt gate reads the corpus, git and the colour helpers.
+keel-json = { path = "../keel-json" }
+keel-git = { path = "../keel-git" }
+keel-model = { path = "../keel-model" }
+serde_json = "1"
 
 [dev-dependencies]
 # keel_fs::test_support::repo_root, the one repository-root walk for tests (issue557); a leaf depending on a leaf, downward.

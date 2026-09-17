@@ -27,7 +27,7 @@
 //! The sitting reviewer is embedded at generation time as the sole registered `Person`; a sitting
 //! review is the per-sitting human gate (D0049) and may never be recorded as an AI.
 
-use crate::json::Json;
+use keel_json::json::Json;
 use std::fmt::Write as _;
 use std::path::Path;
 
@@ -168,7 +168,7 @@ mod fork_shape_tests {
 
 // The consent-marker classifier descended to the read model's textscan (sprint 733): one classifier for the
 // write path's hold, guard `consent-scope` and the deck, re-exported so `crate::deck::` paths keep resolving.
-pub use crate::textscan::{marker_text_without_marker, marker_words, MARKER_WORDS, NOT_A_PROCESS_CHANGE};
+pub use keel_model::textscan::{marker_text_without_marker, marker_words, MARKER_WORDS, NOT_A_PROCESS_CHANGE};
 
 /// `keel render decision-card [NAME] [--proposed]` (D0205 githubChannel; under `render` since D0449).
 ///
@@ -183,7 +183,7 @@ pub fn decision_cards(root: &Path, name: Option<&str>, proposed_only: bool) -> R
     let idx = item_index(root);
     // D0398: retirement is the `#Supersede` edge, not a status value - a retired Decision is never
     // dealt as proposed, whatever its `status` field kept.
-    let retired = crate::supersede_targets(root);
+    let retired = keel_model::corpus::supersede_targets(root);
     let mut cards: Vec<Json> = Vec::new();
     for (n, (uid, title, file)) in &idx {
         if !n.starts_with('d') || !file.contains("decisions/") {
@@ -288,7 +288,7 @@ fn inbox_js(root: &Path) -> String {
 pub(crate) fn item_index(root: &Path) -> std::collections::BTreeMap<String, (String, String, String)> {
     let mut out = std::collections::BTreeMap::new();
     for base in [".tracking", ".engine"] {
-        for f in crate::collect_sysml(&root.join(base)) {
+        for f in keel_model::corpus::collect_sysml(&root.join(base)) {
             let rel = f
                 .strip_prefix(root)
                 .map_or_else(|_| f.to_string_lossy().to_string(), |p| p.to_string_lossy().to_string())
@@ -370,7 +370,7 @@ fn collect(root: &Path) -> Vec<Item> {
             add("acceptance", n, "proposed - needs your signature".to_string());
         }
     }
-    let disp = parse(crate::view::dispositions(root).unwrap_or_default());
+    let disp = parse(keel_issues::views::dispositions(root).unwrap_or_default());
     for f in disp.get("findings").and_then(|v| v.as_array()).unwrap_or(&empty) {
         if !f.get("dispositioned").and_then(serde_json::Value::as_bool).unwrap_or(true) {
             if let Some(n) = f.get("finding").and_then(|v| v.as_str()) {
@@ -399,7 +399,7 @@ fn collect(root: &Path) -> Vec<Item> {
 fn judgment_cards(root: &Path) -> Vec<Item> {
     let rule = crate::attestation::sampling_rule(root);
     let mut out = Vec::new();
-    for f in crate::collect_sysml(&root.join(".tracking")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         let proposals = crate::attestation::proposals_in(root, &f);
         let pending: Vec<&crate::attestation::Proposal> = crate::attestation::sample(&proposals, rule).into_iter().filter(|p| !p.judged).collect();
         let Some(first) = pending.first() else { continue };
@@ -423,7 +423,7 @@ fn judgment_cards(root: &Path) -> Vec<Item> {
 /// decision cards link to their issue board (D0206: GitHub is the decision surface; the deck is a
 /// read view). `None` for non-GitHub remotes: no link beats a wrong link.
 fn github_slug(root: &Path) -> Option<String> {
-    let url = crate::gitx::git()
+    let url = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["config", "--get", "remote.origin.url"])
@@ -505,11 +505,11 @@ fn esc(s: &str) -> String {
 /// lenient about the same shape, so ONE output serves both transports).
 ///
 /// # Errors
-/// Returns [`crate::view::ViewError`] if the model cannot be read.
-pub fn html(root: &Path) -> Result<String, crate::view::ViewError> {
+/// Returns [`keel_view::view::ViewError`] if the model cannot be read.
+pub fn html(root: &Path) -> Result<String, keel_view::view::ViewError> {
     let items = collect(root);
     let human = sole_human(root).unwrap_or_default();
-    let head_sha = crate::gitx::git()
+    let head_sha = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--short", "HEAD"])

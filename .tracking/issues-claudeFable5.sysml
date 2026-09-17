@@ -1918,4 +1918,48 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcWaitRereadsBeforeKilled to issue592;
+
+    part issue593 : Issue {
+        :>> id = "95a58b8d-1913-4f57-9771-9986d668bd8c";
+        :>> title = "The code registry's filePath values name nine files the extractions moved and nothing reads them";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Eleven of the twenty-five `filePath` values in .tracking/architecture/code-registry.sysml (nine distinct: keel-cli/src/actor.rs, arch.rs, claim.rs, guards.rs, migrate.rs, orient.rs, sync.rs, view.rs, write.rs) name files that no longer exist - the D0479 extractions moved each under members/ between sprints 731 and 737 - and nothing read the values, so the CodeElement-to-source map has been wrong for seven sprints without a red. Established by a shell loop over the attribute values at 904ff24c testing each path's existence (11 missing of 25). Sprint 738's codemod (scripts/extract_serve.py) corrected the two values whose elements are claudeFable5's (ceServeJudgment -> members/keel-serve/src/serve.rs, ceLauncher -> members/keel-serve/src/launcher.rs) because the transform knew the moves; the nine others are claudeOpus5's and stay stale until corrected by an ADD or a #Supersede (D0108). The class: an authored path attribute with no control that reads it against the tree - the same class as deliverable-manifest.txt rows before the suspicion computation read them. Resolver: dcCodeRegistryPathsResolve - a `code-registry-paths` check that fails on any filePath with no file at ROOT, plus the eleven corrections.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcCodeRegistryPathsResolve to issue593;
+
+    part issue594 : Issue {
+        :>> id = "90caaabe-44b6-4aef-afa1-c75620f22e9b";
+        :>> title = "Six leaf members carry no lint preamble, so the workspace holds two lint regimes";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Six of the fifteen crates under members/ (keel-actor, keel-git, keel-github, keel-json, keel-perf, keel-schema - the leaves sprint 714 split out) have a lib.rs with no lint attribute at all, while keel-fs and every member extracted since sprint 731 carry the preamble that forbids unsafe and denies warnings, clippy::all/pedantic/nursery, unwrap/expect/panic/indexing/todo/unimplemented. Established at 904ff24c by reading each members/*/src/lib.rs for `deny(warnings` (six absent). The consequence: a warning or an unwrap in a leaf crate compiles clean under `cargo build --release` - the settle build every D0388 positive probe runs - and is caught only by the `cargo clippy --workspace -- -D warnings` rung, so the workspace holds the same kind of code under two lint regimes and nothing reads which. Surfaced in sprint 738 when scripts/extract_serve.py wrote the preamble into members/keel-serve/src/lib.rs from its LINTS constant and added ci_runs.rs to members/keel-github, whose lib.rs has none. Resolver: dcMembersCarryTheLintPreamble - the preamble on the six, the build clean under it, and a `member-lints` check that fails naming any member whose lib.rs lacks a line of it.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcMembersCarryTheLintPreamble to issue594;
+
+    part issue595 : Issue {
+        :>> id = "03e0aa69-cbc5-4a82-8da3-85d9809e8b81";
+        :>> title = "the sprint 738 ladder's touched rung spanned a 97-minute host standby and two clock-sensitive tests read red that pass in isolation; the receipt named the reds and not the standby - issue481/issue534's class in the form no margin absorbs";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The sprint 738 verifier's touched rung spanned a 97-minute host standby (Kernel-Power 506 at 11:59:01, 507 at 13:36:04) and two clock-sensitive tests read red - an_output_still_linking_is_not_copied and turn_boundary_gate_allows_a_clean_tree_and_blocks_a_dishonest_one - that pass in isolation in under six seconds; the receipt named the reds and not the standby. The touched run (launch epoch 1789667298, log .keel/metrics/touched-1789667668.log) reported Summary 259 tests run: 257 passed (18 slow), 2 failed, 6106 s, where a full set takes 7-15 minutes; the 18 slow tests each read 5930-6040 s and were the ones in flight when the host entered Modern Standby five minutes into the run. an_output_still_linking_is_not_copied (keel-cli/tests/self_build_hooks_leave_the_build_tree.rs:112-118) stamps its fixture NOW+600 s so a two-second grace cannot age past it - the fix for issue481 - and the standby advanced the wall clock 5820 s, so the fixture read settled and was copied. turn_boundary_gate_allows_a_clean_tree_and_blocks_a_dishonest_one (keel-cli/tests/remaining_controls_actually_fire.rs:115) read an empty stdout from the second stop-hook fire; its mechanism under the standby is not established - it is recorded as in flight during the same window and green in isolation, not as diagnosed. Third instance of the class issue481 and issue534 named (an assertion whose truth depends on how fast the host reaches a clock read judges the host, not the change); both earlier fixes widened a margin, and a suspend defeats every margin, so the control belongs in the runner: the receipt measures suspended time (wall clock against a clock that stops while the host sleeps) and re-runs a red once in isolation when the run spanned a standby, naming both. Until then a verifier whose run crossed a sleep hands the primary a red it must diagnose by hand against the Windows event log, as this one was.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcSuiteReceiptNamesTheStandbyItSpanned to issue595;
+
+    part issue596 : Issue {
+        :>> id = "565a4cfe-0391-4a50-8200-a4ad8fc19be4";
+        :>> title = "The result writer doubles the RAN prefix on quoted evidence, and the two receipt readers then read an empty receipt";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The result writer prepends `// RAN: ` to every evidence string unconditionally (members/keel-write/src/write.rs:837 and :1293), and an actor that passes evidence already carrying the receipt prefix - the shape CLAUDE.md quotes as the `// RAN:` receipt - lands a line reading `// RAN: // RAN: <receipt>`. At 904ff24c `git grep -c '// RAN: // RAN:' -- .tracking .engine` counts 71 such lines in 29 files (15 in .tracking/backlog.sysml, 7 each in sprints 714, 715 and 721, one to five in twenty-four more); sprint 738's two DoD results were written the same way before the count was taken. The doubled prefix is not cosmetic: the two readers that act on a receipt take the text after the FIRST prefix - members/keel-write/src/reverify.rs:143 `line.split('// RAN:').nth(1)` and members/keel-github/src/ci_runs.rs:76 the same - so on a doubled line the receipt they read is the empty string between the prefixes, and a replayable demo receipt (D0444) or a `ci-run id=` receipt (D0323) on such a line is silently dropped from `keel record reverify --demos` and `audit ci-runs`; the acceptance guard and the attestation lens (acceptance.rs:470, attestation.rs:85) test only for the prefix's presence and are unaffected. Class: the write path accepts a shape it then reshapes without checking whether the shape is already there - the issue448 fix moved the receipt check to the write and did not make the write idempotent on its own prefix. Control belongs in the writer (strip one leading `// RAN:` and its whitespace before formatting, so the same evidence lands identically whether or not the caller quoted the prefix) with the D0388 pair as unit tests, and in the readers (take the text after the LAST prefix on the line, so history already written reads correctly); the 71 existing lines are then a content-preserving migration under the migration skill or are left as they are once the readers tolerate them - the resolver decides, and says which.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRanReceiptCarriesOnePrefix to issue596;
 }

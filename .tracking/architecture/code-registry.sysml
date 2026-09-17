@@ -184,7 +184,7 @@ package ProjectCodeRegistry {
         :>> title = "serve.rs - the human-judgment write endpoints and oversight console";
         :>> createdAt = "2026-08-22"; :>> createdBy = "claudeFable5";
         :>> kind = "module";
-        :>> filePath = "keel-cli/src/serve.rs";
+        :>> filePath = "members/keel-serve/src/serve.rs";
         :>> riskClass = RiskClass::security;
         :>> invariantSafety = InvariantSafety::enforced;
         :>> stpaRole = StpaRole::actuator;
@@ -238,7 +238,7 @@ package ProjectCodeRegistry {
         :>> title = "launcher.rs - the run lifecycle (dirty refusal, spawn snapshot, post-run gate, run records)";
         :>> createdAt = "2026-08-22"; :>> createdBy = "claudeFable5";
         :>> kind = "module";
-        :>> filePath = "keel-cli/src/launcher.rs";
+        :>> filePath = "members/keel-serve/src/launcher.rs";
         :>> riskClass = RiskClass::correctness;
         :>> invariantSafety = InvariantSafety::enforced;
         :>> stpaRole = StpaRole::controller;

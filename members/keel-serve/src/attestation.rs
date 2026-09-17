@@ -46,7 +46,7 @@ pub struct Census {
 /// Count attestations by judge kind: `"human"`, `"ai"`, or `"unregistered"`.
 #[must_use]
 pub fn census(root: &Path) -> BTreeMap<String, Census> {
-    let files = crate::collect_sysml(&root.join(".tracking"));
+    let files = keel_model::corpus::collect_sysml(&root.join(".tracking"));
     // The Test declares the method; the result declares the judge.
     let mut method_of: BTreeMap<String, String> = BTreeMap::new();
     for f in &files {
@@ -69,7 +69,7 @@ pub fn census(root: &Path) -> BTreeMap<String, Census> {
                 continue;
             }
             let by = quoted(line, "judgedBy").unwrap_or_default();
-            let kind = crate::actor::kind_of(root, &by).unwrap_or_else(|| "unregistered".to_string());
+            let kind = keel_actor::actor::kind_of(root, &by).unwrap_or_else(|| "unregistered".to_string());
             let e = out.entry(kind).or_default();
             e.total += 1;
             if line.contains("VerdictKind::fail") {
@@ -197,7 +197,7 @@ pub fn sampling_rule(root: &Path) -> Option<SamplingRule> {
 /// replayable receipt joins the pool as `ReplayableDemo`; none declared, none join.
 #[must_use]
 pub fn proposals_in_text(text: &str, human: &dyn Fn(&str) -> bool, prefixes: &[String]) -> Vec<Proposal> {
-    let demos = crate::reverify::demo_tests_in_text(text);
+    let demos = keel_write::reverify::demo_tests_in_text(text);
     // every result line: (test, n, outcome, judgedBy, id)
     let mut results: Vec<(String, u32, String, String, String)> = Vec::new();
     for line in text.lines() {
@@ -221,7 +221,7 @@ pub fn proposals_in_text(text: &str, human: &dyn Fn(&str) -> bool, prefixes: &[S
         .collect();
     // D0444: a replayable demo pass is the LATEST result of its Test by construction, so a human's later
     // verdict removes it from the pool rather than marking it judged.
-    for (test, _) in crate::reverify::demo_replays_in_text(text, prefixes) {
+    for (test, _) in keel_write::reverify::demo_replays_in_text(text, prefixes) {
         let Some((_, n, _, _, uuid)) = results.iter().filter(|r| r.0 == test).max_by_key(|r| r.1) else { continue };
         out.push(Proposal { result: format!("{test}R{n}"), test, uuid: uuid.clone(), judged: false, kind: ProposalKind::ReplayableDemo });
     }
@@ -233,7 +233,7 @@ pub fn proposals_in_text(text: &str, human: &dyn Fn(&str) -> bool, prefixes: &[S
 #[must_use]
 pub fn proposals_in(root: &Path, file: &Path) -> Vec<Proposal> {
     let Ok(text) = std::fs::read_to_string(file) else { return Vec::new() };
-    proposals_in_text(&text, &|by| crate::actor::kind_of(root, by).as_deref() == Some("human"), &crate::reverify::demo_prefixes(root))
+    proposals_in_text(&text, &|by| keel_actor::actor::kind_of(root, by).as_deref() == Some("human"), &keel_write::reverify::demo_prefixes(root))
 }
 
 /// The SAMPLE of one file's proposals: the ones a human is asked to judge. Every proposal already
@@ -278,7 +278,7 @@ impl ProposalCounts {
 pub fn proposal_counts(root: &Path) -> ProposalCounts {
     let rule = sampling_rule(root);
     let mut c = ProposalCounts::default();
-    for f in crate::collect_sysml(&root.join(".tracking")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         let ps = proposals_in(root, &f);
         c.proposed += ps.iter().filter(|p| p.kind.is_proposal()).count();
         c.demo_proposed += ps.iter().filter(|p| p.kind == ProposalKind::ProposedDemo).count();
@@ -293,8 +293,8 @@ pub fn proposal_counts(root: &Path) -> ProposalCounts {
 /// because the gating attempt ran at 0% precision on live data (see the module note).
 #[must_use]
 pub fn uncited_coverage_claims(root: &Path) -> usize {
-    let mut files = crate::collect_sysml(&root.join(".tracking"));
-    files.extend(crate::collect_sysml(&root.join(".engine").join("decisions")));
+    let mut files = keel_model::corpus::collect_sysml(&root.join(".tracking"));
+    files.extend(keel_model::corpus::collect_sysml(&root.join(".engine").join("decisions")));
     let mut n = 0usize;
     for f in &files {
         let Ok(text) = std::fs::read_to_string(f) else { continue };
@@ -330,7 +330,7 @@ pub fn cmd(args: &[String]) -> i32 {
     // issue281: refuse rather than answer over nothing. At a workspace root this printed a census of
     // ZERO attestations and exited 0 - the same false green the issue269 refusal closed for
     // `validate` alone.
-    if let Err(code) = crate::workspace::require_project(&root, "keel show attestation [ROOT] [--json]") {
+    if let Err(code) = keel_process::workspace::require_project(&root, "keel show attestation [ROOT] [--json]") {
         return code;
     }
     let c = census(&root);
@@ -429,11 +429,11 @@ mod tests {
         let proposed = "package S {\n    verification sRefineGate : Test { :>> id = \"e2e00000-0000-4000-8000-00000000f101\"; :>> method = VerificationMethod::inspect; }\n    part sRefineGateR1 : TestResult { :>> id = \"e2e00000-0000-4000-8000-00000000f102\"; :>> outcome = VerdictKind::proposed; :>> judgedAgainst = \"abc1234\"; :>> judgedAt = \"2026-09-10\"; :>> judgedBy = \"bot\"; }\n}\n";
         std::fs::write(&f, proposed).expect("write");
         assert_eq!(super::proposed_count(&root), 1, "one proposed result is counted");
-        assert!(!crate::textscan::gate_passed(proposed, "sRefine"), "a proposed gate is NOT passed");
+        assert!(!keel_model::textscan::gate_passed(proposed, "sRefine"), "a proposed gate is NOT passed");
         let passed = proposed.replace("VerdictKind::proposed", "VerdictKind::pass");
         std::fs::write(&f, &passed).expect("write");
         assert_eq!(super::proposed_count(&root), 0, "a pass is not proposed");
-        assert!(crate::textscan::gate_passed(&passed, "sRefine"), "the same gate at pass IS passed");
+        assert!(keel_model::textscan::gate_passed(&passed, "sRefine"), "the same gate at pass IS passed");
     }
 
     #[test]

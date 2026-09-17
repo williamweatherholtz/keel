@@ -7,15 +7,15 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 #[allow(clippy::wildcard_imports)] // the report cards are written in the view's vocabulary
-use crate::view::*;
+use keel_view::view::*;
 
 /// The orient view WITH its burndown (D0098): the frontier from the read model, the burndown from the
 /// view layer. The read model cannot compose a view (D0479/D0485), so the JSON emitters call this.
 #[must_use]
-pub fn orient(root: &Path) -> crate::orient::Output {
-    let mut o = crate::orient::compute(root);
+pub fn orient(root: &Path) -> keel_model::orient::Output {
+    let mut o = keel_model::orient::compute(root);
     let extras = BurndownExtras { guard_warnings: actionable_guard_warnings(root), proposed_results: crate::attestation::proposed_count(root) };
     o.burndown = burndown_summary_json(root, extras).unwrap_or_default();
     o
@@ -29,9 +29,9 @@ pub fn orient(root: &Path) -> crate::orient::Output {
 /// guards, and a count computed over a different tree would be prose state, so with no receipt for this
 /// tree the value is `null` and `how` says what to run.
 fn actionable_guard_warnings(root: &Path) -> Json {
-    let receipt = crate::receipt::key(root)
-        .and_then(|k| crate::receipt::read(root, &k))
-        .filter(|r| r.covers_all(&[crate::receipt::GUARDS]));
+    let receipt = keel_guards::receipt::key(root)
+        .and_then(|k| keel_guards::receipt::read(root, &k))
+        .filter(|r| r.covers_all(&[keel_guards::receipt::GUARDS]));
     let Some(receipt) = receipt else {
         return Json::Obj(vec![
             ("actionable".to_string(), Json::Null),
@@ -64,8 +64,8 @@ fn actionable_guard_warnings(root: &Path) -> Json {
 /// Compute a report's `(title, cards)`; shared by the JSON emitter and the HTML scorecard.
 fn report_cards(root: &Path, name: &str) -> Result<(String, Vec<Json>), ViewError> {
     let model = Model::build(root)?;
-    let orient = crate::orient::compute(root);
-    let done = crate::done::done_names(root);
+    let orient = keel_model::orient::compute(root);
+    let done = keel_model::done::done_names(root);
     let task_suspect: HashSet<String> = orient.suspect.iter().cloned().collect();
     let stale = compute_stale_verifications(root, &model);
     let cov = compute_coverage(&model, &done, &task_suspect, &stale);
@@ -146,7 +146,7 @@ pub fn report_html(root: &Path, name: &str, trend: bool) -> Result<String, ViewE
 /// # Errors
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
 pub fn orient_html(root: &Path) -> Result<String, ViewError> {
-    let o = crate::orient::compute(root);
+    let o = keel_model::orient::compute(root);
     let preview = |items: &[String], n: usize| -> String {
         if items.is_empty() {
             return "\u{2014}".to_string();
@@ -155,7 +155,7 @@ pub fn orient_html(root: &Path) -> Result<String, ViewError> {
         let more = items.len().saturating_sub(n);
         if more > 0 { format!("{} \u{2026} +{more} more", shown.join(", ")) } else { shown.join(", ") }
     };
-    let rb = crate::guards::compute_readiness(root)?;
+    let rb = keel_guards::compute_readiness(root)?;
     let wip: Vec<String> = o
         .in_progress_sprints
         .iter()
@@ -215,7 +215,7 @@ fn assurance_cards(root: &Path, model: &Model, cov: &[Coverage], stale: &HashSet
     let (crit_f, high_f, med_f, low_f) = (sev_count("Critical"), sev_count("High"), sev_count("Medium"), sev_count("Low"));
     let undisp = crit_f + high_f + med_f;
     let suspect_load = task_suspect.len() + critique_suspect_set(model).len();
-    let rb = crate::guards::compute_readiness(root)?;
+    let rb = keel_guards::compute_readiness(root)?;
     Ok(vec![
         card("Verification coverage", format!("{covered_pct}%"), format!("{verified} verified + {attested} attested of {total} (gate-covered)"), if total == 0 { "empty" } else { cov_tone(covered_pct) }),
         card("Critique coverage", format!("{crit_pct}%"), format!("{crit_cov} of {} elements Core-3 critiqued", crit.len()), cov_tone_of(crit_cov, crit.len())),
@@ -257,8 +257,8 @@ fn traceability_cards(model: &Model, cov: &[Coverage]) -> Vec<Json> {
 
 fn quality_debt_cards(root: &Path, model: &Model, cov: &[Coverage], stale: &HashSet<String>, task_suspect: &HashSet<String>) -> Vec<Json> {
     // Charter debt: grandfathered elements (pre-rigor) that are still not gate-covered or not critiqued.
-    let gf_cov = crate::govern::grandfathered_under(root, COVERAGE_DECISION);
-    let gf_crit = crate::govern::grandfathered_under(root, CRITIQUE_DECISION);
+    let gf_cov = keel_view::govern::grandfathered_under(root, COVERAGE_DECISION);
+    let gf_crit = keel_view::govern::grandfathered_under(root, CRITIQUE_DECISION);
     let cov_debt = cov.iter().filter(|c| !is_covered_tier(c.tier) && gf_cov.as_ref().is_some_and(|g| g.contains(&c.element))).count();
     let crit_debt = compute_critique_coverage(model, stale, &CritiquePolicy::load_or_core3(root)).into_iter().filter(|c| !c.covered && gf_crit.as_ref().is_some_and(|g| g.contains(&c.element))).count();
     // Requirements volatility: supersede edges (churn signal).
@@ -274,7 +274,7 @@ fn quality_debt_cards(root: &Path, model: &Model, cov: &[Coverage], stale: &Hash
     ]
 }
 
-fn flow_cards(root: &Path, model: &Model, orient: &crate::orient::Output) -> Vec<Json> {
+fn flow_cards(root: &Path, model: &Model, orient: &keel_model::orient::Output) -> Vec<Json> {
     let _ = model;
     let ready = orient.ready.len();
     let wip = orient.in_progress_sprints.len();
@@ -287,7 +287,7 @@ fn flow_cards(root: &Path, model: &Model, orient: &crate::orient::Output) -> Vec
     // Cycle time, time per point, the inter-commit gap and the point calibration come from GIT in
     // minutes (dcCycleTimeReadsFromGit; issue483/issue485): judgedAt is a date, and a day is coarser
     // than the work. Lead time and aging WIP still read the dates - they are day-scale questions.
-    let git_cards = crate::view::flow::facts(root).map_or_else(|e| crate::view::flow::unavailable_cards(&e), |f| crate::view::flow::cards(&f));
+    let git_cards = keel_view::view::flow::facts(root).map_or_else(|e| keel_view::view::flow::unavailable_cards(&e), |f| keel_view::view::flow::cards(&f));
     let leads: Vec<i64> = flows.iter().filter_map(|f| Some(f.retro? - f.created?)).collect();
     let lead_mean = if leads.is_empty() { 0 } else { leads.iter().sum::<i64>() / i64::try_from(leads.len()).unwrap_or(1) };
     // Predictability: spread of per-sprint points.

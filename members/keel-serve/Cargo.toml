@@ -1,0 +1,32 @@
+[package]
+name = "keel-serve"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The console (D0094): the localhost server, the obligation deck, the run launcher, the console registry, the scorecard reports and the attestation sampling - everything that serves the engine to a person, above every member and below keel-cli."
+
+[dependencies]
+keel-perf = { path = "../keel-perf" }
+keel-git = { path = "../keel-git" }
+keel-json = { path = "../keel-json" }
+keel-actor = { path = "../keel-actor" }
+keel-schema = { path = "../keel-schema" }
+keel-model = { path = "../keel-model" }
+keel-write = { path = "../keel-write" }
+keel-view = { path = "../keel-view" }
+keel-guards = { path = "../keel-guards" }
+keel-process = { path = "../keel-process" }
+keel-issues = { path = "../keel-issues" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "process", "io-util", "time", "sync"] }
+axum = "0.7"
+async-stream = "0.3"
+tokio-stream = "0.1"
+
+[dev-dependencies]
+# keel_fs::test_support::repo_root and keel_fs::scratch, the one repository-root walk and scratch dir for tests (issue557).
+keel-fs = { path = "../keel-fs" }
+tower = { version = "0.5", features = ["util"] }

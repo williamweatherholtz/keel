@@ -38,6 +38,8 @@ keel-suite = { path = "../members/keel-suite" }
 keel-process = { path = "../members/keel-process" }
 # D0480 item processes (sprint 737): github_ingest, intake_write, the issue write and the item views; re-exported under their old paths in lib.rs.
 keel-issues = { path = "../members/keel-issues" }
+# D0479 console (sprint 738): serve, deck, launcher, console_registry, reports, attestation; re-exported under their old paths in lib.rs.
+keel-serve = { path = "../members/keel-serve" }
 # OS CSPRNG for UUID v4 identity (issue075/D0129) — already in the lock tree transitively.
 getrandom = "0.3"
 # HMAC-SHA256 for device-bound deck taps (D0201 B) - already in the lock tree via keel-parser.
@@ -47,15 +49,10 @@ serde_json = "1"
 toml = "0.8"
 thiserror = "1"
 include_dir = "0.7"
-tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "process", "io-util", "time", "sync"] }
-axum = "0.7"
-async-stream = "0.3"
-tokio-stream = "0.1"
 
 [dev-dependencies]
 cucumber = { version = "0.20", features = ["macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-tower = { version = "0.5", features = ["util"] }
 
 [[test]]
 name = "cli_bdd"

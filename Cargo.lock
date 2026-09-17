@@ -1035,8 +1035,6 @@ dependencies = [
 name = "keel-cli"
 version = "0.4.1"
 dependencies = [
- "async-stream",
- "axum",
  "cucumber",
  "getrandom 0.3.4",
  "include_dir",
@@ -1052,6 +1050,7 @@ dependencies = [
  "keel-perf",
  "keel-process",
  "keel-schema",
+ "keel-serve",
  "keel-suite",
  "keel-view",
  "keel-write",
@@ -1060,9 +1059,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "tokio",
- "tokio-stream",
  "toml",
- "tower",
 ]
 
 [[package]]
@@ -1084,6 +1081,10 @@ name = "keel-github"
 version = "0.4.1"
 dependencies = [
  "keel-fs",
+ "keel-git",
+ "keel-json",
+ "keel-model",
+ "serde_json",
 ]
 
 [[package]]
@@ -1180,6 +1181,32 @@ version = "0.4.1"
 dependencies = [
  "include_dir",
  "keel-fs",
+]
+
+[[package]]
+name = "keel-serve"
+version = "0.4.1"
+dependencies = [
+ "async-stream",
+ "axum",
+ "keel-actor",
+ "keel-fs",
+ "keel-git",
+ "keel-guards",
+ "keel-issues",
+ "keel-json",
+ "keel-model",
+ "keel-perf",
+ "keel-process",
+ "keel-schema",
+ "keel-view",
+ "keel-write",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tower",
 ]
 
 [[package]]

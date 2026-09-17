@@ -64,7 +64,7 @@ fn field(line: &str, key: &str) -> Option<String> {
 #[must_use]
 pub fn receipts(root: &Path) -> Vec<CiRunReceipt> {
     let mut out = Vec::new();
-    for f in crate::collect_sysml(&root.join(".tracking")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         let lines: Vec<&str> = text.lines().collect();
         for (i, line) in lines.iter().enumerate() {
@@ -150,7 +150,7 @@ fn fetch(slug: &str, run_id: &str) -> Result<Option<RunFacts>, String> {
 }
 
 fn github_slug(root: &Path) -> Option<String> {
-    let url = crate::gitx::git().arg("-C").arg(root).args(["config", "--get", "remote.origin.url"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())?;
+    let url = keel_git::gitx::git().arg("-C").arg(root).args(["config", "--get", "remote.origin.url"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())?;
     let rest = url.strip_prefix("https://github.com/").or_else(|| url.strip_prefix("git@github.com:"))?;
     Some(rest.trim_end_matches(".git").trim_end_matches('/').to_string())
 }
@@ -183,9 +183,9 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
         }
     }
     for v in &violations {
-        println!("  {} {v}", crate::color::fail("ERROR"));
+        println!("  {} {v}", keel_json::color::fail("ERROR"));
     }
-    println!("[audit-ci-runs] {} — {} receipt(s) checked against {slug}, {} violation(s)", if violations.is_empty() { crate::color::pass("PASS") } else { crate::color::fail("FAIL") }, found.len(), violations.len());
+    println!("[audit-ci-runs] {} — {} receipt(s) checked against {slug}, {} violation(s)", if violations.is_empty() { keel_json::color::pass("PASS") } else { keel_json::color::fail("FAIL") }, found.len(), violations.len());
     i32::from(!violations.is_empty())
 }
 

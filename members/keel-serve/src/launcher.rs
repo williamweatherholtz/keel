@@ -56,9 +56,9 @@ pub fn hook_pin_args(root: &Path) -> Result<Vec<String>, String> {
     let keel_dir = root.join(".keel");
     std::fs::create_dir_all(&keel_dir).map_err(|e| format!("cannot create {}: {e}", keel_dir.display()))?;
     let settings = keel_dir.join("launch-settings.json");
-    crate::write::write_atomic(&settings, LAUNCH_SETTINGS).map_err(|e| format!("cannot write {}: {e}", settings.display()))?;
+    keel_write::write::write_atomic(&settings, LAUNCH_SETTINGS).map_err(|e| format!("cannot write {}: {e}", settings.display()))?;
     let mut args = Vec::new();
-    let plugin = root.join(crate::claude_surface::PLUGIN_DIR);
+    let plugin = root.join(keel_write::claude_surface::PLUGIN_DIR);
     if plugin.join("hooks").join("hooks.json").is_file() {
         args.push("--plugin-dir".to_string());
         args.push(plugin.to_string_lossy().replace('\\', "/"));
@@ -87,7 +87,7 @@ pub struct RunSetup {
 /// A dirty tree (the single-writer rule — the refusal is also PM's `launch-dirty-refusal` ledger
 /// event, the PESS-2 watch metric), an unbound actor, or an unreadable HEAD.
 pub fn prepare(root: &Path, process: &str, approved_by: &str) -> Result<RunSetup, String> {
-    let dirty = crate::gitx::git()
+    let dirty = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["status", "--porcelain"])
@@ -101,8 +101,8 @@ pub fn prepare(root: &Path, process: &str, approved_by: &str) -> Result<RunSetup
             dirty_list.lines().count()
         ));
     }
-    let actor = crate::actor::resolve(root, None).map_err(|e| format!("launch refused: {e}"))?;
-    let head = crate::gitx::git()
+    let actor = keel_actor::actor::resolve(root, None).map_err(|e| format!("launch refused: {e}"))?;
+    let head = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "--short", "HEAD"])
@@ -112,12 +112,12 @@ pub fn prepare(root: &Path, process: &str, approved_by: &str) -> Result<RunSetup
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .ok_or("launch refused: cannot read HEAD (K12 needs the spawn-time tree identity)")?;
     Ok(RunSetup {
-        id: crate::ident::gen_uuid(),
+        id: keel_model::ident::gen_uuid(),
         process: process.to_string(),
         actor,
         approved_by: approved_by.to_string(),
         head_at_spawn: head,
-        fingerprint_at_spawn: crate::fingerprint::of(root),
+        fingerprint_at_spawn: keel_model::fingerprint::of(root),
         started: std::time::SystemTime::now(),
     })
 }
@@ -138,8 +138,8 @@ pub struct RunOutcome {
 /// Only on an unwritable `.keel/` — gate redness is an OUTCOME (`gate_green: false`), not an error.
 #[allow(clippy::too_many_lines)]
 pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, timed_out: bool) -> Result<RunOutcome, String> {
-    crate::fingerprint::new_epoch(); // the run wrote; the memo must not serve the spawn-time value
-    let diff = crate::gitx::git()
+    keel_model::fingerprint::new_epoch(); // the run wrote; the memo must not serve the spawn-time value
+    let diff = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["status", "--porcelain"])
@@ -165,19 +165,19 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
     let mut problems: Vec<String> = Vec::new();
     let mut fired_since_spawn_flag = false;
     if !diff_files.is_empty() {
-        let report = crate::validate_root(root);
+        let report = keel_model::validate::validate_root(root);
         for (p, d) in report.diagnostics.iter().take(10) {
             problems.push(format!("validate {}:{} {}", p.display(), d.line, d.message));
         }
         for e in report.errors.iter().take(10) {
             problems.push(format!("parse {} {}", e.file.display(), e.message));
         }
-        for r in crate::guards::run_all(root) {
+        for r in keel_guards::run_all(root) {
             for v in r.violations.iter().take(5) {
                 problems.push(format!("[{}] {v}", r.name));
             }
         }
-        if let Ok(json) = crate::view::check(root) {
+        if let Ok(json) = keel_view::view::check(root) {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
                 let empty = Vec::new();
                 for r in v.get("rules").and_then(|x| x.as_array()).unwrap_or(&empty) {
@@ -240,7 +240,7 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
         "ledgerSignal": ledger_signal,
     });
     let local_record = runs.join(format!("{}.json", setup.id));
-    crate::write::write_atomic(&local_record, record.to_string()).map_err(|e| e.to_string())?;
+    keel_write::write::write_atomic(&local_record, record.to_string()).map_err(|e| e.to_string())?;
 
     // ONE tracked summary per NON-EMPTY-diff run (empty-diff runs stay local-only), written AFTER
     // the gate, under the RUN'S stamped actor, carrying the spawn HEAD as judgedAgainst (K12).
@@ -255,7 +255,7 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
         // ONE sanitiser (D0305): this closure used to be a second one - quotes and newlines only - and the
         // first parse-before-write refusal caught it embedding a Windows path from a gate problem as an
         // invalid escape. Two sanitisers is how the second one stays behind.
-        let esc = |s: &str| crate::write::sanitize_field(s);
+        let esc = |s: &str| keel_write::write::sanitize_field(s);
         let text = format!(
             "// LAUNCHED-RUN SUMMARY (auto-recorded after the post-run gate, D0182/K12). The gate verifies\n\
              // FORM; substance verification is the human diff review, which this run's diff awaits\n\
@@ -266,9 +266,9 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
              \x20   verification run{short}Gate : Test {{ :>> id = \"{}\"; :>> title = \"launched run {short}: {} - post-run gate\"; :>> createdAt = \"{}\"; :>> createdBy = \"{}\"; :>> method = VerificationMethod::test; :>> procedureText = \"Launch approved by {} against the reviewed plan (srServeApproveGateHuman). REACHABILITY RESIDUAL (srServeBoundedReachableContext): the run received only its declared inputs as context but could READ the whole repository; the enforced bound is the post-run whole-tree gate plus unconditional human diff review, not input scoping. Post-run gate over the run-start-to-working-tree diff ({} file(s): {}). validate + activation-filtered guards + blocking rules. Turns {}; duration {}ms; timedOut {}; K3 ledgerSignal {} (report-only, issue206: machine-local, never a gate input). THE DIFF AWAITS HUMAN REVIEW regardless of this verdict. Problems at gate: {}\"; }}\n\
              \x20   part run{short}GateR1 : TestResult {{ :>> id = \"{}\"; :>> outcome = VerdictKind::{verdict}; :>> judgedAgainst = \"{}\"; :>> judgedAt = \"{}\"; :>> judgedBy = \"{}\"; }}\n\
              }}\n",
-            crate::ident::gen_uuid(),
+            keel_model::ident::gen_uuid(),
             esc(&setup.process),
-            crate::scaffold::today(),
+            keel_write::scaffold::today(),
             setup.actor,
             esc(&setup.approved_by),
             diff_files.len(),
@@ -278,12 +278,12 @@ pub fn finish(root: &Path, setup: &RunSetup, exit: Option<i32>, turns: u64, time
             timed_out,
             ledger_signal,
             if problems.is_empty() { "none".to_string() } else { esc(&problems.join(" | ")).chars().take(1500).collect::<String>() },
-            crate::ident::gen_uuid(),
+            keel_model::ident::gen_uuid(),
             setup.head_at_spawn,
-            crate::scaffold::today(),
+            keel_write::scaffold::today(),
             setup.actor,
         );
-        crate::write::write_atomic(&path, text).map_err(|e| e.to_string())?;
+        keel_write::write::write_atomic(&path, text).map_err(|e| e.to_string())?;
         Some(path)
     };
     Ok(RunOutcome { gate_green, diff_files, summary_path, local_record, problems })
@@ -326,7 +326,7 @@ mod tests {
         std::fs::write(root.join(".gitignore"), ".keel/\n").expect("gitignore");
         let run = |args: &[&str]| {
             assert!(
-                crate::gitx::git().arg("-C").arg(&root).args(args).output().expect("git").status.success(),
+                keel_git::gitx::git().arg("-C").arg(&root).args(args).output().expect("git").status.success(),
                 "git {args:?}"
             );
         };
@@ -393,7 +393,7 @@ mod tests {
         let doc: serde_json::Value = serde_json::from_str(&text).expect("json");
         assert_eq!(doc["disableAllHooks"], false, "the pin is an explicit false: {text}");
         std::fs::write(&args[1], "stale").expect("stale");
-        let plugin = root.join(crate::claude_surface::PLUGIN_DIR).join("hooks");
+        let plugin = root.join(keel_write::claude_surface::PLUGIN_DIR).join("hooks");
         std::fs::create_dir_all(&plugin).expect("plugin dir");
         std::fs::write(plugin.join("hooks.json"), "{}").expect("hooks.json");
         let args = super::hook_pin_args(&root).expect("args again");

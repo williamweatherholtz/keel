@@ -779,15 +779,15 @@ fn decision_follow_through(root: &Path) -> Json {
 /// is different - a consumer cannot discover it and a maintainer cannot tell it from a leftover.
 fn api_surface(root: &Path) -> Json {
     let (Ok(serve), Ok(html)) = (
-        std::fs::read_to_string(root.join("keel-cli/src/serve.rs")),
-        std::fs::read_to_string(root.join("keel-cli/assets/console.html")),
+        std::fs::read_to_string(root.join("members/keel-serve/src/serve.rs")),
+        std::fs::read_to_string(root.join("members/keel-serve/assets/console.html")),
     ) else {
         return Json::Obj(vec![
             ("available".to_string(), Json::Bool(false)),
             (
                 "reason".to_string(),
                 Json::s(
-                    "keel-cli/src/serve.rs or assets/console.html is not readable from this root, so                      the HTTP surface cannot be audited (issue183).",
+                    "members/keel-serve/src/serve.rs or assets/console.html is not readable from this root, so                      the HTTP surface cannot be audited (issue183).",
                 ),
             ),
         ]);
@@ -1142,8 +1142,8 @@ mod tests {
     /// that is not registered. The second half has never been checked and would 404 a real consumer.
     #[test]
     fn every_registered_route_is_accounted_for() {
-        let serve = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/serve.rs")).expect("serve.rs is readable");
-        let html = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/assets/console.html")).expect("console.html is readable");
+        let serve = std::fs::read_to_string(crate::test_repo_root().join("members/keel-serve/src/serve.rs")).expect("serve.rs is readable");
+        let html = std::fs::read_to_string(crate::test_repo_root().join("members/keel-serve/assets/console.html")).expect("console.html is readable");
         let routes = registered_routes(&serve);
         let advertised = advertised_endpoints(&serve);
         assert!(routes.len() > 30, "route scan found {} - the lens is mis-aimed", routes.len());
