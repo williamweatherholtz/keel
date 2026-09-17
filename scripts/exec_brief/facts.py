@@ -4081,6 +4081,196 @@ fact("probePairTravelsInAFile", {
      "the probe row's command split at `: ` then ` ; ` into the file and the two sides. issue571/issue578 from .tracking/issues-claudeFable5.sysml with "
      "their #Resolves edges and whether each resolver's DoD names them. resolverPositions as section 34; backlogItems = every `action x;` in backlog.sysml. "
      "sprint730 from its delivery file, charter d0500, plus literal `issue578` and `no new item` in its text.")
+# ================================================================ 38. D0501 + D0502 - a subagent is measured from its own start; a verifier's stop is never a block (sprint 731, brief 38)
+_d0501 = _dec_file("0501-")
+_d0502 = _dec_file("0502-")
+_f501 = _decision_facts(_d0501, "d0501")
+_f502 = _decision_facts(_d0502, "d0502")
+_d0502_text = _d0502 or ""            # _dec_file returns the TEXT of the record
+_main01 = _main_rs
+_cs01 = read(_mh("claude_surface") or "") or ""
+_census01 = read(_module_home("view/census") or "") or ""
+_events01 = read(os.path.join(REPO, ".engine", "contracts", "control-events.toml")) or ""
+_cmap01 = read(os.path.join(REPO, ".tracking", "architecture", "control-map.sysml")) or ""
+_hook01_fact = (re.search(r"^\s*part cliHook2 : CliCommand \{.*$", _cmds00, re.M) or [""])[0]
+_hook01_mirror = (re.search(r'^\s*CliFact \{ name: "hook",.*$', _facts00, re.M) or [""])[0]
+_events01_block = (re.search(r"^\[subagent-start\]\n(?:[^\[\n][^\n]*\n)*", _events01, re.M) or [""])[0]
+_ledger01_path = os.path.join(REPO, ".keel", "metrics", "hooks.jsonl")
+_ledger01 = (read(_ledger01_path) or "").splitlines()
+
+
+def _ledger01_real(pred):
+    """Ledger lines matching `pred`, minus this script's own probe sessions and the hand probes of the sprint."""
+    n = 0
+    for _ln in _ledger01:
+        if not pred(_ln):
+            continue
+        _sess = (re.search(r'"session":"([^"]*)"', _ln) or [None, ""])[1]
+        if _sess.startswith("probe") or _sess.startswith("keel-facts-"):
+            continue
+        n += 1
+    return n
+
+
+# live: `keel hook <event>` reads its payload from stdin; the session and agent ids are this process's, so the only files
+# the probes touch are their own fp files under .keel/metrics (removed after) and their own ledger lines (excluded above)
+def _hook01(event, payload):
+    try:
+        p = subprocess.run([KEEL, "hook", event], cwd=REPO, capture_output=True, text=True, timeout=120,
+                           input=json.dumps(payload), encoding="utf-8", errors="replace")
+        return p.returncode, (p.stdout or "").strip()
+    except Exception as exc:                                        # pragma: no cover
+        return 1, "%s: %s" % (type(exc).__name__, exc)
+
+
+_sess01 = f"keel-facts-{os.getpid()}"
+_aid01 = f"facts/{os.getpid()}"                      # the `/` is folded to `_` by agent_baseline_path; the file name proves it
+_fp01 = os.path.join(REPO, ".keel", "metrics", f"agent-facts_{os.getpid()}.fp")
+_sessfp01 = os.path.join(REPO, ".keel", "metrics", f"baseline-{_sess01}.fp")
+_ver01 = {"session_id": _sess01, "agent_id": _aid01, "agent_type": "verifier", "stop_hook_active": False}
+_rc01_start, _out01_start = _hook01("subagent-start", _ver01)
+_fp01_written = os.path.isfile(_fp01)
+_fp01_first = read(_fp01) or ""
+_rc01_start2, _ = _hook01("post-edit", {**_ver01, "tool_name": "Edit", "tool_input": {"file_path": "nothing.txt"}})
+_fp01_second = read(_fp01) or ""
+_rc01_still, _out01_still = _hook01("subagent-stop", _ver01)
+try:
+    with open(_fp01, "w", encoding="utf-8") as _fh:
+        _fh.write("moved-by-facts-py")
+except OSError:
+    pass
+_rc01_moved, _out01_moved = _hook01("subagent-stop", _ver01)
+_rc01_none, _out01_none = _hook01("subagent-stop", {"session_id": f"{_sess01}-nobaseline", "agent_id": f"{_aid01}-none", "agent_type": "verifier", "stop_hook_active": False})
+_ledger01_after = (read(_ledger01_path) or "").splitlines()
+_probe01_lines = [l for l in _ledger01_after if f'"session":"{_sess01}"' in l]
+for _p01 in (_fp01, _sessfp01):
+    try:
+        os.remove(_p01)
+    except OSError:
+        pass
+_i578b = _issue_facts("578", "dcVerifierStopIsNeverABlock")
+_s731 = _sprint_facts("sprint731_verifierStopIsNeverABlock.sysml", "d0502")
+_blocks01 = [l for l in _ledger01 if '"event":"subagent-stop"' in l and '"decision":"block"' in l]
+_blocks01_day = [l for l in _blocks01 if 1789574400 <= int((re.search(r'"ts":(\d+)', l) or [None, "0"])[1]) < 1789660800]
+fact("subagentOwnStartAndVerifierStop", {
+    "d0501": {
+        **_f501,
+        "namesIssue578": "issue578" in (_f501["context"] or ""),
+        "namesSixBlocks": "six blocks" in (_f501["context"] or ""),
+        "namesSessionBaseline": "baseline-{session}.fp" in (_f501["context"] or ""),
+        "namesAgentFile": "agent-{agent_id}.fp" in (_f501["decision"] or ""),
+        "namesNeverOverwrites": "never overwrites it" in (_f501["decision"] or ""),
+        "namesFallback": "the session baseline is read only for a stop payload that names no agent_id" in (_f501["decision"] or ""),
+        "namesSubagentStartHome": "claude_surface.rs keel_hooks" in (_f501["decision"] or ""),
+        "saysSafetyChange": "This is a safety change" in (_f501["rationale"] or ""),
+        "saysNotAFork": "NOT A FORK" in (_f501["rationale"] or ""),
+        "namesWrongIf": "Wrong if a subagent's hook fires arrive without agent_id" in (_f501["consequences"] or ""),
+    },
+    "d0502": {
+        **_f502,
+        "namesIssue578": "issue578" in (_f502["context"] or ""),
+        "namesSixBlocks": "blocked six times" in (_f502["context"] or ""),
+        "namesTheInventedFinding": "a retro finding it invented" in (_f502["context"] or ""),
+        "namesNeverABlock": "the hook never emits a block" in (_f502["decision"] or ""),
+        "namesTheControl": "verifier:tree-written" in (_f502["decision"] or ""),
+        "namesRecorderKeepsBlock": "The recorder keeps its block under recorder:tree-red" in (_f502["decision"] or ""),
+        "namesD0424": "D0424" in (_f502["rationale"] or ""),
+        "saysSafetyChange": "This is a safety change" in (_f502["rationale"] or ""),
+        "saysNotAFork": "NOT A FORK" in (_f502["rationale"] or ""),
+        "namesWrongIf": "Wrong if a verifier writes the tree and the primary's next orient does not surface the census row" in (_f502["consequences"] or ""),
+        "dependsOnD0501": "#DependsOn dependency from d0502 to d0501;" in _d0502_text,
+    },
+    "source": {
+        "baselinePathFolds": "fn agent_baseline_path(root: &Path, agent_id: &str) -> PathBuf {" in _main01 and 'format!("agent-{safe}.fp")' in _main01,
+        "dispatcherWritesOnFirstFire": 'if event != "subagent-stop" {' in _main01 and "let bl = agent_baseline_path(&root, agent_id);" in _main01 and "if !bl.exists() {" in _main01,
+        "baselineOwnThenSession": "fn subagent_baseline(root: &Path, payload: &serde_json::Value, session: &str) -> Option<String> {" in _main01
+                                  and 'own.or_else(|| std::fs::read_to_string(root.join(".keel").join("metrics").join(format!("baseline-{session}.fp"))).ok())' in _main01,
+        "routeEnumArms": [a for a in ("NotGated", "Silent", "VerifierTreeWritten", "Gate") if re.search(r"^\s{4}" + a + r",$", _main01, re.M)],
+        "routeIsPure": "fn subagent_stop_route(agent_type: Option<&str>, baseline: Option<&str>, now: &str) -> SubagentStopRoute {" in _main01,
+        "verifierArmIsTheType": 'if agent_type == Some("verifier") {' in _main01,
+        "verifierArmLedgersRefused": 'note_verdict("refused", "verifier:tree-written");' in _main01,
+        "verifierArmExitsZero": ("SubagentStopRoute::VerifierTreeWritten => {" in _main01
+                                 and re.search(r"SubagentStopRoute::VerifierTreeWritten => \{.*?\n\s{12}0\n\s{8}\}", _main01, re.S) is not None),
+        "routeBeforeGate": ("match subagent_stop_route(agent_type, baseline.as_deref(), &now) {" in _main01
+                            and "let code = hook_stop(payload, root);" in _main01
+                            and _main01.index("match subagent_stop_route(agent_type, baseline.as_deref(), &now) {") < _main01.index("let code = hook_stop(payload, root);")),
+        "recorderRelabelKept": "let relabelled = subagent_block_control(agent_type, control);" in _main01,
+        "startEventIsCounted": '"subagent-start" => 0,' in _main01,
+        "tests": [t for t in ("a_verifier_is_never_gated_and_its_own_write_is_the_ledgered_fact",
+                              "a_recorder_and_an_untyped_agent_keep_the_gate_over_a_moved_tree",
+                              "the_agents_own_start_is_read_before_the_sessions") if f"fn {t}()" in _main01],
+        "claudeSurface": {"registersSubagentStart": '"SubagentStart": [{ "hooks": [hook_entry(' in _cs01 and 'hook subagent-start"' in _cs01,
+                          "recognisesTheCommand": 'c.contains("hook subagent-start")' in _cs01,
+                          "sevenEventsTest": "fn generated_hooks_have_seven_events_and_fail_loud_resolution()" in _cs01},
+        "guardsLedger": "const EMITTED_LEDGER: [&str; 15] = [" in _guards_rs and '"subagent-start"' in _guards_rs,
+        "censusHookEvents": '"subagent-start"' in ((re.search(r"^const HOOK_EVENTS: &\[&str\] = &\[.*$", _census01, re.M) or [""])[0]),
+    },
+    "declared": {
+        "controlEvent": {"found": bool(_events01_block), "control": (re.search(r'^control = "([^"]+)"', _events01_block, re.M) or [None, None])[1],
+                         "record": (re.search(r'^record = "([^"]+)"', _events01_block, re.M) or [None, None])[1], "namesD0501": "D0501" in _events01_block},
+        "cliFact": {"found": bool(_hook01_fact), "invocationNamesStart": "|subagent-start|" in _hook01_fact,
+                    "supersedesCliHook": "#Supersede dependency from cliHook2 to cliHook;" in _cmds00,
+                    "mirrorFound": bool(_hook01_mirror), "mirrorNamesStart": "|subagent-start|" in _hook01_mirror},
+        "controlMap": {"found": "part ctlVerifierTreeWritten : SystemSafetyConstraint {" in _cmap01,
+                       "title": (re.search(r'part ctlVerifierTreeWritten : SystemSafetyConstraint \{[^\n]*?title = "([^"]+)"', _cmap01) or [None, None])[1],
+                       "dischargesEhz2": "dependency from ctlVerifierTreeWritten to ehz2;" in _cmap01,
+                       "hookRuleTitles": len(re.findall(r'title = "hook-rule: ', _cmap01))},
+        "process": {"stepNamesBoth": "recorder:tree-red" in _pr00 and "verifier:tree-written" in _pr00,
+                    "stepNamesOwnStart": "measured from the fingerprint" in _pr00 and "D0501" in _pr00},
+        "skill": {"namesBoth": "`recorder:tree-red`" in _dc00 and "`verifier:tree-written`" in _dc00,
+                  "namesNeverBlocked": "a verifier is NEVER blocked (D0502)" in _dc00,
+                  "namesOwnStart": "the tree at its OWN start (D0501)" in _dc00,
+                  "claudeCopyAgrees": _dc00 == _dc00c},
+        "claudeMd": {"namesControl": "`verifier:tree-written`" in _claude00, "namesNeverBlocked": "never blocked (D0501/D0502" in _claude00},
+    },
+    "live": {
+        "start": {"exit": _rc01_start, "silent": _out01_start == "", "wroteOwnFile": _fp01_written, "fileNameFoldsTheSlash": os.path.basename(_fp01),
+                  "fingerprintLength": len(_fp01_first.strip())},
+        "secondFireLeavesIt": {"exit": _rc01_start2, "unchanged": _fp01_second == _fp01_first and _fp01_first != ""},
+        "stopUnmoved": {"exit": _rc01_still, "silent": _out01_still == "", "namesNoControl": "verifier:tree-written" not in _out01_still},
+        "stopMoved": {"exit": _rc01_moved, "namesControl": "verifier:tree-written" in _out01_moved, "isSystemMessage": _out01_moved.startswith('{"systemMessage":'),
+                      "saysNotABlock": "Not a block" in _out01_moved, "namesD0502": "D0502" in _out01_moved,
+                      "line": _out01_moved[:240] or None},
+        "stopNoBaseline": {"exit": _rc01_none, "namesNotGated": "subagent tree not gated" in _out01_none},
+        "ledger": {"probeLines": len(_probe01_lines),
+                   "startLines": len([l for l in _probe01_lines if '"event":"subagent-start"' in l]),
+                   "refusedLines": len([l for l in _probe01_lines if '"control":"verifier:tree-written"' in l and '"decision":"refused"' in l]),
+                   "blockLines": len([l for l in _probe01_lines if '"decision":"block"' in l])},
+        "cleanedUp": not os.path.exists(_fp01) and not os.path.exists(_sessfp01),
+    },
+    "ledger": {
+        "subagentStartFires": _ledger01_real(lambda l: '"event":"subagent-start"' in l),
+        "verifierTreeWritten": _ledger01_real(lambda l: '"control":"verifier:tree-written"' in l),
+        "recorderTreeRed": _ledger01_real(lambda l: '"control":"recorder:tree-red"' in l),
+        "subagentStopBlocksEver": len(_blocks01),
+        "subagentStopBlocksOn0916": len(_blocks01_day),
+        "agentFpFiles": len([f for f in os.listdir(os.path.join(REPO, ".keel", "metrics")) if f.startswith("agent-") and f.endswith(".fp")]),
+    },
+    "issue578": _i578b,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcVerifierStopIsNeverABlock", "dcViewIsAMember", "dcSuiteIsAMember")},
+    "backlogItems": len(_bl00_actions),
+    "sprint731": {k: v for k, v in _s731.items() if k != "text"} | ({"retroNamesIssue578": "issue578" in _s731["text"], "retroNamesDispatchOrder": "dispatch order" in _s731["text"],
+                                                                     "standupNamesOrder": "the retro is filled BEFORE the verifier is dispatched" in _s731["text"]} if _s731.get("exists") else {}),
+} if _d0501 and _d0502 and _main01 else None,
+     "the two held records: Decisions, the route and the baseline in source, the seven declaration homes, live hook fires, the ledger, issue578, sprint 731",
+     _DEC_HOW + " Names by literal search in the field named; dependsOnD0501 = the `#DependsOn dependency from d0502 to d0501;` edge in D0502's file. source: "
+     "main.rs wherever module_home resolves it, searched for agent_baseline_path and its `agent-{safe}.fp`, the dispatcher's first-fire write guarded by "
+     "`event != subagent-stop` and `!bl.exists()`, subagent_baseline's own-then-session or_else, the four arms of SubagentStopRoute, the pure route fn, the "
+     "verifier arm's type test, its note_verdict(refused, verifier:tree-written) and its literal `0` return, the route match sitting before `hook_stop` in the "
+     "file, the recorder relabel, the `subagent-start => 0` dispatch arm, and the three test fn names; claude_surface.rs for the SubagentStart hook_entry, "
+     "is_keel_hook's `hook subagent-start`, the seven-events test; guards.rs for `EMITTED_LEDGER: [&str; 15]` naming subagent-start; view/census.rs's one-line "
+     "HOOK_EVENTS. declared: the [subagent-start] table of control-events.toml (control, record, D0501); the one-line `part cliHook2` of commands.sysml, the "
+     "`#Supersede dependency from cliHook2 to cliHook;` edge, and the one-line `CliFact { name: \"hook\"` mirror; control-map.sysml's ctlVerifierTreeWritten "
+     "part, its title, its discharge edge to ehz2, and the count of `hook-rule:` titles; delegated-ceremony.sysml, the skill (byte-equal .claude copy) and CLAUDE.md "
+     "by literal spans. live: five `keel hook <event>` fires with a JSON payload on stdin whose session_id is keel-facts-<pid> and agent_id facts/<pid>: subagent-start "
+     "(exit, silence, the agent-facts_<pid>.fp file it wrote - the slash folded - and its length), a post-edit fire (the file is unchanged: never overwritten), "
+     "subagent-stop over the unmoved start (exit, silence), subagent-stop after this script overwrote the fp file (exit, the systemMessage naming the control, "
+     "`Not a block`, D0502), and subagent-stop under a session and agent no fire named (the not-gated advisory); ledger = the probe session's own lines in "
+     ".keel/metrics/hooks.jsonl by event / control / decision; both fp files are removed after and cleanedUp says so. ledger (whole file, sessions beginning "
+     "`probe` or `keel-facts-` excluded): subagent-start fires, verifier:tree-written and recorder:tree-red lines, subagent-stop block lines ever and in the "
+     "UTC day 2026-09-16 by ts; agentFpFiles = agent-*.fp under .keel/metrics now. issue578 as section 37. resolverPositions as section 34; backlogItems = every "
+     "`action x;` in backlog.sysml. sprint731 from its delivery file, charter d0502, plus literal `issue578`, `dispatch order` and the standup's ordering sentence.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
