@@ -3938,6 +3938,149 @@ fact("guardTestsNameScratchPerProcess", {
      "the two probe fn names (helperCarriesPid = the one-line body between the signature and its closing brace holds `std::process::id()`); scratchSitesInTree = `scratch(` calls (bare, keel_fs:: or fsx::) over every .rs file under keel-cli/src, keel-cli/tests "
      "and members/*/src. obligation from .tracking/obligations/red-yield-637916a4.sysml: its #Resolves edge and whether its description opens on the "
      "process-change lock. issue577 and resolverPositions as section 35. sprint729 from its delivery file, charter d0498.")
+
+
+# ================================================================ 37. D0500 - the probe pair travels in a file (sprint 730, brief 37)
+_d0500 = _dec_file("0500-")
+_f500 = _decision_facts(_d0500, "d0500")
+_vr00_path = _module_home("verify")
+_vr00 = read(_vr00_path or "") or ""
+_cmds00 = read(os.path.join(REPO, ".engine", "cli", "commands.sysml")) or ""
+_facts00 = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or ""
+_tv00 = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
+_tv00c = read(os.path.join(REPO, ".claude", "skills", "test-verify", "SKILL.md")) or ""
+_dc00 = read(os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_dc00c = read(os.path.join(REPO, ".claude", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_pr00 = read(os.path.join(REPO, ".engine", "processes", "delegated-ceremony.sysml")) or ""
+_claude00 = read(os.path.join(REPO, "CLAUDE.md")) or ""
+_verify00 = (re.search(r"^\s*part cliVerify : CliCommand \{.*$", _cmds00, re.M) or [""])[0]
+_mirror00 = (re.search(r'^\s*CliFact \{ name: "verify",.*$', _facts00, re.M) or [""])[0]
+_vr00_receipt = read(os.path.join(REPO, ".keel", "metrics", "verify-receipt.toml")) or ""
+_probe00 = re.search(r'^\[\[rung\]\]\nname = "probe"\nverdict = "(\w+)"\nexit = (\d+)\nseconds = (\d+)\ncommand = "([^"]*)"', _vr00_receipt, re.M)
+_probe00_cmd = _probe00.group(4) if _probe00 else ""
+_rung00_secs = {n: int(s) for n, s in re.findall(r'^\[\[rung\]\]\nname = "(\w+)"\nverdict = "\w+"\nexit = \d+\nseconds = (\d+)', _vr00_receipt, re.M)}
+_vr00_fact = _receipt94("verify-receipt.toml")
+# live: the refusals are decided at parse, before any rung and before the receipt is touched (verify.rs `let probe = match parse_probe`
+# returns 2), so they are safe to run at any time, land included; the file is written under the scratch rule and removed after
+import shutil     # noqa: E402
+import tempfile   # noqa: E402
+_scratch00 = os.path.join(tempfile.gettempdir(), f"keel-facts-pair-{os.getpid()}")   # per-process, the D0498 rule
+os.makedirs(_scratch00, exist_ok=True)
+_one00 = os.path.join(_scratch00, "one-line.txt")
+_blank00 = os.path.join(_scratch00, "blank-second.txt")
+_three00 = os.path.join(_scratch00, "three-lines.txt")
+with open(_one00, "w", encoding="utf-8") as _fh:
+    _fh.write("cargo test a\n")
+with open(_blank00, "w", encoding="utf-8") as _fh:
+    _fh.write("cargo test a\n\n")
+with open(_three00, "w", encoding="utf-8") as _fh:
+    _fh.write("cargo test a\ncargo test b\ncargo test c\n")
+_rc00_one, _out00_one = run_rc([KEEL, "verify", ".", "--probe-from", _one00], timeout=30)
+_rc00_blank, _out00_blank = run_rc([KEEL, "verify", ".", "--probe-from", _blank00], timeout=30)
+_rc00_three, _out00_three = run_rc([KEEL, "verify", ".", "--probe-from", _three00], timeout=30)
+_rc00_both, _out00_both = run_rc([KEEL, "verify", ".", "--probe", "a,b", "--probe-from", _one00], timeout=30)
+_rc00_wait, _out00_wait = run_rc([KEEL, "verify", "--wait", "--probe-from", _one00, "."], timeout=30)
+_rc00_help, _out00_help = run_rc([KEEL, "verify", "--help"], timeout=30)
+_receipt00_after = read(os.path.join(REPO, ".keel", "metrics", "verify-receipt.toml")) or ""
+shutil.rmtree(_scratch00, ignore_errors=True)
+
+
+def _last00(out):
+    return (out or "").strip().splitlines()[-1] if (out or "").strip() else None
+
+
+_i571 = _issue_facts("571", "dcProbePairTravelsInAFile")
+_i578 = _issue_facts("578", "dcVerifierStopIsNeverABlock")
+_s730 = _sprint_facts("sprint730_probePairTravelsInAFile.sysml", "d0500")
+_bl00_actions = re.findall(r"^\s{8}action (\w+);", _bl, re.M)
+_bl00_defs = {}
+for _m00 in re.finditer(r"^    action def (\w+) \{(.*?)^    \}", _bl, re.S | re.M):
+    for _a00 in re.findall(r"^\s{8}action (\w+);", _m00.group(2), re.M):
+        _bl00_defs.setdefault(_a00, _m00.group(1))
+fact("probePairTravelsInAFile", {
+    **_f500,
+    "namesIssue571": "issue571" in (_f500["context"] or ""),
+    "namesThreeDispatches": "a third time" in (_f500["context"] or ""),
+    "namesEightySeconds": "80-second climb" in (_f500["context"] or ""),
+    "namesD0224": "D0224" in (_f500["context"] or ""),
+    "namesExactlyTwoLines": "exactly two non-empty lines" in (_f500["decision"] or ""),
+    "namesVerifierNeverTranscribes": "the verifier never transcribes the pair" in (_f500["decision"] or ""),
+    "namesBothFlagsRefused": "--probe given beside --probe-from is refused at parse" in (_f500["decision"] or ""),
+    "namesTypedPairStays": "stays for a human at a terminal" in (_f500["decision"] or ""),
+    "namesD0047": "D0047" in (_f500["rationale"] or ""),
+    "namesTwoSecondRefusal": "two-second refusal" in (_f500["rationale"] or ""),
+    "saysProcessChange": "This is a process change" in (_f500["rationale"] or ""),
+    "namesResolvesIssue571": "Resolves issue571" in (_f500["consequences"] or ""),
+    "source": {
+        "probeCarriesSource": "pub from: Option<PathBuf>," in _vr00,
+        "textNamesTheFile": '|f| format!("--probe-from {}: {} ; {}", f.display(), self.pos, self.neg),' in _vr00,
+        "bothFlagsRefused": '(Some(_), Some(_)) => Err("--probe and --probe-from name the same pair twice; give one (D0500)".to_owned()),' in _vr00,
+        "exactlyTwoLines": "let [pos, neg] = lines[..] else {" in _vr00,
+        "blankLineRefused": "is blank; both lines of a D0388 pair file are command lines" in _vr00,
+        "ownArgsSkipsThePath": 'if a == "--probe" || a == "--probe-from" {' in _vr00,
+        "waitRefusesIt": '*a == "--probe" || *a == "--probe-from" || *a == "--no-receipt"' in _vr00,
+        "parseBeforeAnyRung": ("let probe = match parse_probe(args) {" in _vr00 and "let (steps, stopped_at) = climb(" in _vr00
+                               and _vr00.index("let probe = match parse_probe(args) {") < _vr00.index("let (steps, stopped_at) = climb(")),
+        "notRunRowNamesThePair": "(Rung::Probe, Some(pair)) => pair.to_owned()," in _vr00,
+        "probeTests": [t for t in ("a_probe_file_names_the_pair", "a_probe_file_that_is_not_a_pair_is_refused") if f"fn {t}()" in _vr00],
+        "notRunRowTest": 'assert_eq!(steps[3].command, "--probe-from pair.txt: cargo test a ; cargo test b"' in _vr00,
+    },
+    "cliFact": {
+        "found": bool(_verify00), "invocationNamesFlag": "| --probe-from FILE]" in _verify00, "synopsisNamesD0500": "D0500" in _verify00,
+        "mirrorFound": bool(_mirror00), "mirrorNamesFlag": "| --probe-from FILE]" in _mirror00, "mirrorNamesD0500": "D0500" in _mirror00,
+    },
+    "skill": {
+        "step1LaunchesFromFile": 'KEEL verify . --probe-from "<ABS PAIR FILE>"' in _tv00,
+        "transcribesNothing": "transcribe NOTHING" in _tv00,
+        "namesIssue571": "issue571" in _tv00,
+        "receiptShapeNamesFlag": "LADDER: KEEL verify . --probe-from <ABS PAIR FILE>" in _tv00,
+        "notRunRowForm": "PROBE PAIR: <the row's command> -> not" in _tv00,
+        "typedPairMentions": _tv00.count("--probe POS,NEG") + _tv00.count("--probe POSITIVE,NEGATIVE"),
+        "claudeCopyAgrees": _tv00 == _tv00c,
+        "briefSlotIsTheFile": "the pair file at <ABS PAIR FILE>" in _dc00 and "`--probe-from <ABS PAIR FILE>` and transcribe nothing" in _dc00,
+        "briefClaudeCopyAgrees": _dc00 == _dc00c,
+        "processStepWritesTheFile": "Write the sprint's D0388 pair as a file of two lines" in _pr00 and "transcribes nothing, D0500" in _pr00,
+    },
+    "claudeMdLines": len(re.findall(r"--probe-from", _claude00)),
+    "live": {
+        "oneLine": {"exit": _rc00_one, "line": _last00(_out00_one), "namesTheShape": "1 line(s); a D0388 pair file is exactly two" in (_out00_one or "")},
+        "blankSecond": {"exit": _rc00_blank, "line": _last00(_out00_blank), "namesTheLine": "line 2 is blank" in (_out00_blank or "")},
+        "threeLines": {"exit": _rc00_three, "line": _last00(_out00_three), "namesTheShape": "3 line(s); a D0388 pair file is exactly two" in (_out00_three or "")},
+        "bothFlags": {"exit": _rc00_both, "line": _last00(_out00_both), "namesTwice": "name the same pair twice" in (_out00_both or "")},
+        "waitBeside": {"exit": _rc00_wait, "line": _last00(_out00_wait), "namesTheLaunch": "belongs to the launch, not the wait" in (_out00_wait or "")},
+        "help": {"exit": _rc00_help, "namesFlag": "--probe-from FILE" in (_out00_help or "")},
+        "receiptUntouchedByRefusals": _receipt00_after == _vr00_receipt,
+        "verifierReceipt": {**{k: v for k, v in _vr00_fact.items() if k in ("exists", "outcome", "rungs")},
+                            "stoppedAt": (re.search(r'^stopped_at = "([^"]+)"', _vr00_receipt, re.M) or [None, None])[1],
+                            "rungsGreen": len([v for v in (_vr00_fact.get("rungs") or {}).values() if v == "pass"])},
+        "probeRung": {"verdict": _probe00.group(1), "exit": int(_probe00.group(2)), "seconds": int(_probe00.group(3)),
+                      "namesAFile": _probe00_cmd.startswith("--probe-from "), "fileStem": (re.search(r"--probe-from (?:.*[/\\])?([^/\\:]+):", _probe00_cmd) or [None, None])[1],
+                      "sides": [s.strip() for s in _probe00_cmd.split(": ", 1)[1].split(" ; ")] if ": " in _probe00_cmd else [],
+                      "sidesAreTheTests": all(t in _probe00_cmd for t in ("a_probe_file_names_the_pair", "a_probe_file_that_is_not_a_pair_is_refused"))} if _probe00 else None,
+        "rungSeconds": _rung00_secs,
+    },
+    "issue571": _i571,
+    "issue578": _i578,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcProbePairTravelsInAFile", "dcVerifierStopIsNeverABlock", "dcViewIsAMember")},
+    "backlogItems": len(_bl00_actions),
+    "sprint730": {k: v for k, v in _s730.items() if k != "text"} | ({"retroNamesIssue578": "issue578" in _s730["text"], "retroNamesNoNewItem": "no new item" in _s730["text"]} if _s730.get("exists") else {}),
+} if _d0500 and _vr00 else None, "the held record for the pair file: Decision, the control in source, CLI fact and mirror, the two skills and the process step, CLAUDE.md, live refusals and help, the sprint's own ladder receipt, issue571, issue578, sprint 730",
+     _DEC_HOW + " Names by literal search in the field named. source: the verify module wherever module_home resolves it, searched for the Probe field, "
+     "the text() arm that prefixes the file, the both-flags Err arm, the two-line slice pattern, the blank-line message, own_args' skip, --wait's "
+     "refusal list, the not-run arm of climb, the two probe test fn names and the not-run assertion; parseBeforeAnyRung = parse_probe's call site "
+     "sits in the file before the `let (steps, stopped_at) = climb(` call (the Err arm returns 2 before the ladder is entered). cliFact: the one-line `part cliVerify` of "
+     ".engine/cli/commands.sysml and the one-line `CliFact { name: \"verify\"` of members/keel-schema/src/cli_facts.rs, each searched for the invocation's "
+     "`| --probe-from FILE]` and for `D0500`. skill: literal spans of .engine/skills/test-verify/SKILL.md (the step-1 launch line, `transcribe NOTHING`, "
+     "issue571, the LADDER receipt line, the not-run form; typedPairMentions counts the typed spelling), byte equality with the .claude copy; the "
+     "delegated-ceremony brief's pair slot and its copy; the process file's dispatch step. claudeMdLines = `--probe-from` occurrences in CLAUDE.md. live: "
+     "each refusal is `keel verify . --probe-from <file>` over a file this script writes under the per-process temp dir (one line / a blank second line / "
+     "three lines), `--probe a,b --probe-from <file>`, and `--wait --probe-from <file>`; exit from run_rc and the last output line; every one is refused "
+     "at parse before a rung runs, so receiptUntouchedByRefusals = .keel/metrics/verify-receipt.toml byte-equal before and after. help = `keel verify --help` "
+     "searched for the flag. verifierReceipt/probeRung/rungSeconds read .keel/metrics/verify-receipt.toml: outcome, stopped_at, each [[rung]] verdict, and "
+     "the probe row's command split at `: ` then ` ; ` into the file and the two sides. issue571/issue578 from .tracking/issues-claudeFable5.sysml with "
+     "their #Resolves edges and whether each resolver's DoD names them. resolverPositions as section 34; backlogItems = every `action x;` in backlog.sysml. "
+     "sprint730 from its delivery file, charter d0500, plus literal `issue578` and `no new item` in its text.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
