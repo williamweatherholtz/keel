@@ -1962,4 +1962,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRanReceiptCarriesOnePrefix to issue596;
+
+    part issue597 : Issue {
+        :>> id = "3e9ab0b9-398f-4e83-a850-82a7a2e51305";
+        :>> title = "The sitting review is the one ceremony record still finished by method = confirmation, a debt the console counts as 309 owed";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The per-sitting review is the one ceremony record still finished by method = confirmation: .engine/skills/sprint-review/SKILL.md lines 27-34 and 119-131 record `sittingRev<id> : Test { method = VerificationMethod::confirmation }` judged by the human, sittingReviewVP (.engine/views/viewpoint-registry.sysml:328) sits on the act surface with the concern 'which sittings have not yet had their per-sitting human review (D0049's single gate)', and keel show sitting-coverage at e5e71f2a reads 309 of 738 sprints due such a review. D0204 retired the framing (the review is not a mandatory human gate; sitting coverage left the authority queue) but not the method, so the skill still asks the human to 'accept the sitting's content (the one gate)' and the console's act tab still counts the 309 as owed. Every judgment a review presents already has a per-item verb (keel accept, keel judge-set, a disposition), and 'the review is finished' is a receipt, not testimony (D0232) - a confirmation over it is a duplicate or a reading receipt, and a count of them is a debt aimed at the human (D0204). The human said so on 2026-09-17: 'change the method for finishing a review to not be confirmation. what should there be to confirm? on a sprint review'. D0510 (HELD, process-change) decides the method; this Issue tracks applying it and the guard that keeps it applied.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcSittingReviewIsFinishedByAnalysis to issue597;
 }
