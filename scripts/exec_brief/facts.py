@@ -4605,6 +4605,167 @@ fact("guardSourceLockIsADirectoryPrefix", {
      "issues 583-587 as section 34, with the issues guard's naming rule read from the backlog DoD (584-586) or the issue's own description (583, 587). "
      "resolverPositions as section 34; sprint733 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = "
      "`(n) ` markers opening a sentence or following a label's colon in that text; dodResults = the story's DoDRn outcomes and shas.")
+# ================================================================ 41. D0505 - a locked guard source's test anchor repoints through keel-fs (sprint 734, brief 41)
+_d0505 = _dec_file("0505-")
+_f505 = _decision_facts(_d0505, "d0505")
+_LAND734_FROM, _LAND734_TO = "e3714e3", "1736ff4"   # the sprint's landing range, fixed (issue586: a fact about a range reads the range)
+_ts05_path = os.path.join(REPO, "members", "keel-fs", "src", "test_support.rs")
+_ts05 = read(_ts05_path) or ""
+_fslib05 = read(os.path.join(REPO, "members", "keel-fs", "src", "lib.rs")) or ""
+_adh05 = read(_mh("adherence") or "") or ""   # issue559: the resolver, never a keel-cli/src anchor
+_adh05_test = _tb04(_adh05, "this_repo_yields_the_empty_prefix")
+_tch05 = read(_mh("touched") or "") or ""
+_scan05 = _tb04(_tch05, "no_member_test_anchors_on_a_cwd_relative_path")
+_enf05 = read(os.path.join(REPO, "members", "keel-guards", "src", "enforcement.rs")) or ""
+_gsf05_paths = re.findall(r'"([^"]+)"', (re.search(r"const GUARD_SOURCE_FILES: &\[&str\] = &\[(.*?)\];", _enf05) or [None, ""])[1])
+# the four anchor shapes the scan reads (keel-cli/src/touched.rs ANCHORS), counted over non-comment lines per tree
+_ANCH05 = ('Path::new("..")', 'read_to_string("src/', 'CARGO_MANIFEST_DIR")).join("..")', 'read_to_string("../')
+def _rs05(rel_dirs):
+    out = []
+    for _rd in rel_dirs:
+        for _dp, _, _fs in os.walk(os.path.join(REPO, _rd)):
+            for _f in _fs:
+                if _f.endswith(".rs"):
+                    out.append(os.path.join(_dp, _f))
+    return sorted(out)
+def _anchors05(paths):
+    hits = []
+    for _p in paths:
+        for _i, _l in enumerate((read(_p) or "").splitlines(), 1):
+            if _l.strip().startswith("//"):
+                continue
+            for _a in _ANCH05:
+                if _a in _l:
+                    hits.append(os.path.relpath(_p, REPO).replace(os.sep, "/") + ":" + str(_i))
+    return hits
+_ws05_members = re.findall(r'^\s*"([^"]+)",', (re.search(r"members\s*=\s*\[(.*?)\]", read(os.path.join(REPO, "Cargo.toml")) or "", re.S) or [None, ""])[1], re.M)
+_member_src05 = [m + "/src" for m in _ws05_members if m.startswith("members/")]
+_cli05, _mem05, _tests05 = _rs05(["keel-cli/src"]), _rs05(_member_src05), _rs05(["keel-cli/tests"])
+_defs05 = []
+for _p in _cli05 + _mem05:
+    for _i, _l in enumerate((read(_p) or "").splitlines(), 1):
+        if _l.lstrip().startswith("pub fn repo_root(") or _l.lstrip().startswith("fn repo_root("):
+            _defs05.append(os.path.relpath(_p, REPO).replace(os.sep, "/") + ":" + str(_i))
+_uses05 = [os.path.relpath(_p, REPO).replace(os.sep, "/") for _p in _cli05 + _mem05 if "use keel_fs::test_support::repo_root;" in (read(_p) or "")]
+_calls05 = [os.path.relpath(_p, REPO).replace(os.sep, "/") for _p in _cli05 if "keel_fs::test_support::repo_root()" in (read(_p) or "")]
+def _devdep05(member):
+    _c = read(os.path.join(REPO, "members", member, "Cargo.toml")) or ""
+    _dd = _c.split("[dev-dependencies]", 1)[1] if "[dev-dependencies]" in _c else ""
+    return bool(re.search(r"^keel-fs\s*=", _dd.split("\n[", 1)[0], re.M))
+_collapse05 = read(os.path.join(REPO, "scripts", "collapse_repo_root.py")) or ""
+# the landed commit's shape over the fixed range, and the locked file's own numstat inside it
+_ok05d, _out05d = run(["git", "diff", "--name-status", "-M", _LAND734_FROM, _LAND734_TO])
+_codes05 = [l.split("\t")[0][:1] for l in (_out05d or "").splitlines() if l.strip()]
+_names05 = [l.split("\t")[-1] for l in (_out05d or "").splitlines() if l.strip()]
+_ok05s, _out05s = run(["git", "diff", "--shortstat", _LAND734_FROM, _LAND734_TO])
+_short05 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out05s or "")
+_ok05a, _out05a = run(["git", "diff", "--numstat", _LAND734_FROM, _LAND734_TO, "--", "keel-cli/src/adherence.rs"])
+_adh05_num = re.match(r"(\d+)\s+(\d+)", (_out05a or "").strip())
+_ok05p, _out05p = run(["git", "diff", "-U0", _LAND734_FROM, _LAND734_TO, "--", "keel-cli/src/adherence.rs"])
+_adh05_added = [l[1:] for l in (_out05p or "").splitlines() if l.startswith("+") and not l.startswith("+++")]
+_adh05_removed = [l[1:] for l in (_out05p or "").splitlines() if l.startswith("-") and not l.startswith("---")]
+_locked05_touched = [n for n in _names05 if n in _gsf05_paths or n.startswith("members/keel-guards/src/")]
+# live: the lock's own verdict on this tree, the landing run's receipt
+_rc05g, _out05g = run_rc([KEEL, "gate", "guard", "process-change", "--no-receipt", "."], timeout=300)
+_pc05_last = (_out05g or "").strip().splitlines()[-1] if (_out05g or "").strip() else ""
+_pc05 = re.search(r"\[guard:process-change\] (PASS|FAIL|WARN)[^\d]*(\d+) scanned[^\d]*(\d+) warning\(s\), (\d+) violation\(s\)", _pc05_last)
+_tr05 = _receipt94("touched-receipt.toml")
+_i557 = _issue_facts("557", "dcOneRepoRootHelper")
+_s734 = _sprint_facts("sprint734_oneRepoRootHelper.sysml", "d0479")
+_retro05 = (re.search(r'oneRepoRootHelperRetroGate[^\n]*procedureText = "([^"]*)"', _s734.get("text") or "") or [None, ""])[1]
+fact("lockedTestAnchorRepointsThroughKeelFs", {
+    **_f505,
+    "dependsOnD0479": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0505\s+to\s+d0479\s*;", _d0505)),
+    "dependsOnD0504": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0505\s+to\s+d0504\s*;", _d0505)),
+    "namesBreaksTwoLevelsDown": "the shape that breaks when a crate moves two levels down" in (_f505["context"] or ""),
+    "namesSecondDoorClosed": "carries no marker, so the guard's second door is closed" in (_f505["context"] or ""),
+    "namesOneLineOfTestCode": "The only edit inside keel-cli/src/adherence.rs is one line of test code" in (_f505["decision"] or ""),
+    "namesLogicUnchanged": "every guard's dispatch, severity and gate set are unchanged" in (_f505["decision"] or ""),
+    "namesSevenOtherAnchors": "The same repoint lands in the seven other keel-cli/src anchors" in (_f505["decision"] or ""),
+    "namesScanWidens": "widens its population from members/*/src to keel-cli/src as well" in (_f505["decision"] or ""),
+    "namesLockOnTheFile": "The lock is on the file, not on the logic, by design" in (_f505["rationale"] or ""),
+    "namesNoException": "the scan would have to carve an exception for a locked file" in (_f505["rationale"] or ""),
+    "namesD0388Class": "the class of silent hole D0388 names" in (_f505["rationale"] or ""),
+    "namesFirstTestOnlyFire": "the first time since D0209 that a marked Decision governs no change to enforcement logic" in (_f505["consequences"] or ""),
+    "namesWorkingAsSpecified": "This is the lock working as specified, not a defect" in (_f505["consequences"] or ""),
+    "namesCfgTestForkIsSeparate": "whether the lock should exempt lines inside a cfg(test) module; that is a separate process-change Decision" in (_f505["consequences"] or ""),
+    "source": {
+        "helperFileExists": bool(_ts05),
+        "helperIsPub": "pub fn repo_root() -> std::path::PathBuf" in _ts05,
+        "helperDocHidden": "#[doc(hidden)]" in _ts05,
+        "helperWalksToGit": 'a.join(".git").exists()' in _ts05,
+        "helperHasOwnTest": "fn repo_root_holds_the_workspace_manifest_and_the_engine" in _ts05,
+        "libExportsTestSupport": bool(re.search(r"^pub mod test_support;", _fslib05, re.M)),
+        "repoRootDefinitions": _defs05, "repoRootDefinitionCount": len(_defs05),
+        "oneDefinitionInKeelFs": _defs05 == [d for d in _defs05 if d.startswith("members/keel-fs/src/test_support.rs:")] and len(_defs05) == 1,
+        "useLineFiles": _uses05, "useLineCount": len(_uses05),
+        "cliCallerFiles": _calls05, "cliCallerCount": len(_calls05),
+        "anchorsInCliSrc": _anchors05(_cli05), "anchorsInMemberSrc": _anchors05(_mem05), "anchorsInCliTests": _anchors05(_tests05),
+        "adherenceOnTheLockList": "keel-cli/src/adherence.rs" in _gsf05_paths,
+        "adherenceTestFound": bool(_adh05_test),
+        "adherenceTestCallsHelper": "let root = keel_fs::test_support::repo_root();" in _adh05_test,
+        "adherenceTestHoldsEmptyPrefix": "vec![String::new()]" in _adh05_test,
+        "scanTestFound": bool(_scan05),
+        "scanReadsTestBearingSources": "test_bearing_sources(&root)" in _scan05,
+        "scanExcludesAlwaysTest": "!always_test" in _scan05,
+        "scanAssertsCliInPopulation": 'ends_with("keel-cli/src/touched.rs")' in _scan05,
+        "scanAssertsPopulationSize": "files.len() > 40" in _scan05,
+        "scanNamesHelperInMessage": "use keel_fs::test_support::repo_root() instead" in _scan05,
+        "devDepKeelFs": {"keel-github": _devdep05("keel-github"), "keel-schema": _devdep05("keel-schema"), "keel-actor": _devdep05("keel-actor")},
+        "collapseScriptDeclaresItself": "not-an-instrument:" in _collapse05 and "one-shot codemod" in _collapse05,
+        "collapseScriptIdempotent": "Idempotent" in _collapse05,
+        "workspaceMemberCount": len(_ws05_members),
+    },
+    "landed": {
+        "range": [_LAND734_FROM, _LAND734_TO],
+        "renames": _codes05.count("R"), "modified": _codes05.count("M"), "added": _codes05.count("A"), "deleted": _codes05.count("D"),
+        "filesChanged": int(_short05.group(1)) if _short05 else None,
+        "insertions": int(_short05.group(2)) if _short05 and _short05.group(2) else None,
+        "deletions": int(_short05.group(3)) if _short05 and _short05.group(3) else None,
+        "adherenceInsertions": int(_adh05_num.group(1)) if _adh05_num else None,
+        "adherenceDeletions": int(_adh05_num.group(2)) if _adh05_num else None,
+        "adherenceAddedLines": _adh05_added, "adherenceRemovedLines": _adh05_removed,
+        "adherenceDiffIsTheRepoint": (len(_adh05_added) == 1 and "keel_fs::test_support::repo_root()" in _adh05_added[0]
+                                      and len(_adh05_removed) == 1 and 'CARGO_MANIFEST_DIR")).join("..")' in _adh05_removed[0]),
+        "lockedFilesTouched": _locked05_touched,
+        "newDecisionInRange": any(n.startswith(".engine/decisions/0505-") for n in _names05),
+        "sprintInRange": any(n.endswith("sprint734_oneRepoRootHelper.sysml") for n in _names05),
+    } if _ok05d and _ok05s and _ok05a and _ok05p else None,
+    "live": {
+        "processChange": {"exit0": _rc05g == 0, "verdict": _pc05.group(1) if _pc05 else None, "scanned": int(_pc05.group(2)) if _pc05 else None,
+                          "violations": int(_pc05.group(4)) if _pc05 else None, "line": _pc05_last[:240] or None},
+        "landingReceipt": _tr05,
+    },
+    "issue557": _i557,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcOneRepoRootHelper", "dcSuiteIsAMember", "dcProcessIsAMember", "dcGuardsCatalogueNamesTheFamily",
+                                    "dcBuildScriptHasOneHomeBelowItsUsers", "dcFactsAboutARangeReadTheRange")},
+    "backlogItems": len(_bl00_actions),
+    "sprint734": {k: v for k, v in _s734.items() if k != "text"} | ({
+        "retroScansAvoidable": "avoidable issues scanned (issue011)" in _retro05,
+        "retroNamesGluedDocs": "five tests' doc comments" in _retro05,
+        "retroNamesStaleCounts": "ten helpers, eight anchors" in _retro05,
+        "retroNamesCliTestsOutOfScope": "keel-cli/tests holds three cwd-relative anchors outside the widened population" in _retro05,
+        "retroNamesProbeFalseStart": "the D0388 discipline caught the probe, not the tree" in _retro05,
+        "retroNamesScanNameKept": "keeps the name no_member_test_anchors_on_a_cwd_relative_path" in _retro05,
+        "retroNoNewItemCount": _retro05.count("No new item - "),
+        "retroFindings": len(re.findall(r"(?:^|[.;:] )\((\d)\) ", _retro05)),
+        "dodResults": _dod_results("dcOneRepoRootHelper"),
+    } if _s734.get("exists") else {}),
+} if _d0505 and _ts05 and _adh05 and _tch05 else None,
+     "the held record for a test-only edit to a locked guard source: Decision, the one helper and its callers, the anchor census over three trees, the locked file's own two-line diff, live lock verdict, issue557, sprint 734",
+     _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0505 to dNNNN;` lines. source: "
+     "members/keel-fs/src/test_support.rs for the pub fn, doc(hidden), the .git walk and its own test; members/keel-fs/src/lib.rs for `pub mod test_support;`; "
+     "every .rs under keel-cli/src and each members/*/src (from the root Cargo.toml members list) scanned for a `fn repo_root(` definition, a "
+     "`use keel_fs::test_support::repo_root;` line and a `keel_fs::test_support::repo_root()` call; the four anchor shapes of keel-cli/src/touched.rs ANCHORS counted "
+     "over non-comment lines in keel-cli/src, members/*/src and keel-cli/tests (file:line each); keel-cli/src/adherence.rs's this_repo_yields_the_empty_prefix body and "
+     "GUARD_SOURCE_FILES in members/keel-guards/src/enforcement.rs; the scan's body in touched.rs for its population call, filter, size and membership assertions and its message; "
+     "each member Cargo.toml's [dev-dependencies] table for a keel-fs row; collapse_repo_root.py's not-an-instrument and Idempotent lines. landed = `git diff --name-status -M " +
+     _LAND734_FROM + " " + _LAND734_TO + "` first letters counted, `--shortstat` over the range, `--numstat` and `-U0` over the range for keel-cli/src/adherence.rs alone "
+     "(added and removed lines verbatim), the changed names held against the lock's file list and directory prefix. live: `" + KEEL +
+     " gate guard process-change --no-receipt .` last line; the touched receipt as section 32 reads it. issue557 as section 34. resolverPositions as section 34; "
+     "sprint734 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or "
+     "following a label's colon in that text; retroNoNewItemCount = the guard's justification phrase counted; dodResults = the story's DoDRn outcomes and shas.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
