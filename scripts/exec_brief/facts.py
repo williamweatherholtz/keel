@@ -4435,6 +4435,176 @@ fact("guardNameListIsASchemaFact", {
      "issues 579-581 as section 34, with the issues guard's naming rule (resolver names the issue in its DoD text, or the issue names its resolver) read "
      "from the sprint file (579), backlog.sysml (581) and the issue's own description (580). resolverPositions as section 34; sprint732 from its delivery "
      "file, charter d0479, plus literal spans in the retro and DoD; retroFindings = `(n) ` markers opening a sentence in the retro gate's procedureText (a back-reference like `finding (1)` is not one).")
+# ================================================================ 40. D0504 - the guard-source lock is a directory prefix (sprint 733, brief 40)
+_d0504 = _dec_file("0504-")
+_f504 = _decision_facts(_d0504, "d0504")
+_LAND733_FROM, _LAND733_TO = "f8d3d8d", "c3ffd45"   # the sprint's landing range, fixed (issue586: a fact about a range reads the range)
+_enf04 = read(os.path.join(REPO, "members", "keel-guards", "src", "enforcement.rs")) or ""
+_lib04 = read(os.path.join(REPO, "members", "keel-guards", "src", "lib.rs")) or ""
+def _tb04(text, name):
+    """A test fn's body inside `mod tests`: from `fn name(` to the next line that is exactly four spaces and `}` (_fn_body stops at column 0, which is the module's end)."""
+    s = text.find("fn " + name + "(")
+    if s < 0:
+        return ""
+    e = text.find("\n    }\n", s)
+    return text[s:] if e < 0 else text[s:e]
+_gsf04 = (re.search(r"const GUARD_SOURCE_FILES: &\[&str\] = &\[(.*?)\];", _enf04) or [None, ""])[1]
+_gsf04_paths = re.findall(r'"([^"]+)"', _gsf04)
+_gsd04 = (re.search(r"const GUARD_SOURCE_DIRS: &\[&str\] = &\[(.*?)\];", _enf04) or [None, ""])[1]
+_gsd04_dirs = re.findall(r'"([^"]+)"', _gsd04)
+_ies04 = _fn_body(_enf04, "is_enforcement_surface")
+_cov04 = _tb04(_lib04, "enforcement_surface_covers_every_guard_source")
+_lock04 = _tb04(_lib04, "enforcement_surface_locks_workflows_hooks_and_guard_source")
+_disp04 = _tb04(_lib04, "every_enforced_guard_dispatches")
+_fam04 = re.search(r"pub const FAMILIES: &\[&Family\] = &\[(.*?)\];", _lib04)
+_fam04_names = re.findall(r"&(\w+)::FAMILY", _fam04.group(1)) if _fam04 else []
+_gd04_dir = os.path.join(REPO, "members", "keel-guards", "src")
+_gd04_files = sorted(f for f in os.listdir(_gd04_dir) if f.endswith(".rs")) if os.path.isdir(_gd04_dir) else []
+_gd04_lines = sum(len((read(os.path.join(_gd04_dir, f)) or "").splitlines()) for f in _gd04_files)
+_gd04_defining = [f for f in _gd04_files if "-> GuardReport" in (read(os.path.join(_gd04_dir, f)) or "")]
+_ws04 = read(os.path.join(REPO, "Cargo.toml")) or ""
+_ws04_members = re.findall(r'^\s*"([^"]+)",', (re.search(r"members\s*=\s*\[(.*?)\]", _ws04, re.S) or [None, ""])[1], re.M)
+# every guard-defining .rs in the workspace, and whether the lock (as its two constants read) holds it - the coverage test's own question, asked from outside
+_def04 = []
+for _mem in _ws04_members:
+    for _dp, _, _fs in os.walk(os.path.join(REPO, _mem, "src")):
+        for _f in _fs:
+            if _f.endswith(".rs") and "-> GuardReport" in (read(os.path.join(_dp, _f)) or ""):
+                _def04.append(os.path.relpath(os.path.join(_dp, _f), REPO).replace(os.sep, "/"))
+_def04_uncovered = [p for p in _def04 if p not in _gsf04_paths and not any(p.startswith(d) for d in _gsd04_dirs)]
+_old04 = _module_home("guards") is not None   # resolved, never anchored (issue559): the module has no single home once it is a member
+_ok04o, _out04o = run(["git", "show", _LAND733_FROM + ":keel-cli/src/guards.rs"])
+_old04_lines = len(_out04o.splitlines()) if _ok04o else None
+_gdoc04 = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_gdoc04_h2 = re.findall(r"^## (.+)$", _gdoc04, re.M)
+_mh04 = read(os.path.join(REPO, "scripts", "module_home.py")) or ""
+_split04 = read(os.path.join(REPO, "scripts", "split_guards.py")) or ""
+# the landed commit's shape over the fixed range (renames followed)
+_ok04d, _out04d = run(["git", "diff", "--name-status", "-M", _LAND733_FROM, _LAND733_TO])
+_codes04 = [l.split("\t")[0][:1] for l in (_out04d or "").splitlines() if l.strip()]
+_ok04s, _out04s = run(["git", "diff", "--shortstat", _LAND733_FROM, _LAND733_TO])
+_short04 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out04s or "")
+# live: the lock's own verdict on this tree, the binary's guard count, the landing run's receipt
+_rc04g, _out04g = run_rc([KEEL, "gate", "guard", "process-change", "--no-receipt", "."], timeout=300)
+_pc04_last = (_out04g or "").strip().splitlines()[-1] if (_out04g or "").strip() else ""
+_pc04 = re.search(r"\[guard:process-change\] (PASS|FAIL|WARN)[^\d]*(\d+) scanned[^\d]*(\d+) warning\(s\), (\d+) violation\(s\)", _pc04_last)
+_rc04v, _out04v = run_rc([KEEL, "version"], timeout=60)
+_guards04_line = next((l for l in (_out04v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards04_n = int(re.search(r"guards:\s*(\d+)", _guards04_line).group(1)) if re.search(r"guards:\s*(\d+)", _guards04_line) else None
+_tr04 = _receipt94("touched-receipt.toml")
+_i583 = _issue_facts("583", "dcOneRepoRootHelper")
+_i584 = _issue_facts("584", "dcGuardsCatalogueNamesTheFamily")
+_i585 = _issue_facts("585", "dcBuildScriptHasOneHomeBelowItsUsers")
+_i586 = _issue_facts("586", "dcFactsAboutARangeReadTheRange")
+_i587 = _issue_facts("587", "dcGuardsAreMembersPerFamily")
+# the issues guard's rule (issue333/D0304): the resolver names the issue in its DoD, OR the issue names its resolver
+for _n04, _i04 in (("583", _i583), ("587", _i587)):
+    _i04["resolverNamedByIssue"] = _i04["resolver"] is not None and _i04["resolver"] in (re.search(r"part issue" + _n04 + r" : Issue\s*\{(.*?)\n\s*\}", _iss, re.S) or [None, ""])[1]
+_s733 = _sprint_facts("sprint733_guardsAreMembersPerFamily.sysml", "d0479")
+_retro04 = (re.search(r'guardsAreMembersPerFamilyRetroGate[^\n]*procedureText = "([^"]*)"', _s733.get("text") or "") or [None, ""])[1]
+fact("guardSourceLockIsADirectoryPrefix", {
+    **_f504,
+    "dependsOnD0479": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0504\s+to\s+d0479\s*;", _d0504)),
+    "dependsOnD0503": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0504\s+to\s+d0503\s*;", _d0504)),
+    "namesFourthExtraction": "the fourth D0479 extraction" in (_f504["context"] or ""),
+    "namesOldSize": "9,256 lines" in (_f504["context"] or ""),
+    "namesSilentScan": "a scan aimed at keel-cli/src would pass with nothing to check" in (_f504["context"] or ""),
+    "namesD0388Class": "the class D0388 names" in (_f504["context"] or ""),
+    "namesThirdMeeting": "the third meeting of the lock" in (_f504["context"] or ""),
+    "namesFileListLoses": "GUARD_SOURCE_FILES loses keel-cli/src/guards.rs" in (_f504["decision"] or ""),
+    "namesDirsConstant": "GUARD_SOURCE_DIRS, names members/keel-guards/src/" in (_f504["decision"] or ""),
+    "namesPrefixRule": "starts with a locked directory" in (_f504["decision"] or ""),
+    "namesScansEveryMember": "scans every member's src" in (_f504["decision"] or ""),
+    "namesReachedOwnFiles": "asserts the scan reached the guards member's own files" in (_f504["decision"] or ""),
+    "namesDispatchReadsTables": "every_enforced_guard_dispatches reads the family tables" in (_f504["decision"] or ""),
+    "namesUnionTest": "family_union_tests holds the tables equal to GUARD_NAMES" in (_f504["decision"] or ""),
+    "namesWidening": "which is a widening" in (_f504["decision"] or ""),
+    "namesLockedByConstruction": "locked by construction" in (_f504["rationale"] or ""),
+    "namesCheckFollowsSubject": "the check follows the subject" in (_f504["rationale"] or ""),
+    "namesNextExtractionCovered": "the next extraction (dcSuiteIsAMember) is covered without editing this test" in (_f504["rationale"] or ""),
+    "namesEveryFileLocked": "Every file under members/keel-guards/src/ is a locked surface" in (_f504["consequences"] or ""),
+    "namesCargoNotLocked": "The Cargo.toml of the member is not locked" in (_f504["consequences"] or ""),
+    "namesTwelveMembers": "at least twelve members" in (_f504["consequences"] or ""),
+    "namesRecordedThreeTimes": "recorded three times (D0486, D0503, this)" in (_f504["consequences"] or ""),
+    "source": {
+        "lockFiles": _gsf04_paths, "lockFileCount": len(_gsf04_paths),
+        "oldPathOffTheList": "keel-cli/src/guards.rs" not in _gsf04_paths,
+        "adherenceOnTheList": "keel-cli/src/adherence.rs" in _gsf04_paths,
+        "guardNamesOnTheList": "members/keel-schema/src/guard_names.rs" in _gsf04_paths,
+        "lockDirs": _gsd04_dirs, "guardsDirIsTheLock": _gsd04_dirs == ["members/keel-guards/src/"],
+        "prefixRuleInSource": "GUARD_SOURCE_DIRS.iter().any(|d| p.starts_with(d))" in _ies04,
+        "coverageTestFound": bool(_cov04),
+        "coverageReadsTheManifest": "workspace_members(&manifest)" in _cov04,
+        "coverageScansEveryMember": "for member in &members" in _cov04 and 'join(member).join("src")' in _cov04,
+        "coverageAssertsTwelve": "members.len() >= 12" in _cov04,
+        "coverageAssertsReachedOwn": 'ends_with("identity.rs")' in _cov04,
+        "coverageNamesBothConstants": "GUARD_SOURCE_FILES / GUARD_SOURCE_DIRS" in _cov04,
+        "lockTestFound": bool(_lock04),
+        "lockTestLocks": [p for p in ("members/keel-guards/src/lib.rs", "members/keel-guards/src/identity.rs", "members/keel-guards/src/receipt.rs",
+                                     "keel-cli/src/adherence.rs", "members/keel-schema/src/guard_names.rs") if f'assert!(is_enforcement_surface("{p}"))' in _lock04],
+        "lockTestFrees": [p for p in ("keel-cli/src/main.rs", "keel-cli/src/guards.rs", "members/keel-guards/Cargo.toml", ".engine/docs/guards.md")
+                          if f'assert!(!is_enforcement_surface("{p}"))' in _lock04],
+        "dispatchReadsTables": "super::FAMILIES.iter().flat_map(|f| f.arms.iter())" in _disp04,
+        "dispatchScansNoText": "read_to_string" not in _disp04,
+        "unionTestModule": bool(re.search(r"^mod family_union_tests \{", _lib04, re.M)),
+        "unionTestUsesRunnableOnly": "use super::{FAMILIES, GUARD_NAMES, RUNNABLE_ONLY};" in _lib04,
+        "families": _fam04_names, "familyCount": len(_fam04_names),
+        "memberFiles": _gd04_files, "memberFileCount": len(_gd04_files), "memberLines": _gd04_lines,
+        "guardDefiningFilesInMember": _gd04_defining, "guardDefiningFilesInWorkspace": _def04,
+        "uncoveredGuardDefiningFiles": _def04_uncovered,
+        "workspaceMembers": _ws04_members, "workspaceMemberCount": len(_ws04_members),
+        "oldFileGone": not _old04, "oldFileLinesAtBase": _old04_lines,
+        "moduleHomeHasCrateHelpers": "def crate_root(" in _mh04 and "def crate_text(" in _mh04 and "def crate_sources(" in _mh04,
+        "splitScriptDeclaresItself": "not-an-instrument:" in _split04 and "one-shot codemod" in _split04,
+        "splitScriptRecordsWrongFix": "WRONG FIX, kept as the record of what ran" in _split04,
+    },
+    "landed": {
+        "range": [_LAND733_FROM, _LAND733_TO],
+        "renames": _codes04.count("R"), "modified": _codes04.count("M"), "added": _codes04.count("A"), "deleted": _codes04.count("D"),
+        "filesChanged": int(_short04.group(1)) if _short04 else None,
+        "insertions": int(_short04.group(2)) if _short04 and _short04.group(2) else None,
+        "deletions": int(_short04.group(3)) if _short04 and _short04.group(3) else None,
+    } if _ok04d and _ok04s else None,
+    "declared": {
+        "guardsDocHeadings": _gdoc04_h2, "guardsDocGroupsByTier": _gdoc04_h2[:2] == ["Hard-blocking", "Warning-only"],
+        "guardsDocNamesTheMember": "members/keel-guards/src/" in _gdoc04,
+        "guardsDocNamesOldPath": "keel-cli/src/guards.rs" in _gdoc04,
+    },
+    "live": {
+        "processChange": {"exit0": _rc04g == 0, "verdict": _pc04.group(1) if _pc04 else None, "scanned": int(_pc04.group(2)) if _pc04 else None,
+                          "violations": int(_pc04.group(4)) if _pc04 else None, "line": _pc04_last[:240] or None},
+        "version": {"exit0": _rc04v == 0, "guardsLine": _guards04_line.strip() or None, "guards": _guards04_n},
+        "landingReceipt": _tr04,
+    },
+    "issue583": _i583, "issue584": _i584, "issue585": _i585, "issue586": _i586, "issue587": _i587,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcGuardsAreMembersPerFamily", "dcOneRepoRootHelper", "dcSuiteIsAMember", "dcGuardsCatalogueNamesTheFamily",
+                                    "dcBuildScriptHasOneHomeBelowItsUsers", "dcFactsAboutARangeReadTheRange")},
+    "backlogItems": len(_bl00_actions),
+    "sprint733": {k: v for k, v in _s733.items() if k != "text"} | ({
+        "retroScansAvoidable": "Avoidable issues scanned (issue011)" in _retro04,
+        "retroNamesIssues": [n for n in ("583", "584", "585", "586", "587") if "issue" + n in _retro04],
+        "retroNamesAnchorControlFired": "no_member_test_anchors_on_a_cwd_relative_path refused all ten" in _retro04,
+        "retroNamesRootHelperMoved": "MOVED to the head of the D0479 cluster" in _retro04,
+        "retroNamesProbeRunnerFired": "script-probe runner (D0496) aborted the commit as designed" in _retro04,
+        "retroFindings": len(re.findall(r"(?:^|[.;:] )\((\d)\) ", _retro04)),
+        "dodResults": _dod_results("dcGuardsAreMembersPerFamily"),
+    } if _s733.get("exists") else {}),
+} if _d0504 and _enf04 and _lib04 else None,
+     "the held record for the guard-source lock's new shape: Decision, the two lock constants and the prefix rule in source, the coverage and lock tests, the family tables, the landed diff, the catalogue's grouping, live lock verdict and guard count, issues 583-587, sprint 733",
+     _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0504 to dNNNN;` lines. source: "
+     "members/keel-guards/src/enforcement.rs searched for GUARD_SOURCE_FILES' and GUARD_SOURCE_DIRS' quoted members and is_enforcement_surface's body; "
+     "members/keel-guards/src/lib.rs for the bodies of enforcement_surface_covers_every_guard_source (manifest read, member loop, >= 12, identity.rs reach), "
+     "enforcement_surface_locks_workflows_hooks_and_guard_source (each asserted path, locked and free), every_enforced_guard_dispatches (FAMILIES iteration, no "
+     "read_to_string), the `mod family_union_tests` line and its use line, and `pub const FAMILIES` members; the .rs files under members/keel-guards/src, their "
+     "line count and which contain `-> GuardReport`; the root Cargo.toml `members = [...]` list; every member's src walked for `-> GuardReport` files and each held "
+     "against the two constants as read (uncoveredGuardDefiningFiles); the guards module resolved through module_home (None once it is a member - the old file is gone) and the old file's line count at the range's base via `git show`; "
+     "module_home.py's three crate helpers; split_guards.py's not-an-instrument line and WRONG FIX comment. landed = `git diff --name-status -M " + _LAND733_FROM + " " + _LAND733_TO +
+     "` first letters counted and `git diff --shortstat` over the same range. declared: .engine/docs/guards.md `## ` headings (tier grouping = the first two), the member path, the old path. "
+     "live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line; the touched receipt as section 32 reads it. "
+     "issues 583-587 as section 34, with the issues guard's naming rule read from the backlog DoD (584-586) or the issue's own description (583, 587). "
+     "resolverPositions as section 34; sprint733 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = "
+     "`(n) ` markers opening a sentence or following a label's colon in that text; dodResults = the story's DoDRn outcomes and shas.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
