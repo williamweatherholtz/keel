@@ -50,9 +50,9 @@ impl State {
     fn painted(&self) -> String {
         let padded = format!("{:<10}", self.tag());
         match self {
-            Self::Ok => crate::color::pass(&padded),
-            Self::Attention => crate::color::fail(&padded),
-            Self::Unknown => crate::color::warn(&padded),
+            Self::Ok => keel_json::color::pass(&padded),
+            Self::Attention => keel_json::color::fail(&padded),
+            Self::Unknown => keel_json::color::warn(&padded),
         }
     }
 }
@@ -92,7 +92,7 @@ fn hook_binary_lag(root: &Path) -> Option<String> {
     let build = v.get("build")?.as_str()?;
     let commit = build.trim_end_matches("+dirty");
     let git = |args: &[&str]| -> Option<String> {
-        let out = crate::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
+        let out = keel_git::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
         out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
     };
     let head = git(&["rev-parse", "--short", "HEAD"])?;
@@ -104,7 +104,7 @@ fn hook_binary_lag(root: &Path) -> Option<String> {
 }
 
 fn hooks_section(root: &Path) -> Section {
-    use crate::claude_surface::{hooks_silenced, merge_settings, PLUGIN_DIR, REPO_SCOPE_SETTINGS};
+    use keel_write::claude_surface::{hooks_silenced, merge_settings, PLUGIN_DIR, REPO_SCOPE_SETTINGS};
     let mut lines = Vec::new();
     let mut state = State::Ok;
     // the kill switch first: it decides the verdict regardless of how many hosts exist
@@ -160,8 +160,8 @@ fn hooks_section(root: &Path) -> Section {
     }
     // D0391/issue408: on a self-build tree, which binary the hooks run and how far it lags the tree - a
     // stable copy can be behind HEAD, and that is a fact to read here rather than infer from behaviour.
-    if let Some(line) = crate::hook_binary::describe(root) {
-        if !crate::hook_binary::stable_copy(root).is_file() {
+    if let Some(line) = keel_suite::hook_binary::describe(root) {
+        if !keel_suite::hook_binary::stable_copy(root).is_file() {
             state = State::Attention;
         }
         lines.push(line);
@@ -321,7 +321,7 @@ fn library_section(root: &Path) -> Section {
         lines.push("  nothing behind, nothing new".into());
     }
     // The cache's age is part of the answer: everything above is as-of the last sync.
-    if let Some(when) = crate::gitx::git()
+    if let Some(when) = keel_git::gitx::git()
         .arg("-C")
         .arg(&dir)
         .args(["log", "-1", "--format=%ci"])
@@ -337,11 +337,11 @@ fn library_section(root: &Path) -> Section {
 
 /// MODEL — is the recorded state honest right now.
 fn model_section(root: &Path) -> Section {
-    let reports = crate::guards::run_all(root);
+    let reports = keel_guards::run_all(root);
     let violations: usize = reports.iter().map(|r| r.violations.len()).sum();
     // The read-mode note (D0440) rides in `warnings` and is not one.
-    let warnings: usize = reports.iter().map(|r| r.warnings.iter().filter(|w| !crate::guards::is_read(w)).count()).sum();
-    let files = crate::collect_sysml(&root.join(".tracking")).len();
+    let warnings: usize = reports.iter().map(|r| r.warnings.iter().filter(|w| !keel_guards::is_read(w)).count()).sum();
+    let files = keel_model::corpus::collect_sysml(&root.join(".tracking")).len();
     let mut lines = vec![format!("{files} tracked file(s), {} guards", reports.len())];
     let state = if violations > 0 {
         lines.push(format!("  {violations} VIOLATION(s) — `keel gate guard` for detail"));
@@ -355,7 +355,7 @@ fn model_section(root: &Path) -> Section {
 
 /// WORK — what is ready and what is open.
 fn work_section(root: &Path) -> Section {
-    let out = crate::orient::compute(root);
+    let out = keel_model::orient::compute(root);
     let ready = out.ready.len();
     let issues = out.open_issues.len();
     let mut lines = vec![format!("{ready} ready, {issues} open issue(s)")];
@@ -368,7 +368,7 @@ fn work_section(root: &Path) -> Section {
 /// CI — the verdict for the commit at HEAD (the async surfacing the human chose: land records the
 /// push, and the next command reports what became of it).
 fn ci_section(root: &Path) -> Section {
-    let head = crate::gitx::git()
+    let head = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "HEAD"])
@@ -480,7 +480,7 @@ mod hooks_section_tests {
     #[test]
     fn kill_switch_is_attention_and_named() {
         let root = fixture("kill");
-        let clean = crate::claude_surface::merge_settings(&serde_json::json!({}));
+        let clean = keel_write::claude_surface::merge_settings(&serde_json::json!({}));
         std::fs::write(root.join(".claude").join("settings.json"), clean.to_string()).expect("clean");
         std::fs::write(root.join(".claude").join("settings.local.json"), r#"{"disableAllHooks": true}"#).expect("local");
         let s = hooks_section(&root);
@@ -495,7 +495,7 @@ mod hooks_section_tests {
         let root = fixture("none");
         let s = hooks_section(&root);
         assert!(s.state == State::Attention && s.lines[0].starts_with("NO hook host"), "{:?}", s.lines);
-        let clean = crate::claude_surface::merge_settings(&serde_json::json!({}));
+        let clean = keel_write::claude_surface::merge_settings(&serde_json::json!({}));
         std::fs::write(root.join(".claude").join("settings.json"), clean.to_string()).expect("clean");
         let s = hooks_section(&root);
         assert!(s.state == State::Ok, "{:?}", s.lines);

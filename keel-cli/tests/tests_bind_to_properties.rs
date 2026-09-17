@@ -545,7 +545,7 @@ mod tests {
 
     #[test]
     fn the_checks_own_scope_is_stated_where_someone_will_read_it() {
-        let src = include_str!("../src/adoption_check.rs");
+        let src = include_str!("../../members/keel-process/src/adoption_check.rs");
         assert!(src.contains("WHAT THIS CANNOT CATCH"), "say what the check does NOT cover");
         for needle in ["issue259", "issue263"] {
             assert!(src.contains(needle), "lost `{needle}`");

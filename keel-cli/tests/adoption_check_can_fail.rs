@@ -88,7 +88,7 @@ fn the_checks_own_scope_is_stated_where_someone_will_read_it() {
     // which is what penumbra was, and why issue259 and issue263 are NOT covered. That limit was found
     // by testing the claim rather than asserting it, and a limit nobody can see is one the next reader
     // will assume away. This test fails if the honest scope is ever quietly deleted from the source.
-    let src = include_str!("../src/adoption_check.rs");
+    let src = include_str!("../../members/keel-process/src/adoption_check.rs");
     for needle in ["WHAT THIS CANNOT CATCH", "issue259", "issue263", "vintage"] {
         assert!(src.contains(needle), "the stated scope lost `{needle}` — say what the check does NOT cover");
     }

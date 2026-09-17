@@ -34,6 +34,8 @@ keel-view = { path = "../members/keel-view" }
 keel-guards = { path = "../members/keel-guards" }
 # D0479 build-and-test tooling (sprint 735): suite, touched, verify, hook_binary, contentkey; re-exported under their old module paths in lib.rs.
 keel-suite = { path = "../members/keel-suite" }
+# D0479 governance processes (sprint 736): process_cmd, library, adoption_check, migrate, workspace, sync, status, currency; re-exported under their old module paths in lib.rs.
+keel-process = { path = "../members/keel-process" }
 # OS CSPRNG for UUID v4 identity (issue075/D0129) — already in the lock tree transitively.
 getrandom = "0.3"
 # HMAC-SHA256 for device-bound deck taps (D0201 B) - already in the lock tree via keel-parser.

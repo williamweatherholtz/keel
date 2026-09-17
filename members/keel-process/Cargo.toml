@@ -1,0 +1,25 @@
+[package]
+name = "keel-process"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The governance processes: the process cursor (advance), activation and adoption, the unit library, the two migrations, the workspace gate, sync/land, status and the unattended currency pass."
+# `keel migrate` reports the binary's engine build (migrate.rs: KEEL_BUILD_COMMIT); the script that bakes
+# the commit is keel-cli's, shared, not copied (sprint 736, as keel-guards and keel-write).
+build = "../../keel-cli/build.rs"
+
+[dependencies]
+keel-fs = { path = "../keel-fs" }
+keel-git = { path = "../keel-git" }
+keel-actor = { path = "../keel-actor" }
+keel-json = { path = "../keel-json" }
+keel-schema = { path = "../keel-schema" }
+keel-model = { path = "../keel-model" }
+keel-write = { path = "../keel-write" }
+keel-view = { path = "../keel-view" }
+keel-guards = { path = "../keel-guards" }
+keel-suite = { path = "../keel-suite" }
+serde_json = "1"
+toml = "0.8"
+include_dir = "0.7"

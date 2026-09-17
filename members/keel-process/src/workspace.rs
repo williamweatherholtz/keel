@@ -163,7 +163,7 @@ pub fn canon(p: &Path) -> PathBuf {
 
 /// The git repository root containing `from`, or `from` itself when it is not in a repo.
 fn git_root(from: &Path) -> PathBuf {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(from)
         .args(["rev-parse", "--show-toplevel"])
@@ -210,7 +210,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
 /// Untracked-but-not-ignored matters: a project one minute old has no tracked files yet, and it is
 /// exactly the project most likely to be missed.
 fn git_known_paths(root: &Path) -> Vec<String> {
-    crate::gitx::git()
+    keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         .args(["-c", "core.quotePath=false", "ls-files", "-c", "-o", "--exclude-standard"])
@@ -301,7 +301,7 @@ pub fn discover(from: &Path) -> Workspace {
 fn unowned_keystone_events(unowned: &[String], deleted: &[String]) -> Vec<String> {
     let mut events: Vec<String> = unowned
         .iter()
-        .filter(|p| crate::guards::is_locked_path(p))
+        .filter(|p| keel_guards::is_locked_path(p))
         .map(|p| format!("{p} (repo-root enforcement surface — owned by no project)"))
         .collect();
     for d in deleted {
@@ -408,18 +408,18 @@ pub fn gate_outcome(project: &Path, tag: &str) -> (Vec<String>, Option<String>) 
     // One body means one check covers gate, sync, land and the pre-commit hook identically — and
     // workspace coherence (srWorkspacePinIsCoherent) falls out: projects with DISAGREEING pins
     // cannot both match one binary, so the mismatched one refuses under its own tag, naming it.
-    if let Some((declared, binary)) = crate::pin_skew(&project.join(".tracking").join("x")) {
+    if let Some((declared, binary)) = keel_write::pin_skew(&project.join(".tracking").join("x")) {
         problems.push(format!(
             "{tag}PIN: this project declares engine {declared} and this binary is {binary} — a verdict from an undeclared engine is not this project's verdict (D0251/srProjectPinsItsEngine). Run the pinned version, or `keel migrate` to bring the tree to this one"
         ));
     }
-    let receipt_key = if crate::receipt::forced(&[]) { None } else { crate::receipt::key(project) };
-    if let Some(r) = receipt_key.as_ref().and_then(|k| crate::receipt::read(project, k)) {
-        if r.covers_all(&crate::receipt::ALL_LAYERS) {
+    let receipt_key = if keel_guards::receipt::forced(&[]) { None } else { keel_guards::receipt::key(project) };
+    if let Some(r) = receipt_key.as_ref().and_then(|k| keel_guards::receipt::read(project, k)) {
+        if r.covers_all(&keel_guards::receipt::ALL_LAYERS) {
             return (problems, Some(r.line(&format!("{tag}gate"))));
         }
     }
-    let report = crate::validate_root(project);
+    let report = keel_model::validate::validate_root(project);
     for (path, d) in &report.diagnostics {
         problems.push(format!("{tag}ERROR {}:{} — {}", path.display(), d.line, d.message));
     }
@@ -428,7 +428,7 @@ pub fn gate_outcome(project: &Path, tag: &str) -> (Vec<String>, Option<String>) 
     }
     // Guards and rules are still evaluated when validate failed, because a caller aggregating across
     // a workspace wants the whole picture in one run rather than one layer per invocation.
-    let (reports, durations) = crate::guards::run_all_timed(project);
+    let (reports, durations) = keel_guards::run_all_timed(project);
     for g in &reports {
         for v in &g.violations {
             problems.push(format!("{tag}VIOLATION {}: {v}", g.name));
@@ -439,9 +439,9 @@ pub fn gate_outcome(project: &Path, tag: &str) -> (Vec<String>, Option<String>) 
     }
     if let Some(k) = &receipt_key {
         if problems.is_empty() {
-            let _ = crate::receipt::record_green(project, k, &crate::receipt::ALL_LAYERS, &reports, &durations);
+            let _ = keel_guards::receipt::record_green(project, k, &keel_guards::receipt::ALL_LAYERS, &reports, &durations);
         } else {
-            crate::receipt::delete(project);
+            keel_guards::receipt::delete(project);
         }
     }
     (problems, None)
@@ -449,7 +449,7 @@ pub fn gate_outcome(project: &Path, tag: &str) -> (Vec<String>, Option<String>) 
 
 /// Blocking violations of this project's DECLARED rules (`.engine/rules/`), warnings excluded.
 fn declared_rule_violations(project: &Path) -> Vec<String> {
-    crate::view::check(project)
+    keel_view::view::check(project)
         .ok()
         .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
         .and_then(|v| {
@@ -480,7 +480,7 @@ fn gate_one(p: &Path, label: &str) -> Result<(), String> {
     if problems.is_empty() {
         match from_receipt {
             Some(line) => println!("  {line}"),
-            None => println!("  clean ({} file(s))", crate::validate_root(p).validated),
+            None => println!("  clean ({} file(s))", keel_model::validate::validate_root(p).validated),
         }
         return Ok(());
     }
@@ -526,7 +526,7 @@ pub fn gate_cmd(args: &[String]) -> i32 {
     }
 
     // Which projects does this commit actually touch? Staged paths are repo-relative.
-    let staged = crate::gitx::git()
+    let staged = keel_git::gitx::git()
         .arg("-C")
         .arg(&ws.root)
         .args(["diff", "--cached", "--name-only"])
@@ -571,7 +571,7 @@ pub fn gate_cmd(args: &[String]) -> i32 {
     }
     // issue276: the keystone lock, applied to what no project gate covers. Printing the unowned files
     // and then exiting 0 was the whole defect — this is the line that makes the report a verdict.
-    let deleted: Vec<String> = crate::gitx::git()
+    let deleted: Vec<String> = keel_git::gitx::git()
         .arg("-C")
         .arg(&ws.root)
         .args(["-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--diff-filter=D"])
@@ -581,7 +581,7 @@ pub fn gate_cmd(args: &[String]) -> i32 {
         .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(str::to_owned).collect())
         .unwrap_or_default();
     let events = unowned_keystone_events(&workspace_level, &deleted);
-    if !events.is_empty() && !crate::guards::staged_marked_decision(&ws.root) {
+    if !events.is_empty() && !keel_guards::staged_marked_decision(&ws.root) {
         eprintln!("gate: KEYSTONE — {} staged change(s) to the locked surface carry no co-committed", events.len());
         eprintln!("  Decision bearing #ProspectiveChange or #SafetyChange (D0070/D0209 clause 2):");
         for e in events.iter().take(10) {
@@ -654,7 +654,7 @@ mod tests {
         };
         let _ = std::fs::create_dir_all(&dir);
         let git = |args: &[&str]| {
-            let _ = crate::gitx::git().arg("-C").arg(&dir).args(args).output();
+            let _ = keel_git::gitx::git().arg("-C").arg(&dir).args(args).output();
         };
         git(&["init", "-q", "."]);
 

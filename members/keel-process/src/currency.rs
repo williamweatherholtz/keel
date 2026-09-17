@@ -49,11 +49,14 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 }
 
 /// Run the pass. Prints each stage under its own header, then the summary.
+///
+/// `pull` is the GitHub pull the binary hands in (`keel_cli::github_ingest::pull_cmd`): the intake stays
+/// in keel-cli until D0480 makes it keel-issues', and the process member depends on neither (sprint 736).
 #[must_use]
-pub fn cmd(args: &[String], root: &Path) -> i32 {
+pub fn cmd(args: &[String], root: &Path, pull: &dyn Fn(&[String], &Path) -> i32) -> i32 {
     let repo = flag(args, "repo").or_else(|| github_slug(root));
     let by = flag(args, "by");
-    let at = flag(args, "at").unwrap_or_else(crate::scaffold::today);
+    let at = flag(args, "at").unwrap_or_else(keel_write::scaffold::today);
     let skip_pull = args.iter().any(|a| a == "--skip-pull");
     let mut passes = Vec::new();
 
@@ -64,7 +67,7 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
         match (repo.as_deref(), by.as_deref()) {
             (Some(r), Some(b)) => {
                 let pull_args: Vec<String> = ["--repo", r, "--by", b, "--at", &at].iter().map(|s| (*s).to_string()).collect();
-                let code = crate::github_ingest::pull_cmd(&pull_args, root);
+                let code = pull(&pull_args, root);
                 passes.push(PassOutcome { name: "pull", code, note: format!("{r} as {b} on {at}") });
             }
             (None, _) => {
@@ -95,7 +98,7 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
 }
 
 fn github_slug(root: &Path) -> Option<String> {
-    let url = crate::gitx::git().arg("-C").arg(root).args(["config", "--get", "remote.origin.url"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())?;
+    let url = keel_git::gitx::git().arg("-C").arg(root).args(["config", "--get", "remote.origin.url"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())?;
     let rest = url.strip_prefix("https://github.com/").or_else(|| url.strip_prefix("git@github.com:"))?;
     Some(rest.trim_end_matches(".git").trim_end_matches('/').to_string())
 }

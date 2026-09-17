@@ -152,8 +152,8 @@ mod stamp_tests {
 
 // The engine-resync text and the portable-tool predicates descended to the schema member beside the
 // embedded tree they read (sprint 733); re-exported so `crate::migrate::` paths keep resolving.
-pub use crate::embedded::{is_engine_dev_only, is_portable_engine_tool, resync_text};
-use crate::embedded::{is_sectioned_contract, merge_project_sections, project_sections};
+pub use keel_schema::embedded::{is_engine_dev_only, is_portable_engine_tool, resync_text};
+use keel_schema::embedded::{is_sectioned_contract, merge_project_sections, project_sections};
 
 // ── plan types ───────────────────────────────────────────────────────────────
 
@@ -423,8 +423,8 @@ fn clip(s: &str, max: usize) -> String {
 /// own `.engine/decisions/` (D0093 — a downstream project authors its decisions there; the engine's
 /// ship read-only under `.engine/reference/decisions/` and are resynced, never rewritten).
 fn authored_files(root: &Path) -> Vec<PathBuf> {
-    let mut v = crate::collect_sysml(&root.join(".tracking"));
-    v.extend(crate::collect_sysml(&root.join(".engine").join("decisions")));
+    let mut v = keel_model::corpus::collect_sysml(&root.join(".tracking"));
+    v.extend(keel_model::corpus::collect_sysml(&root.join(".engine").join("decisions")));
     v.sort();
     v
 }
@@ -525,7 +525,7 @@ fn step_engine_resync(root: &Path, engine: &Dir) -> StepPlan {
         // the engine's copy carries this repository's own declaredAt, and shipping that date would
         // retro-fail the project's events on a rule it never had. The migration date is the adoption.
         let stamped: Option<String> = (mapped == Path::new("contracts/adoption-profile.toml") && current.is_none())
-            .then(|| stamp_declared_at(new_content, &crate::scaffold::today()));
+            .then(|| stamp_declared_at(new_content, &keel_write::scaffold::today()));
         let new_content: &str = stamped.as_deref().or(merged.as_deref()).unwrap_or(new_content);
         if current.as_deref() == Some(new_content) {
             return;
@@ -546,7 +546,7 @@ fn step_engine_resync(root: &Path, engine: &Dir) -> StepPlan {
     // tell a project's own addition from an engine file left over by a rename. Reported instead,
     // because a stale schema file from an older vintage duplicate-defines and IS worth a look.
     let mut unknown = Vec::new();
-    for f in crate::collect_sysml(&dst_engine) {
+    for f in keel_model::corpus::collect_sysml(&dst_engine) {
         let Ok(rel) = f.strip_prefix(&dst_engine) else { continue };
         if rel.starts_with("decisions") || shipped.contains(rel) {
             continue;
@@ -808,7 +808,7 @@ pub fn check_preconditions(root: &Path, dry_run: bool) -> Result<Vec<String>, Re
     if !root.join(".engine").is_dir() {
         return Err(Refusal::NotAKeelProject);
     }
-    let out = crate::gitx::git()
+    let out = keel_git::gitx::git()
         .arg("-C")
         .arg(root)
         // `-uall` because git COLLAPSES a wholly-untracked directory to one entry — the first run of
@@ -861,7 +861,7 @@ fn marker_path(root: &Path) -> PathBuf {
 }
 
 fn head_sha(root: &Path) -> Option<String> {
-    let out = crate::gitx::git().arg("-C").arg(root).args(["rev-parse", "HEAD"]).output().ok()?;
+    let out = keel_git::gitx::git().arg("-C").arg(root).args(["rev-parse", "HEAD"]).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
@@ -872,7 +872,7 @@ fn head_sha(root: &Path) -> Option<String> {
 /// `checkout` restores modified and deleted files; `clean` removes ones the run created.
 fn restore(root: &Path, sha: &str) -> Result<(), String> {
     let run = |args: &[&str]| -> Result<(), String> {
-        let out = crate::gitx::git()
+        let out = keel_git::gitx::git()
             .arg("-C")
             .arg(root)
             .args(args)
@@ -1283,7 +1283,7 @@ fn record_attempt(root: &Path, outcome: &str, gate: &str, output: &str) {
         text,
         "\n[[attempt]]\nversion = \"{}\"\nat = \"{}\"\noutcome = \"{outcome}\"\ngate = \"{}\"\noutput = \"{}\"\n",
         env!("CARGO_PKG_VERSION"),
-        crate::scaffold::today(),
+        keel_write::scaffold::today(),
         clean(gate),
         clean(output)
     );

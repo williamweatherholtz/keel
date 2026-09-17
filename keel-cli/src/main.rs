@@ -4876,7 +4876,7 @@ fn cmd_verify(rest: &[String]) -> i32 {
 
 fn cmd_currency(rest: &[String]) -> i32 {
     let root = rest.iter().find(|a| !a.starts_with("--") && Path::new(a.as_str()).join(".tracking").is_dir()).map_or_else(|| find_repo_root().unwrap_or_else(|| PathBuf::from(".")), PathBuf::from);
-    keel_cli::currency::cmd(rest, &root)
+    keel_cli::currency::cmd(rest, &root, &keel_cli::github_ingest::pull_cmd)
 }
 
 fn cmd_migrate(args: &[String]) -> i32 {

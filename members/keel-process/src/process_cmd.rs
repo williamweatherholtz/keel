@@ -49,9 +49,9 @@ struct Row {
 /// precondition of travelling. This is the un-swept half of issue149: that fix taught `activation`
 /// and `activate`/`deactivate` to report the whole set, and never reached this catalogue.
 fn rows(root: &Path) -> Vec<Row> {
-    let act = crate::activation::Activation::load(root);
+    let act = keel_model::activation::Activation::load(root);
     let mut out = Vec::new();
-    for name in crate::activation::declared_processes(root) {
+    for name in keel_model::activation::declared_processes(root) {
         let u = act.unit(&name);
         let switchable = u.is_some_and(|u| !u.guards.is_empty());
         out.push(Row {
@@ -62,7 +62,7 @@ fn rows(root: &Path) -> Vec<Row> {
             // Resolve the deploying skill from the registry when no unit exists, so a guard-less
             // process still EXPORTS WHOLE (definition + skill) — issue241/srPortModularProcessUnit.
             skills: u.map(|u| u.skills.clone()).filter(|s| !s.is_empty())
-                .unwrap_or_else(|| crate::activation::deploying_skills(root, &name)),
+                .unwrap_or_else(|| keel_model::activation::deploying_skills(root, &name)),
             rules: u.map(|u| u.rules.clone()).unwrap_or_default(),
             guards: u.map(|u| u.guards.clone()).unwrap_or_default(),
             name,
@@ -89,7 +89,7 @@ fn process_purpose(root: &Path, name: &str) -> String {
 /// holding MANY processes' rules, so a unit export carries the owned declarations in a unit-local
 /// file instead of copying a shared file that would clobber the destination's other rules.
 fn extract_rule_block(root: &Path, rule: &str) -> Option<String> {
-    for f in crate::collect_sysml(&root.join(".engine").join("rules")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".engine").join("rules")) {
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         let needle = format!("part {rule} :");
         let Some(start) = text.find(&needle) else { continue };
@@ -400,7 +400,7 @@ fn write_minted_id(root: &Path, process: &str, id: &str) {
         let _ = writeln!(text, "{process} = \"{id}\"");
     }
     let _ = std::fs::create_dir_all(reg.parent().unwrap_or(root));
-    let _ = crate::write::write_atomic(&reg, text);
+    let _ = keel_write::write::write_atomic(&reg, text);
 }
 
 /// `keel process export <name> --out <dir>` — write the unit as a portable bundle.
@@ -456,14 +456,14 @@ fn unit_id_for(root: &Path, process: &str) -> Result<String, String> {
     if let Some(id) = minted {
         return Ok(id);
     }
-    let id = crate::ident::gen_uuid();
+    let id = keel_model::ident::gen_uuid();
     write_minted_id(root, process, &id);
     Ok(id)
 }
 
 /// Content hash for the three-way base (D0183): the arch module's stable hash, one per file.
 fn file_hash(path: &Path) -> String {
-    std::fs::read_to_string(path).map_or_else(|_| "unreadable".to_string(), |t| crate::arch::stable_hash(&t))
+    std::fs::read_to_string(path).map_or_else(|_| "unreadable".to_string(), |t| keel_view::arch::stable_hash(&t))
 }
 
 /// The install record for `unit_id`, from `.engine/contracts/installed-units.toml`:
@@ -644,7 +644,7 @@ fn write_install_record(root: &Path, unit_id: &str, process: &str, version: u32,
         let _ = writeln!(text, "file.{} = \"{hash}\"", path.replace('/', "__SL__"));
     }
     std::fs::create_dir_all(reg.parent().unwrap_or(root))?;
-    crate::write::write_atomic(&reg, text).map_err(std::io::Error::other)?;
+    keel_write::write::write_atomic(&reg, text).map_err(std::io::Error::other)?;
     Ok(())
 }
 
@@ -672,7 +672,7 @@ fn unit_commands(files: &[std::path::PathBuf]) -> Vec<String> {
             let rest = &text[i + 5..];
             let word: String =
                 rest.chars().take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-').collect();
-            if !word.is_empty() && crate::cli_surface::has_command(&word) {
+            if !word.is_empty() && keel_schema::cli_surface::has_command(&word) {
                 found.insert(word);
             }
         }
@@ -689,7 +689,7 @@ fn handshake(root: &Path, manifest: &str, bundle_dir: Option<&Path>, degrade: bo
         .find(|l| l.starts_with("guards = "))
         .map(|l| l.trim_start_matches("guards = [").trim_end_matches(']').split(',').map(|s| s.trim().trim_matches('"').to_string()).filter(|s| !s.is_empty()).collect())
         .unwrap_or_default();
-    let missing: Vec<String> = declared.iter().filter(|g| !crate::guards::GUARD_NAMES.contains(&g.as_str())).cloned().collect();
+    let missing: Vec<String> = declared.iter().filter(|g| !keel_guards::GUARD_NAMES.contains(&g.as_str())).cloned().collect();
     // D0252 clause A, COMMAND slice. A unit that invokes `keel orphans` cannot work on an engine
     // that no longer dispatches it, and until this existed the failure was SILENT — the skill landed
     // and its instructions simply did not run. This refuses BEFORE any file is written, naming the
@@ -713,7 +713,7 @@ fn handshake(root: &Path, manifest: &str, bundle_dir: Option<&Path>, degrade: bo
         })
         .unwrap_or_default();
     let missing_commands: Vec<String> =
-        declared_commands.iter().filter(|c| !crate::cli_surface::has_command(c)).cloned().collect();
+        declared_commands.iter().filter(|c| !keel_schema::cli_surface::has_command(c)).cloned().collect();
     if !missing_commands.is_empty() {
         eprintln!(
             "error: this binary does not have {} command(s) the unit invokes: {} (D0252 clause A).",
@@ -742,7 +742,7 @@ fn handshake(root: &Path, manifest: &str, bundle_dir: Option<&Path>, degrade: bo
                     && std::fs::read_to_string(f).is_ok_and(|t| t.contains(&needle))
             })
         });
-        let in_dest = crate::collect_sysml(&root.join(".engine").join("rules"))
+        let in_dest = keel_model::corpus::collect_sysml(&root.join(".engine").join("rules"))
             .iter()
             .any(|f| std::fs::read_to_string(f).is_ok_and(|t| t.contains(&needle)));
         if !in_bundle && !in_dest {
@@ -752,8 +752,8 @@ fn handshake(root: &Path, manifest: &str, bundle_dir: Option<&Path>, degrade: bo
     if !missing_rules.is_empty() {
         if degrade {
             eprintln!("DEGRADED IMPORT (K8/P4b): {} declared rule(s) are neither in the bundle nor the destination: {}", missing_rules.len(), missing_rules.join(", "));
-            if let Ok(actor) = crate::actor::resolve(root, None) {
-                let _ = crate::write::record_obligation(
+            if let Ok(actor) = keel_actor::actor::resolve(root, None) {
+                let _ = keel_write::write::record_obligation(
                     root,
                     "degraded-import",
                     &format!("degraded unit import: {} rule(s) missing", missing_rules.len()),
@@ -779,8 +779,8 @@ fn handshake(root: &Path, manifest: &str, bundle_dir: Option<&Path>, degrade: bo
         return Err(1);
     }
     eprintln!("DEGRADED IMPORT (K8): {} required guard(s) are not in this binary: {}", missing.len(), missing.join(", "));
-    if let Ok(actor) = crate::actor::resolve(root, None) {
-        let _ = crate::write::record_obligation(
+    if let Ok(actor) = keel_actor::actor::resolve(root, None) {
+        let _ = keel_write::write::record_obligation(
             root,
             "degraded-import",
             &format!("degraded unit import: {} guard(s) missing", missing.len()),
@@ -818,7 +818,7 @@ fn cmd_publish(args: &[String], root: &Path) -> i32 {
         return code;
     }
     // Anything to commit? `git status --porcelain -- <unit dir>` scopes the question to this unit.
-    let status = crate::gitx::git()
+    let status = keel_git::gitx::git()
         .arg("-C")
         .arg(&clone)
         .args(["status", "--porcelain", "--"])
@@ -842,7 +842,7 @@ fn cmd_publish(args: &[String], root: &Path) -> i32 {
         .unwrap_or_else(|| "?".to_string());
     let subject = if manifest_only { format!("publish {name} v{version} (manifest only)") } else { format!("publish {name} v{version}") };
     for step in [vec!["add", "-A", "--", name.as_str()], vec!["-c", "commit.gpgsign=false", "commit", "-q", "-m", &subject]] {
-        let out = crate::gitx::git().arg("-C").arg(&clone).args(&step).output();
+        let out = keel_git::gitx::git().arg("-C").arg(&clone).args(&step).output();
         match out {
             Ok(o) if o.status.success() => {}
             Ok(o) => {
@@ -884,7 +884,7 @@ fn cmd_retire(args: &[String]) -> i32 {
         return 2;
     };
     let replaced_by = flag("--replaced-by");
-    let at = flag("--at").unwrap_or_else(crate::scaffold::today);
+    let at = flag("--at").unwrap_or_else(keel_write::scaffold::today);
     let Some(clone) = crate::library::clone_dir().filter(|d| d.join(".git").exists()) else {
         eprintln!("library: not initialised on this machine — `keel library init <remote>` first");
         return 2;
@@ -917,7 +917,7 @@ fn cmd_retire(args: &[String]) -> i32 {
     }
     let msg = format!("retire {name}: {}", why.chars().take(72).collect::<String>());
     for step in [vec!["add", "-A", "--", name.as_str()], vec!["-c", "commit.gpgsign=false", "commit", "-q", "-m", &msg]] {
-        match crate::gitx::git().arg("-C").arg(&clone).args(&step).output() {
+        match keel_git::gitx::git().arg("-C").arg(&clone).args(&step).output() {
             Ok(o) if o.status.success() => {}
             Ok(o) => {
                 eprintln!("retire: git {step:?} failed: {}", String::from_utf8_lossy(&o.stderr).trim());
@@ -1527,7 +1527,7 @@ fn referenced_names(texts: &[String]) -> Vec<(String, &'static str)> {
 
 /// The base schema's names - what every adopter has, because `init` ships `.engine/schema/`.
 fn schema_names(root: &Path) -> std::collections::HashSet<String> {
-    let texts: Vec<String> = crate::collect_sysml(&root.join(".engine").join("schema"))
+    let texts: Vec<String> = keel_model::corpus::collect_sysml(&root.join(".engine").join("schema"))
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .collect();
@@ -1538,7 +1538,7 @@ fn schema_names(root: &Path) -> std::collections::HashSet<String> {
 /// report can say which file the adopter would need, or that the symbol is defined nowhere.
 fn defining_file(root: &Path, name: &str) -> Option<String> {
     for dir in [".engine/rules", ".engine/processes", ".engine/skills", ".engine/views", ".engine/workflows"] {
-        for p in crate::collect_sysml(&root.join(dir)) {
+        for p in keel_model::corpus::collect_sysml(&root.join(dir)) {
             let Ok(t) = std::fs::read_to_string(&p) else { continue };
             if defined_names(std::slice::from_ref(&t)).contains(name) {
                 return Some(p.strip_prefix(root).unwrap_or(&p).to_string_lossy().replace('\\', "/"));
@@ -1835,7 +1835,7 @@ mod tests {
     fn catalogue_reports_every_declared_process_not_only_guard_bearing_units() {
         let root = &keel_fs::test_support::repo_root();
         let all = super::rows(root);
-        let declared = crate::activation::declared_processes(root);
+        let declared = keel_model::activation::declared_processes(root);
         assert_eq!(all.len(), declared.len(), "the catalogue must cover every declared process");
         for d in &declared {
             assert!(all.iter().any(|r| &r.name == d), "declared process `{d}` missing from the catalogue");

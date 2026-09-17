@@ -1896,4 +1896,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine to issue590;
+
+    part issue591 : Issue {
+        :>> id = "a6db3734-041b-4f70-b414-347842e9422b";
+        :>> title = "Source citations on the living docs are held to nothing: project-migration cites migrate.rs:664-666, a file sprint 736 moves";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The living doc surface cites source by path and line and nothing reads the citation against the tree. .engine/skills/project-migration/SKILL.md line 10 says check_preconditions refuses a self-build at migrate.rs:664-666; at 01f7ad00 the function sits at keel-cli/src/migrate.rs:805-807, and sprint 736 (dcProcessIsAMember) moves the file to members/keel-process/src/migrate.rs, so the citation is wrong twice over - line range and path - with the prose untouched. Found doc-syncing the move. The fix is one line, but .engine/skills/** is under the keystone lock (is_process_def, members/keel-guards/src/enforcement.rs:34-40), so it needs a co-committed marked Decision and cannot ride an extraction sprint whose Decision says no locked path is edited (D0507); the citation stays stale in this commit. The control gap is the class, not the line: tool-reference holds .engine/tools/<file> names to disk and cli-reference holds keel verbs to the dispatcher, but a <file>.rs:N citation is held to nothing, and every D0479 extraction moves files that skills cite. Resolver: dcSourceCitationsOnTheLivingDocsResolve - a source-reference guard in tool-reference's family that resolves each citation through the manifest-driven module home and checks the named identifier sits in the cited range; its known-positive is this line.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcSourceCitationsOnTheLivingDocsResolve to issue591;
 }

@@ -28,8 +28,8 @@
 use std::path::Path;
 
 // How this clone stands relative to its upstream is a git fact (keel-model, sprint 718).
-pub use crate::gitfacts::{divergence, Divergence};
-use crate::gitfacts::git_out as git;
+pub use keel_model::gitfacts::{divergence, Divergence};
+use keel_model::gitfacts::git_out as git;
 
 /// Does the full enforced gate pass against the tree as it stands right now?
 ///
@@ -119,7 +119,7 @@ pub fn cmd_sync(repo: &Path) -> i32 {
     // dangling rather than merely unfetched. This is the ONLY place that distinction can be drawn
     // (issue113): `orient` never fetches, so from there the honest answer is always "unverifiable
     // from here".
-    let o = crate::orient::compute_after_fetch(repo, true);
+    let o = keel_model::orient::compute_after_fetch(repo, true);
     if o.invalid_evidence.is_empty() {
         println!("  evidence: every anchor resolves.");
     } else {
@@ -164,7 +164,7 @@ pub fn cmd_land(repo: &Path, max_attempts: u32) -> i32 {
     // `.gitattributes` does not declare, naming the changed paths first and counting the rest, with
     // the touched receipt saying `eol-mismatch`. Before the gate, because guard `working-tree-eol`
     // reads the same census and would otherwise bury this line among N gate problems.
-    let touched = match crate::touched::before_gate(repo).transpose() {
+    let touched = match keel_suite::touched::before_gate(repo).transpose() {
         Ok(t) => t,
         Err(code) => return code,
     };
@@ -194,7 +194,7 @@ pub fn cmd_land(repo: &Path, max_attempts: u32) -> i32 {
     // RUNS them and refuses only once D0421 carries the human's acceptance (D0337: a refusal on this
     // path is outside standing consent), and an empty set runs nothing and says so. A downstream tree
     // is untouched.
-    if let Some(code) = touched.as_ref().and_then(|t| crate::touched::after_gate(repo, t)) {
+    if let Some(code) = touched.as_ref().and_then(|t| keel_suite::touched::after_gate(repo, t)) {
         return code;
     }
     for attempt in 1..=max_attempts {
@@ -269,11 +269,11 @@ fn name_ci_verdict_of_base(repo: &Path, branch: &str) {
 }
 
 fn warn_if_landing_on_held_items(repo: &Path, branch: &str) {
-    let me = crate::actor::resolve(repo, None).unwrap_or_default();
+    let me = keel_actor::actor::resolve(repo, None).unwrap_or_default();
     if me.is_empty() {
         return; // no bound actor: nothing to attribute the landing to (the write paths refuse anyway)
     }
-    let held = crate::claim::held_by_others(repo, &me).unwrap_or_default();
+    let held = keel_write::claim::held_by_others(repo, &me).unwrap_or_default();
     if held.is_empty() {
         return;
     }
@@ -282,7 +282,7 @@ fn warn_if_landing_on_held_items(repo: &Path, branch: &str) {
     };
     let changed: std::collections::HashSet<String> =
         outgoing.lines().map(|l| l.trim().replace('\\', "/")).collect();
-    let Ok(model_files) = crate::view::item_files(repo) else { return };
+    let Ok(model_files) = keel_view::view::item_files(repo) else { return };
     let file_of: std::collections::HashMap<String, String> = model_files.into_iter().collect();
     for (item, holder) in held {
         if let Some(file) = file_of.get(&item) {

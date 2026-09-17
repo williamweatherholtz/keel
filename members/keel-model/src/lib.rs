@@ -38,3 +38,4 @@ pub mod algo;
 pub mod activation;
 pub mod orient;
 pub mod onboard;
+pub mod validate;

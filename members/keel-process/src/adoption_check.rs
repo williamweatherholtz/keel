@@ -388,7 +388,7 @@ pub fn cmd(args: &[String]) -> i32 {
     println!("adoption-check: baseline clean — a fresh scaffold gates green\n");
 
     let units: Vec<String> =
-        only.as_ref().map_or_else(|| crate::activation::declared_processes(&root), |u| vec![u.clone()]);
+        only.as_ref().map_or_else(|| keel_model::activation::declared_processes(&root), |u| vec![u.clone()]);
     if units.is_empty() {
         eprintln!("error: no declared processes found under {} — refusing to report a pass over an", root.display());
         eprintln!("       empty population (the vacuous-pass class this project has shipped twice)");
