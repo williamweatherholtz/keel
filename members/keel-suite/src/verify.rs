@@ -651,7 +651,7 @@ fn write_receipt(repo: &Path, ladder: &Ladder) {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if let Err(e) = crate::write::write_atomic(&path, render_receipt(ladder)) {
+    if let Err(e) = keel_fs::fsx::write_atomic(&path, render_receipt(ladder)) {
         eprintln!("keel verify: receipt could not be written: {e}");
     }
 }
@@ -726,8 +726,8 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         eprintln!("keel verify: {line}");
         return 2;
     }
-    let forced = crate::receipt::forced(args);
-    let head = crate::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    let forced = keel_fs::fsx::no_receipt_forced(args);
+    let head = keel_git::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
     let started = Instant::now();
     let probe_text = probe.as_ref().map(Probe::text);
     let (steps, stopped_at) = climb(
@@ -1009,16 +1009,32 @@ mod tests {
 
     /// issue565's control, D0047: the running form was added per receipt three times (issue399 suite,
     /// issue468 touched, now verify) and the file left out was the one that fired. This census reads
-    /// every module in the crate that writes a `.keel/metrics/*-receipt.toml` with an `outcome`, and
-    /// fails for one that never renders `running` - a fourth such receipt cannot ship without it.
+    /// every module in every workspace crate (`keel-cli/src` and each `members/*/src`, since the three
+    /// writers moved to this member in sprint 735) that writes a `.keel/metrics/*-receipt.toml` with an
+    /// `outcome`, and fails for one that never renders `running` - a fourth such receipt cannot ship
+    /// without it, whichever crate it lands in.
     #[test]
     fn every_receipt_writer_with_an_outcome_renders_a_running_form() {
-        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let sources: Vec<(String, String)> = std::fs::read_dir(&src)
-            .expect("src listing")
-            .map(|e| e.expect("entry").path())
-            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("rs"))
-            .map(|p| (p.file_name().expect("name").to_string_lossy().into_owned(), std::fs::read_to_string(&p).expect("read")))
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let root = keel_fs::test_support::repo_root();
+        let mut files = Vec::new();
+        walk(&root.join("keel-cli").join("src"), &mut files);
+        for m in std::fs::read_dir(root.join("members")).expect("members listing").flatten() {
+            walk(&m.path().join("src"), &mut files);
+        }
+        assert!(files.len() > 40, "every crate's src is the population, asserted non-empty: {}", files.len());
+        let sources: Vec<(String, String)> = files
+            .iter()
+            .map(|p| (p.file_name().expect("name").to_string_lossy().into_owned(), std::fs::read_to_string(p).expect("read")))
             .collect();
         let (writers, missing) = receipt_writer_census(&sources);
         assert_eq!(writers, ["suite.rs", "touched.rs", "verify.rs"], "the census is the three receipts; a new one joins this list AND renders running");

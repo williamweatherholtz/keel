@@ -32,7 +32,7 @@ pub const RECEIPT: &str = ".keel/metrics/suite-receipt.toml";
 
 // The self-build predicate descended to the read model (sprint 733); re-exported so `crate::suite::is_self_build`
 // keeps resolving.
-pub use crate::corpus::is_self_build;
+pub use keel_model::corpus::is_self_build;
 
 /// The deliverable fingerprint: SHA-256 over `(path, content)` for every file git knows or would add
 /// under `DELIVERABLE_PATHS`, sorted by path, content read from DISK so an uncommitted edit counts.
@@ -44,7 +44,7 @@ pub fn fingerprint(repo: &Path) -> Result<String, String> {
     for args in [vec!["ls-files", "-z", "--"], vec!["ls-files", "-z", "-o", "--exclude-standard", "--"]] {
         let mut a: Vec<&str> = args;
         a.extend(DELIVERABLE_PATHS);
-        let out = crate::gitx::git().arg("-C").arg(repo).args(&a).output().map_err(|e| format!("git ls-files: {e}"))?;
+        let out = keel_git::gitx::git().arg("-C").arg(repo).args(&a).output().map_err(|e| format!("git ls-files: {e}"))?;
         if !out.status.success() {
             return Err(format!("git ls-files failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
         }
@@ -60,7 +60,7 @@ pub fn fingerprint(repo: &Path) -> Result<String, String> {
         h.update(&bytes);
         h.update([0u8]);
     }
-    Ok(crate::device::hex(&h.finalize()))
+    Ok(keel_actor::device::hex(&h.finalize()))
 }
 
 /// What the last suite run on this machine recorded.
@@ -230,7 +230,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         return 0;
     }
     if args.iter().take_while(|a| *a != "--").any(|a| a == "--touched") {
-        return crate::touched::cmd(repo, crate::receipt::forced(args));
+        return crate::touched::cmd(repo, keel_fs::fsx::no_receipt_forced(args));
     }
     if !is_self_build(repo) {
         eprintln!("keel suite: {} holds no keel-cli/Cargo.toml - there is no suite to run here (a downstream project's gate is `keel gate`)", repo.display());
@@ -255,10 +255,10 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     // that is killed leaves `outcome = "running"` - not green, not counted - rather than the last
     // completed run's verdict standing over a tree it never saw. Same fingerprint as the final receipt
     // will carry, so a reader comparing fingerprints is told the run is in progress, not stale.
-    let head = crate::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    let head = keel_git::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
     if let Ok(fp) = fingerprint(repo) {
         let stub = Receipt { fingerprint: fp, head: head.clone(), at: started, passed: 0, failed: 0, outcome: "running".to_string(), seconds: 0 };
-        if let Err(e) = crate::write::write_atomic(&repo.join(RECEIPT), render_receipt(&stub, &log)) {
+        if let Err(e) = keel_fs::fsx::write_atomic(&repo.join(RECEIPT), render_receipt(&stub, &log)) {
             eprintln!("keel suite: running stub could not be written: {e}");
         }
     }
@@ -283,7 +283,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         // the code exists, so none is recorded. The previous receipt stands as what was last measured.
         match previous {
             Some(p) => {
-                if let Err(e) = crate::write::write_atomic(&repo.join(RECEIPT), p) {
+                if let Err(e) = keel_fs::fsx::write_atomic(&repo.join(RECEIPT), p) {
                     eprintln!("keel suite: previous receipt could not be restored: {e}");
                 }
             }
@@ -306,7 +306,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         }
     };
     let r = done_receipt(fp, head, started, now_secs(), passed, failed, outcome);
-    if let Err(e) = crate::write::write_atomic(&repo.join(RECEIPT), render_receipt(&r, &log)) {
+    if let Err(e) = keel_fs::fsx::write_atomic(&repo.join(RECEIPT), render_receipt(&r, &log)) {
         eprintln!("keel suite: receipt could not be written: {e}");
     }
     for l in text.lines().filter(|l| l.contains("FAILED") || l.contains("panicked at")).take(20) {

@@ -873,7 +873,7 @@ else:
         wall = int(seconds)
         fact("suiteWallMinutes", round(wall / 60.0, 1) if wall > 0 else None,
              "wall minutes of the most recent suite run",
-             RC_HOW + "`seconds`, stamped by keel-cli/src/suite.rs as the write moment minus the launch "
+             RC_HOW + "`seconds`, stamped by members/keel-suite/src/suite.rs as the write moment minus the launch "
                       "(issue472). WALL time: compilation and the gaps between binaries included, not the "
                       "sum of the per-binary 'finished in' values."
              if wall > 0 else RC_HOW + "`seconds` is 0; nothing honest to derive.",
@@ -3597,7 +3597,7 @@ fact("verifierStemsRow", {
      _DEC_HOW + " Names by literal search in the field named. skill: the one line of .engine/skills/test-verify/SKILL.md beginning "
      "`| `stems` |`, searched for `PLUS `init``, `.engine/`, `embedded_stem`, `issue530`, `git status --short -- .engine`; "
      "claudeCopyIdentical = byte equality with .claude/skills/test-verify/SKILL.md. binary: the `pub fn embedded_stem` body in "
-     "keel-cli/src/touched.rs (its 1-based line), searched for the strip_prefix, the `Some(\"init\")` return and the empty-rel None; "
+     "members/keel-suite/src/touched.rs (its 1-based line), searched for the strip_prefix, the `Some(\"init\")` return and the empty-rel None; "
      "ownTestLine = the line of `fn a_change_under_the_embedded_tree_names_init`. live.ownTest = `cargo test --release --lib -- "
      "touched::tests::a_change_under_the_embedded_tree_names_init` exit and its `test result:` line. verifierReceipt / landingReceipt "
      "= head, outcome, stems, passed, failed read from .keel/metrics/verify-receipt.toml and touched-receipt.toml (a verify receipt "
@@ -3693,7 +3693,7 @@ fact("clippyLintsCiTriple", {
     "sprint726": {k: v for k, v in _s726.items() if k != "text"},
     "ci": _ci95,
 } if _d0495 and _verify95 else None, "the other-host clippy: Decision, pure control and tests, hook branch, skill sentence, host, receipts, the class's Issues, sprint",
-     _DEC_HOW + " Names by literal search in the field named. binary: keel-cli/src/verify.rs (resolved by scripts/module_home.py) searched for the "
+     _DEC_HOW + " Names by literal search in the field named. binary: members/keel-suite/src/verify.rs (resolved by scripts/module_home.py) searched for the "
      "CI_TRIPLE const, the `pub fn other_host_lint` body (its 1-based line) and its three arms, the two test fns and `--workspace`. hook: "
      ".githooks/pre-commit searched for the `--target \"$ci_triple\"` clippy, `rustc -vV`, `rustup target list --installed`, the GATE "
      "CANNOT RUN branch naming `rustup target add`, and `D0495`. skill: .engine/skills/test-verify/SKILL.md searched for the `--target` "
@@ -4618,7 +4618,7 @@ _tch05 = read(_mh("touched") or "") or ""
 _scan05 = _tb04(_tch05, "no_member_test_anchors_on_a_cwd_relative_path")
 _enf05 = read(os.path.join(REPO, "members", "keel-guards", "src", "enforcement.rs")) or ""
 _gsf05_paths = re.findall(r'"([^"]+)"', (re.search(r"const GUARD_SOURCE_FILES: &\[&str\] = &\[(.*?)\];", _enf05) or [None, ""])[1])
-# the four anchor shapes the scan reads (keel-cli/src/touched.rs ANCHORS), counted over non-comment lines per tree
+# the four anchor shapes the scan reads (members/keel-suite/src/touched.rs ANCHORS), counted over non-comment lines per tree
 _ANCH05 = ('Path::new("..")', 'read_to_string("src/', 'CARGO_MANIFEST_DIR")).join("..")', 'read_to_string("../')
 def _rs05(rel_dirs):
     out = []
@@ -4708,7 +4708,7 @@ fact("lockedTestAnchorRepointsThroughKeelFs", {
         "scanTestFound": bool(_scan05),
         "scanReadsTestBearingSources": "test_bearing_sources(&root)" in _scan05,
         "scanExcludesAlwaysTest": "!always_test" in _scan05,
-        "scanAssertsCliInPopulation": 'ends_with("keel-cli/src/touched.rs")' in _scan05,
+        "scanAssertsCliInPopulation": 'ends_with("keel-cli/src/main.rs")' in _scan05,  # the scan named touched.rs until it left keel-cli (sprint 735)
         "scanAssertsPopulationSize": "files.len() > 40" in _scan05,
         "scanNamesHelperInMessage": "use keel_fs::test_support::repo_root() instead" in _scan05,
         "devDepKeelFs": {"keel-github": _devdep05("keel-github"), "keel-schema": _devdep05("keel-schema"), "keel-actor": _devdep05("keel-actor")},
@@ -4757,7 +4757,7 @@ fact("lockedTestAnchorRepointsThroughKeelFs", {
      _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0505 to dNNNN;` lines. source: "
      "members/keel-fs/src/test_support.rs for the pub fn, doc(hidden), the .git walk and its own test; members/keel-fs/src/lib.rs for `pub mod test_support;`; "
      "every .rs under keel-cli/src and each members/*/src (from the root Cargo.toml members list) scanned for a `fn repo_root(` definition, a "
-     "`use keel_fs::test_support::repo_root;` line and a `keel_fs::test_support::repo_root()` call; the four anchor shapes of keel-cli/src/touched.rs ANCHORS counted "
+     "`use keel_fs::test_support::repo_root;` line and a `keel_fs::test_support::repo_root()` call; the four anchor shapes of members/keel-suite/src/touched.rs ANCHORS counted "
      "over non-comment lines in keel-cli/src, members/*/src and keel-cli/tests (file:line each); keel-cli/src/adherence.rs's this_repo_yields_the_empty_prefix body and "
      "GUARD_SOURCE_FILES in members/keel-guards/src/enforcement.rs; the scan's body in touched.rs for its population call, filter, size and membership assertions and its message; "
      "each member Cargo.toml's [dev-dependencies] table for a keel-fs row; collapse_repo_root.py's not-an-instrument and Idempotent lines. landed = `git diff --name-status -M " +

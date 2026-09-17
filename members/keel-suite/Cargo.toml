@@ -1,0 +1,16 @@
+[package]
+name = "keel-suite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The build-and-test tooling: the full suite and its receipt, the touched set (D0421/D0474) with its content keys, the pre-commit ladder (D0476) and the hook-binary refresh."
+
+[dependencies]
+keel-fs = { path = "../keel-fs" }
+keel-git = { path = "../keel-git" }
+keel-actor = { path = "../keel-actor" }
+keel-model = { path = "../keel-model" }
+keel-perf = { path = "../keel-perf" }
+sha2 = "0.10"
+toml = "0.8"

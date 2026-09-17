@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "The forward guards, one module per family, with the runner, the guard receipts, the content key, the hardening census and the plan-cover check."
+description = "The forward guards, one module per family, with the runner, the guard receipts, the hardening census and the plan-cover check."
 # The guard receipt keys on the build that wrote it (receipt.rs: KEEL_BUILD_COMMIT); the script that
 # bakes the commit is keel-cli's, shared, not copied (sprint 733, as keel-write).
 build = "../../keel-cli/build.rs"

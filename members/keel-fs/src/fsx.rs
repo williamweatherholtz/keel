@@ -60,11 +60,22 @@ pub fn write_atomic(path: &std::path::Path, content: impl AsRef<str>) -> std::io
 /// Two lib runs overlapping on one host shared every fixed-name `temp_dir().join("keel-x")` tree and
 /// produced two different failing sets from one source (issue570). The process id is what separates
 /// them; putting it in one helper makes the correct call the shortest one to write, and the census in
-/// `keel-cli/src/touched.rs` fails any test-code join that names a tree without it. The directory is
+/// `members/keel-suite/src/touched.rs` fails any test-code join that names a tree without it. The directory is
 /// NOT created here: callers decide whether they want it fresh.
 #[must_use]
 pub fn scratch(tag: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{tag}-{}", std::process::id()))
+}
+
+/// `--no-receipt` on the command line, or `KEEL_NO_RECEIPT=1` in the environment.
+///
+/// Hooks and CI have no argv of their own, hence the variable. A caller that reads `true` runs its check
+/// and writes no receipt. Out of the guard member's `receipt.rs` in sprint 735 (D0479) so the
+/// build-and-test tooling reads the flag without depending on the guards; `keel_guards::receipt::forced`
+/// re-exports it under the name its callers use.
+#[must_use]
+pub fn no_receipt_forced(args: &[String]) -> bool {
+    args.iter().any(|a| a == "--no-receipt") || std::env::var("KEEL_NO_RECEIPT").is_ok_and(|v| v == "1")
 }
 
 #[cfg(test)]
@@ -80,5 +91,15 @@ mod tests {
         assert_eq!(name, format!("keel-scratch-a-{pid}"), "the process id closes the name");
         assert_eq!(a.parent(), Some(std::env::temp_dir().as_path()), "under the system temp dir");
     }
-}
 
+    /// The `--no-receipt` predicate (sprint 735, out of the guard member): the flag in argv is read
+    /// (known-positive); no flag and no `KEEL_NO_RECEIPT=1` is not forced (known-negative). The
+    /// environment half is not set here - a test must not mutate the process environment other tests read.
+    #[test]
+    fn no_receipt_is_forced_by_the_flag_and_not_by_its_absence() {
+        assert!(super::no_receipt_forced(&["--no-receipt".to_string()]));
+        if std::env::var("KEEL_NO_RECEIPT").is_err() {
+            assert!(!super::no_receipt_forced(&[".".to_string()]));
+        }
+    }
+}

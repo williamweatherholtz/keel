@@ -15,7 +15,6 @@
 // Tests may use unwrap/expect/panic/indexing/asserts freely.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing))]
 
-pub mod contentkey;
 pub mod hardening;
 pub mod plan_cover;
 pub mod receipt;

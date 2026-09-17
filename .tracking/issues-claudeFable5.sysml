@@ -1863,4 +1863,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcGuardsAreMembersPerFamily to issue587;
+
+    part issue588 : Issue {
+        :>> id = "3f3fe259-256f-463c-ac3c-5de73462a4fe";
+        :>> title = "The full suite fingerprints and tests keel-cli alone; a member edit leaves its receipt unchanged";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The full suite measures keel-cli alone. members/keel-suite/src/suite.rs:28 declares DELIVERABLE_PATHS = ['keel-cli', '.engine', 'keelw', 'Cargo.toml', 'Cargo.lock'], so the deliverable fingerprint the receipt carries omits members/ and keel-parser/: an edit to any workspace member's source leaves the fingerprint equal, and the staleness message at suite.rs:146 (the deliverable CHANGED since the last green suite run) never fires for it. The run itself at suite.rs:267 is cargo test --release --manifest-path keel-cli/Cargo.toml --no-fail-fast, the keel-cli package only, so the members' own lib tests (keel-suite 50, keel-guards 137, keel-view 159, keel-write 62, ...) are outside the full run while the touched set (touched.rs:315) does include them. Found reading suite.rs during sprint 735 (dcSuiteIsAMember), which moved the file; the gap predates the move (the constant is unchanged since D0387) and widened with each D0479 extraction since sprint 714. keel suite gates nothing (D0356), so no gate is dishonest - the receipt is; the fingerprint says the deliverable is unchanged when a member changed. Not fixed in sprint 735: its scope is the move only.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcSuiteMeasuresTheWorkspace to issue588;
 }

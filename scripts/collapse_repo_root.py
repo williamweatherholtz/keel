@@ -1,7 +1,7 @@
 """sprint 734: collapse every local `fn repo_root()` onto keel_fs::test_support::repo_root and repoint
 keel-cli/src's cwd-relative test anchors to it. Idempotent: a file already in the new shape is skipped.
 not-an-instrument: it is a one-shot codemod (the migration skill's gate 1); the counts it prints are the
-transform reporting what it rewrote, not a measure of the project - the anchor scan in keel-cli/src/touched.rs
+transform reporting what it rewrote, not a measure of the project - the anchor scan in members/keel-suite/src/touched.rs
 (no_member_test_anchors_on_a_cwd_relative_path) and the D0388 pair pos734/neg734 are the sensors it answers to."""
 import re
 import sys

@@ -133,12 +133,9 @@ fn human(d: Duration) -> String {
     }
 }
 
-/// `--no-receipt` on the command line, or `KEEL_NO_RECEIPT=1` in the environment (hooks and CI have no
-/// argv of their own).
-#[must_use]
-pub fn forced(args: &[String]) -> bool {
-    args.iter().any(|a| a == "--no-receipt") || std::env::var("KEEL_NO_RECEIPT").is_ok_and(|v| v == "1")
-}
+// The `--no-receipt` predicate descended to keel-fs (sprint 735, D0479) so the suite member reads it
+// without depending on the guards; re-exported so `receipt::forced` keeps resolving for every caller.
+pub use keel_fs::fsx::no_receipt_forced as forced;
 
 fn build_id() -> String {
     let exe = std::env::current_exe().ok().and_then(|p| std::fs::metadata(p).ok());

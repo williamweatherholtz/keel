@@ -12,6 +12,7 @@ members = [
     "members/keel-write",
     "members/keel-view",
     "members/keel-guards",
+    "members/keel-suite",
     "keel-cli",
 ]
 resolver = "2"

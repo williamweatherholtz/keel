@@ -330,7 +330,7 @@ pub struct Touched {
     /// `.gitattributes` entry declares an ending and whose working copy holds another. Read ONCE, with
     /// the set, so `land` and `suite --touched` refuse on the same census before cargo compiles the
     /// bytes; `eol_scanned` / `eol_millis` are the census's population and cost.
-    pub eol: Vec<crate::eol::Mismatch>,
+    pub eol: Vec<keel_git::eol::Mismatch>,
     pub eol_scanned: usize,
     pub eol_millis: u64,
 }
@@ -360,7 +360,7 @@ impl Touched {
         if self.eol.is_empty() {
             return None;
         }
-        Some(crate::eol::describe(&self.eol, &self.changed))
+        Some(keel_git::eol::describe(&self.eol, &self.changed))
     }
 
     /// The one line that says the census ran and what it cost.
@@ -371,7 +371,7 @@ impl Touched {
 }
 
 fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
-    let o = crate::gitx::git().arg("-C").arg(repo).args(args).output().ok()?;
+    let o = keel_git::gitx::git().arg("-C").arg(repo).args(args).output().ok()?;
     o.status.success().then(|| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
@@ -442,7 +442,7 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
     let lib = !stems.is_empty() || !unattributed.is_empty();
     // issue478: the endings are read with the set, before any decision to run - the receipt this
     // computation writes must be able to say `eol-mismatch` in place of a verdict cargo never reached.
-    let census = crate::eol::census(repo)?;
+    let census = keel_git::eol::census(repo)?;
     Ok(Touched { base, stems, unattributed, tests, lib, self_reading, changed, eol: census.mismatches, eol_scanned: census.scanned, eol_millis: census.millis })
 }
 
@@ -707,7 +707,7 @@ fn write_receipt(repo: &Path, t: &Touched, phase: Phase<'_>, memo: &Memo) {
     let metrics = repo.join(".keel").join("metrics");
     let _ = std::fs::create_dir_all(&metrics);
     let head = git_out(repo, &["rev-parse", "--short", "HEAD"]).unwrap_or_default();
-    if let Err(e) = crate::write::write_atomic(&repo.join(RECEIPT), render_receipt(t, &head, now_secs(), phase, memo)) {
+    if let Err(e) = keel_fs::fsx::write_atomic(&repo.join(RECEIPT), render_receipt(t, &head, now_secs(), phase, memo)) {
         eprintln!("touched: receipt could not be written: {e}");
     }
 }
@@ -768,7 +768,7 @@ fn millis_of(seconds: &str) -> u64 {
 
 /// The `[workspace] members` reader lives with the corpus walk (sprint 732: the proof census in
 /// keel-view reads it too); re-exported so `crate::touched::workspace_members` keeps resolving.
-pub use crate::corpus::workspace_members;
+pub use keel_model::corpus::workspace_members;
 
 /// The package names of every workspace member other than keel-cli (sprint 714).
 ///
@@ -796,7 +796,7 @@ pub fn member_libs(repo: &Path) -> Vec<String> {
 
 // The manifest reader descended to the read model beside `workspace_members` (sprint 733); re-exported so
 // `crate::touched::custom_harness_tests` keeps resolving.
-pub use crate::corpus::custom_harness_tests;
+pub use keel_model::corpus::custom_harness_tests;
 
 /// Which runner executes the set, and what the receipt says it was.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1103,7 +1103,7 @@ pub fn after_gate(repo: &Path, t: &Touched) -> Option<i32> {
     }
     let n = t.binaries().len();
     println!("keel land: {n} touched test binar{} before the push (cargo nextest run over the selected binaries, D0475; those observed green at this content are skipped, D0474)", if n == 1 { "y" } else { "ies" });
-    match run(repo, t, crate::receipt::forced(&[])) {
+    match run(repo, t, keel_fs::fsx::no_receipt_forced(&[])) {
         Ok(r) if r.green() => {
             println!("keel land: touched tests pass - {} (receipt {RECEIPT})", r.summary());
             None
@@ -1210,8 +1210,8 @@ mod tests {
         let clean = render_receipt(&t, "1234567", 100, Phase::NotRun, &Memo::default());
         assert!(clean.contains("eol_scanned = 3\n") && clean.contains("eol_ms = 7\n"), "{clean}");
         t.eol = vec![
-            crate::eol::Mismatch { path: "keel-cli/src/scaffold.rs".into(), declared: "lf".into(), worktree: "crlf".into() },
-            crate::eol::Mismatch { path: ".tracking/backlog.sysml".into(), declared: "lf".into(), worktree: "crlf".into() },
+            keel_git::eol::Mismatch { path: "keel-cli/src/scaffold.rs".into(), declared: "lf".into(), worktree: "crlf".into() },
+            keel_git::eol::Mismatch { path: ".tracking/backlog.sysml".into(), declared: "lf".into(), worktree: "crlf".into() },
         ];
         let line = t.eol_refusal().expect("a mismatch refuses");
         assert!(line.contains("changed by this push: [keel-cli/src/scaffold.rs (w/crlf where eol=lf)]"), "{line}");
@@ -1508,7 +1508,7 @@ mod tests {
         assert_eq!(custom_harness_tests(manifest), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
         assert!(custom_harness_tests("[package]\nname = \"x\"\n").is_empty());
         // keel-cli's manifest declares exactly these three; keel-parser's four are CI's to route (guard custom-harness-routed, issue542).
-        let real = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")).unwrap();
+        let real = std::fs::read_to_string(keel_fs::test_support::repo_root().join("keel-cli").join("Cargo.toml")).unwrap();
         assert_eq!(custom_harness_tests(&real), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
     }
 
@@ -1531,11 +1531,11 @@ mod tests {
     /// to a tracked module and an untracked new module both read as changed.
     #[test]
     fn the_changed_set_is_the_working_trees_not_heads() {
-        let dir = std::env::temp_dir().join(format!("keel-touched-{}", crate::ident::gen_uuid()));
+        let dir = std::env::temp_dir().join(format!("keel-touched-{}", keel_model::ident::gen_uuid()));
         std::fs::create_dir_all(dir.join("keel-cli").join("src")).unwrap();
         std::fs::create_dir_all(dir.join("keel-cli").join("tests")).unwrap();
         let git = |args: &[&str]| {
-            let o = crate::gitx::git().arg("-C").arg(&dir).args(args).output().unwrap();
+            let o = keel_git::gitx::git().arg("-C").arg(&dir).args(args).output().unwrap();
             assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
             String::from_utf8_lossy(&o.stdout).trim().to_string()
         };
@@ -1679,7 +1679,7 @@ mod tests {
     /// call inside a string literal and a quoted needle (this census's own fixtures).
     #[test]
     fn the_scratch_census_passes_per_process_joins_and_production_sites() {
-        let src = "let scratch = std::env::temp_dir().join(\"keel-audit\");\n#[cfg(test)]\nmod tests {\n    let a = keel_fs::scratch(\"keel-x\");\n    let b = std::env::temp_dir().join(format!(\"keel-x-{}\", std::process::id()));\n    let c = std::env::temp_dir().join(format!(\"keel-eol-{tag}-{}\", crate::ident::gen_uuid()));\n    // let d = std::env::temp_dir().join(\"keel-commented\");\n    let e = \"let x = std::env::temp_dir().join(\\\"keel-in-a-literal\\\");\";\n    const N: &str = \"temp_dir().join(\";\n}\n";
+        let src = "let scratch = std::env::temp_dir().join(\"keel-audit\");\n#[cfg(test)]\nmod tests {\n    let a = keel_fs::scratch(\"keel-x\");\n    let b = std::env::temp_dir().join(format!(\"keel-x-{}\", std::process::id()));\n    let c = std::env::temp_dir().join(format!(\"keel-eol-{tag}-{}\", keel_model::ident::gen_uuid()));\n    // let d = std::env::temp_dir().join(\"keel-commented\");\n    let e = \"let x = std::env::temp_dir().join(\\\"keel-in-a-literal\\\");\";\n    const N: &str = \"temp_dir().join(\";\n}\n";
         let named = fixed_scratch_joins(src, false);
         assert!(named.is_empty(), "nothing to name: {named:?}");
     }
@@ -1689,11 +1689,7 @@ mod tests {
     /// the control (D0047, D0498): no test-code `temp_dir().join(` names a tree two processes could share.
     #[test]
     fn no_test_names_a_scratch_directory_two_processes_could_share() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .find(|a| a.join(".git").exists())
-            .expect("keel-cli sits inside the keel repository")
-            .to_path_buf();
+        let root = keel_fs::test_support::repo_root();
         let files = test_bearing_sources(&root);
         assert!(files.len() > 100, "the three trees are the population, asserted non-empty: {}", files.len());
         let mut offenders = Vec::new();
@@ -1725,7 +1721,8 @@ mod tests {
         let root = keel_fs::test_support::repo_root();
         let files: Vec<std::path::PathBuf> = test_bearing_sources(&root).into_iter().filter(|(_, always_test)| !always_test).map(|(p, _)| p).collect();
         assert!(files.len() > 40, "keel-cli/src and every member's src are the population, asserted non-empty: {}", files.len());
-        assert!(files.iter().any(|f| f.ends_with("keel-cli/src/touched.rs") || f.ends_with("keel-cli\\src\\touched.rs")), "keel-cli/src is in the population");
+        assert!(files.iter().any(|f| f.ends_with("keel-cli/src/main.rs") || f.ends_with("keel-cli\\src\\main.rs")), "keel-cli/src is in the population");
+        assert!(files.iter().any(|f| f.ends_with("keel-suite/src/touched.rs") || f.ends_with("keel-suite\\src\\touched.rs")), "this member's src is in the population");
         let mut offenders = Vec::new();
         for f in &files {
             let src = std::fs::read_to_string(f).expect("a source is readable");
