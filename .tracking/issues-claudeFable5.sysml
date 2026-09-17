@@ -1874,4 +1874,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcSuiteMeasuresTheWorkspace to issue588;
+
+    part issue589 : Issue {
+        :>> id = "6db72e2d-1a55-4f36-bbfd-3aecf51b3025";
+        :>> title = "Sprint 735 closed with its story DoD passing and the item it delivered, dcSuiteIsAMember, had no DoD result: ranked first as ready at 249dac2";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 735 closed at 249dac2 with its story DoD passing (storySuiteIsAMemberDoDR1 in the delivery file), six gate results recorded and the landing pushed, and the backlog item it delivered, dcSuiteIsAMember, had no DoD TestResult: keel show orient at 249dac2 ranked it FIRST as ready work and held dcSuiteMeasuresTheWorkspace and dcKeelCliIsThinDispatch blocked on it as not done. The recorder's dispatch named the owed result as record result --file .tracking/delivery/sprint735_suiteIsAMember.sysml --task storySuiteIsAMember, the story, where sprint 734's named the item (dcOneRepoRootHelperDoDR1 in backlog.sysml); the recorder wrote exactly what it was owed, check_report.py --owed 7 passed, and nothing read the fill's DELIVERED BACKLOG ITEMS line against the --task set. Second occurrence of the issue563 class (sprint 720, 2026-09-14): an un-typed delivery relationship the primary has to remember when it types the dispatch. Recorded the item's DoD now from the same verifier receipt (a recorder dispatch owed one record). Control: the #Delivers edge the sprint-closure guard reads (resolver dcSprintNamesTheItemItDelivers), declared earlier in the backlog on this recurrence.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcSprintNamesTheItemItDelivers to issue589;
+
+    part issue590 : Issue {
+        :>> id = "b108aa14-ab9f-4db9-b69e-2a9f117f97de";
+        :>> title = "Sprint 735's second recorder refused its one owed record citing the verifier receipt's OWED WRITES: NONE line, and check_report.py passed the report";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The second recorder of sprint 735, dispatched --owed 1 to write dcSuiteIsAMember's DoD result from the verifier receipt that the first recorder had written seven records from, wrote nothing and reported REFUSED: task dcSuiteIsAMember: receipt line 19 states OWED WRITES: NONE; no writes owed per verifier. Line 19 is the test-verify receipt's closing line about the VERIFIER's own writes - none, by design (it writes nothing under the project) - and says nothing about what the recorder owes; the dispatch's count is the only owed count (D0492). check_report.py --owed 1 passed the report, because a REFUSED line accounts for a record whatever its reason, so the misread was visible only to the primary reading the report. A second message naming the line's meaning produced the write (dcSuiteIsAMemberDoDR1). Class: a receipt line whose label reads as the recorder's own instruction. Control: check_report.py refuses a REFUSED line that cites OWED WRITES as its reason, and the receipt line is labelled as the verifier's (resolver dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine to issue590;
 }

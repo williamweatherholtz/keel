@@ -4766,6 +4766,170 @@ fact("lockedTestAnchorRepointsThroughKeelFs", {
      " gate guard process-change --no-receipt .` last line; the touched receipt as section 32 reads it. issue557 as section 34. resolverPositions as section 34; "
      "sprint734 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or "
      "following a label's colon in that text; retroNoNewItemCount = the guard's justification phrase counted; dodResults = the story's DoDRn outcomes and shas.")
+# ================================================================ 42. D0506 - the build-and-test tooling is a member that depends on no view and no guard (sprint 735, brief 42)
+_d0506 = _dec_file("0506-")
+_f506 = _decision_facts(_d0506, "d0506")
+_LAND735_FROM, _LAND735_TO = "7394a28", "249dac2"   # the sprint's landing range, fixed (issue586: a fact about a range reads the range)
+_SUITE06 = ["suite", "touched", "verify", "hook_binary", "contentkey"]   # the five modules the sprint moved, in the DoD's order
+_su06_dir = os.path.join(REPO, "members", "keel-suite", "src")
+_su06_files = sorted(f[:-3] for f in os.listdir(_su06_dir) if f.endswith(".rs")) if os.path.isdir(_su06_dir) else []
+_su06_toml = read(os.path.join(REPO, "members", "keel-suite", "Cargo.toml")) or ""
+_su06_deptab = (re.search(r"\[dependencies\](.*?)(?:\n\[|\Z)", _su06_toml, re.S) or [None, ""])[1]
+_su06_deps = re.findall(r"^([\w-]+)\s*=\s*\{\s*path\s*=", _su06_deptab, re.M)
+_su06_crates = re.findall(r'^([\w-]+)\s*=\s*"', _su06_deptab, re.M)
+_su06_lib = read(os.path.join(_su06_dir, "lib.rs")) or ""
+_su06_declared = [m for m in _SUITE06 if re.search(r"^pub mod " + m + r";", _su06_lib, re.M)]
+_cli06_lib = read(_mh("lib", crate="keel-cli") or "") or ""
+_cli06_reexports = [m for m in _SUITE06 if re.search(r"^pub use keel_suite::" + m + r";", _cli06_lib, re.M)]
+_cli06_left = [m for m in _SUITE06 if os.path.exists(os.path.join(REPO, "keel-cli", "src", m + ".rs"))]
+_cli06_toml = read(os.path.join(REPO, "keel-cli", "Cargo.toml")) or ""
+_gl06 = read(os.path.join(REPO, "members", "keel-guards", "src", "lib.rs")) or ""
+_gr06 = read(os.path.join(REPO, "members", "keel-guards", "src", "receipt.rs")) or ""
+_fsx06 = read(os.path.join(REPO, "members", "keel-fs", "src", "fsx.rs")) or ""
+_ws06_members = re.findall(r'^\s*"([^"]+)",', (re.search(r"members\s*=\s*\[(.*?)\]", read(os.path.join(REPO, "Cargo.toml")) or "", re.S) or [None, ""])[1], re.M)
+_ext06 = read(os.path.join(REPO, "scripts", "extract_suite.py")) or ""
+_suite06 = read(os.path.join(_su06_dir, "suite.rs")) or ""
+_verify06 = read(os.path.join(_su06_dir, "verify.rs")) or ""
+_census06 = _tb04(_verify06, "every_receipt_writer_with_an_outcome_renders_a_running_form")
+_tch06 = read(os.path.join(_su06_dir, "touched.rs")) or ""
+_scan06 = _tb04(_tch06, "no_member_test_anchors_on_a_cwd_relative_path")
+_dp06 = re.search(r"pub const DELIVERABLE_PATHS: \[&str; (\d+)\] = \[([^\]]*)\]", _suite06)
+_dp06_paths = re.findall(r'"([^"]+)"', _dp06.group(2)) if _dp06 else []
+_gsf06_paths = _gsf05_paths   # the lock's file list as section 41 read it from enforcement.rs
+# the landed commit's shape over the fixed range (renames followed: D0479's "moved, not rewritten"), and the locked files' own diffs inside it
+_ok06d, _out06d = run(["git", "diff", "--name-status", "-M", _LAND735_FROM, _LAND735_TO])
+_rows06 = [l.split("\t") for l in (_out06d or "").splitlines() if l.strip()]
+_codes06 = [r[0][:1] for r in _rows06]
+_names06 = [r[-1] for r in _rows06]
+_all06 = [n for r in _rows06 for n in r[1:]]   # a rename names both its old and its new path
+_renames06 = {r[1]: {"to": r[2], "similarity": int(r[0][1:])} for r in _rows06 if r[0].startswith("R")}
+_ok06s, _out06s = run(["git", "diff", "--shortstat", _LAND735_FROM, _LAND735_TO])
+_short06 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out06s or "")
+_LOCKED06 = ["members/keel-guards/src/lib.rs", "members/keel-guards/src/receipt.rs"]
+_ok06n, _out06n = run(["git", "diff", "--numstat", _LAND735_FROM, _LAND735_TO, "--"] + _LOCKED06)
+_num06 = {m.group(3): {"insertions": int(m.group(1)), "deletions": int(m.group(2))} for m in re.finditer(r"^(\d+)\s+(\d+)\s+(\S+)$", _out06n or "", re.M)}
+_ok06p, _out06p = run(["git", "diff", "-U0", _LAND735_FROM, _LAND735_TO, "--"] + _LOCKED06)
+_lock06_added = [l[1:] for l in (_out06p or "").splitlines() if l.startswith("+") and not l.startswith("+++")]
+_lock06_removed = [l[1:] for l in (_out06p or "").splitlines() if l.startswith("-") and not l.startswith("---")]
+_locked06_touched = sorted(set(n for n in _all06 if n in _gsf06_paths or n.startswith("members/keel-guards/src/")))
+# live: the lock's own verdict on this tree, the binary's guard count, the landing run's receipt
+_rc06g, _out06g = run_rc([KEEL, "gate", "guard", "process-change", "--no-receipt", "."], timeout=300)
+_pc06_last = (_out06g or "").strip().splitlines()[-1] if (_out06g or "").strip() else ""
+_pc06 = re.search(r"\[guard:process-change\] (PASS|FAIL|WARN)[^\d]*(\d+) scanned[^\d]*(\d+) warning\(s\), (\d+) violation\(s\)", _pc06_last)
+_rc06v, _out06v = run_rc([KEEL, "version"], timeout=60)
+_guards06_line = next((l for l in (_out06v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards06 = re.search(r"guards:\s*(\d+)\D+(\d+) hard-blocking\D+(\d+) warning-only", _guards06_line)
+_tr06 = _receipt94("touched-receipt.toml")
+_i588 = _issue_facts("588", "dcSuiteMeasuresTheWorkspace")
+_i589 = _issue_facts("589", "dcSprintNamesTheItemItDelivers")
+_s735 = _sprint_facts("sprint735_suiteIsAMember.sysml", "d0479")
+_retro06 = (re.search(r'suiteIsAMemberRetroGate[^\n]*procedureText = "([^"]*)"', _s735.get("text") or "") or [None, ""])[1]
+fact("suiteDependsOnNoViewOrGuard", {
+    **_f506,
+    "dependsOnD0479": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0506\s+to\s+d0479\s*;", _d0506)),
+    "dependsOnD0504": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0506\s+to\s+d0504\s*;", _d0506)),
+    "notAForkInConsequences": "NOT A FORK" in (_f506["consequences"] or ""),
+    "namesCannotBothHold": "The two cannot both hold: keel-guards depends on keel-view" in (_f506["context"] or ""),
+    "namesFirstDoor": "this Decision is the first door" in (_f506["context"] or ""),
+    "namesProbeIsTheContract": "The probe is the contract." in (_f506["decision"] or ""),
+    "namesOneLineUnchanged": "one line of logic unchanged" in (_f506["decision"] or ""),
+    "namesNoViewNoGuard": "on no view, no guard and not on keel-write" in (_f506["decision"] or ""),
+    "namesNoGuardLogicChanges": "no guard's predicate, dispatch, severity, family table or gate set changes" in (_f506["decision"] or ""),
+    "namesHeldToTheProbe": "the probe is what the sprint is held to" in (_f506["rationale"] or ""),
+    "namesMisfiledNotShared": "were misfiled, not shared" in (_f506["rationale"] or ""),
+    "namesLockOnThePath": "The lock fires on the path, not the logic, by design" in (_f506["rationale"] or ""),
+    "namesNeverAGuard": "a module that was never a guard" in (_f506["consequences"] or ""),
+    "namesByteForByte": "byte-for-byte against the pre-move render" in (_f506["consequences"] or ""),
+    "namesWrongIf": "Wrong if a future guard comes to need the content key or the predicate" in (_f506["consequences"] or ""),
+    "source": {
+        "memberExists": os.path.isdir(_su06_dir),
+        "memberModules": _su06_files,
+        "memberDeclaresTheFive": _su06_declared, "memberDeclaresAllFive": sorted(_su06_declared) == sorted(_SUITE06),
+        "memberPathDeps": _su06_deps, "memberCrateDeps": _su06_crates,
+        "memberDependsOnNoViewGuardOrWrite": not any(d in _su06_deps for d in ("keel-view", "keel-guards", "keel-write")),
+        "cliReexports": _cli06_reexports, "cliReexportsAllFive": sorted(_cli06_reexports) == sorted(_SUITE06),
+        "cliStillHoldsModules": _cli06_left,
+        "cliManifestDependsOnSuite": bool(re.search(r"^keel-suite\s*=\s*\{\s*path\s*=", _cli06_toml, re.M)),
+        "workspaceMembers": _ws06_members, "workspaceMemberCount": len(_ws06_members),
+        "suiteListedBeforeCli": ("members/keel-suite" in _ws06_members and "keel-cli" in _ws06_members
+                                 and _ws06_members.index("members/keel-suite") < _ws06_members.index("keel-cli")),
+        "guardLibDeclaresContentkey": bool(re.search(r"^pub mod contentkey;", _gl06, re.M)),
+        "guardReceiptReexportsForced": "pub use keel_fs::fsx::no_receipt_forced as forced;" in _gr06,
+        "guardReceiptDefinesForced": bool(re.search(r"^pub fn forced\(", _gr06, re.M)),
+        "fsxDefinesPredicate": "pub fn no_receipt_forced(args: &[String]) -> bool" in _fsx06,
+        "fsxPredicateReadsFlagAndEnv": '"--no-receipt"' in _fsx06 and '"KEEL_NO_RECEIPT"' in _fsx06,
+        "fsxPredicateHasOwnTests": "super::no_receipt_forced(" in _fsx06,
+        "codemodDeclaresItself": "not-an-instrument:" in _ext06 and "one-shot codemod" in _ext06,
+        "codemodIdempotent": "Idempotent" in _ext06 and "already applied" in _ext06,
+        "codemodHasApplyFlag": "--apply" in _ext06,
+        "censusFound": bool(_census06),
+        "censusWalksCliSrc": 'join("keel-cli").join("src")' in _census06,
+        "censusWalksEveryMember": 'read_dir(root.join("members"))' in _census06,
+        "censusAssertsPopulation": "files.len() > 40" in _census06,
+        "scanAssertsOwnSrcInPopulation": 'ends_with("keel-suite/src/touched.rs")' in _scan06,
+        "deliverablePaths": _dp06_paths, "deliverablePathsNameMembers": any(p.startswith("members") for p in _dp06_paths),
+        "suiteRunsCliManifestOnly": 'join("keel-cli").join("Cargo.toml")' in _suite06 and "--workspace" not in _suite06,
+    },
+    "landed": {
+        "range": [_LAND735_FROM, _LAND735_TO],
+        "renames": _codes06.count("R"), "modified": _codes06.count("M"), "added": _codes06.count("A"), "deleted": _codes06.count("D"),
+        "renamedFrom": _renames06,
+        "movedWhole": [old for old, r in _renames06.items() if r["similarity"] == 100],
+        "filesChanged": int(_short06.group(1)) if _short06 else None,
+        "insertions": int(_short06.group(2)) if _short06 and _short06.group(2) else None,
+        "deletions": int(_short06.group(3)) if _short06 and _short06.group(3) else None,
+        "lockedFileNumstat": _num06,
+        "lockedAddedLines": _lock06_added, "lockedRemovedLines": _lock06_removed,
+        "lockedDiffIsTheTwoDescents": ("pub mod contentkey;" in _lock06_removed
+                                       and any(l.startswith("pub fn forced(") for l in _lock06_removed)
+                                       and "pub use keel_fs::fsx::no_receipt_forced as forced;" in _lock06_added
+                                       and not any(l.startswith("pub fn ") for l in _lock06_added)),
+        "lockedFilesTouched": _locked06_touched,
+        "newDecisionInRange": any(n.startswith(".engine/decisions/0506-") for n in _names06),
+        "sprintInRange": any(n.endswith("sprint735_suiteIsAMember.sysml") for n in _names06),
+        "codemodInRange": "scripts/extract_suite.py" in _names06,
+    } if _ok06d and _ok06s and _ok06n and _ok06p else None,
+    "live": {
+        "processChange": {"exit0": _rc06g == 0, "verdict": _pc06.group(1) if _pc06 else None, "scanned": int(_pc06.group(2)) if _pc06 else None,
+                          "violations": int(_pc06.group(4)) if _pc06 else None, "line": _pc06_last[:240] or None},
+        "guards": {"total": int(_guards06.group(1)), "hardBlocking": int(_guards06.group(2)), "warningOnly": int(_guards06.group(3))} if _guards06 else None,
+        "landingReceipt": _tr06,
+    },
+    "issue588": _i588,
+    "issue589": _i589,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in ("dcSuiteIsAMember", "dcProcessIsAMember", "dcKeelIssuesIsAMember", "dcTouchedSetDescendsTheWorkspace",
+                                    "dcSuiteMeasuresTheWorkspace", "dcSprintNamesTheItemItDelivers", "dcKeelCliIsThinDispatch")},
+    "backlogItems": len(_bl00_actions),
+    "sprint735": {k: v for k, v in _s735.items() if k != "text"} | ({
+        "retroScansAvoidable": "avoidable issues scanned (issue011)" in _retro06,
+        "retroNamesSuiteMeasuresCliAlone": "The full suite measures keel-cli alone" in _retro06,
+        "retroNamesProseVsProbe": "contradicted its own Fresh probe" in _retro06,
+        "retroNamesSecondFiring": "The lock fired for the second sprint running" in _retro06,
+        "retroNamesThirdFiringTrigger": "a third firing is the trigger" in _retro06,
+        "retroNamesCodemodCheck": "replaced by a length-delta conservation check" in _retro06,
+        "retroNamesProbeSettles": "settles the workspace build before touching" in _retro06,
+        "retroNamesStemsRow": "stems row still described the keel-cli-only key" in _retro06,
+        "retroNotTrackedCount": _retro06.count("Not tracked"),
+        "retroFindings": len(re.findall(r"(?:^|[.;:] )\((\d)\) ", _retro06)),
+        "storyDodResults": [{"outcome": o, "judgedAgainst": s} for o, s in re.findall(
+            r"part storySuiteIsAMemberDoDR\d+ : TestResult \{[^}]*?outcome = VerdictKind::(\w+);[^}]*?judgedAgainst = \"([^\"]+)\"", _s735.get("text") or "")],
+        "itemDodResults": _dod_results("dcSuiteIsAMember"),
+    } if _s735.get("exists") else {}),
+} if _d0506 and _su06_toml and _cli06_lib and _gl06 and _gr06 else None,
+     "the held record for the two descents out of the guard member: Decision, the member's manifest and modules, keel-cli's re-exports, the predicate's new home, the landed diff with its two locked files' lines, live lock verdict and guard count, issues 588 and 589, sprint 735",
+     _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0506 to dNNNN;` lines; notAForkInConsequences = the phrase in the consequences field (the decision field carries none). source: "
+     "members/keel-suite/Cargo.toml [dependencies] split into `x = { path = ...}` rows (memberPathDeps) and `x = \"ver\"` rows (memberCrateDeps); members/keel-suite/src listed for .rs stems and lib.rs for `pub mod x;` of each of the five; "
+     "keel-cli's lib.rs (resolved by scripts/module_home.py) for `pub use keel_suite::x;` of each; keel-cli/src probed for x.rs of each (cliStillHoldsModules); keel-cli/Cargo.toml for a keel-suite path row; "
+     "the root Cargo.toml `members = [...]` list and the two indices; members/keel-guards/src/lib.rs for `pub mod contentkey;` and receipt.rs for the re-export line and any `pub fn forced(`; "
+     "members/keel-fs/src/fsx.rs for the predicate's signature, its two literals and a `super::no_receipt_forced(` test call; scripts/extract_suite.py for its not-an-instrument, Idempotent, already-applied and --apply lines; "
+     "the census body in members/keel-suite/src/verify.rs for the keel-cli walk, the members read_dir and the size assertion; the anchor scan's body in touched.rs for the member's own path; "
+     "suite.rs's DELIVERABLE_PATHS members and whether the run names keel-cli/Cargo.toml without --workspace (the issue588 shape, read as it stands). landed = `git diff --name-status -M " + _LAND735_FROM + " " + _LAND735_TO +
+     "` first letters counted, rename rows kept with their similarity (movedWhole = 100), `--shortstat` over the range, `--numstat` and `-U0` over the range for members/keel-guards/src/lib.rs and receipt.rs alone "
+     "(added and removed lines verbatim; lockedDiffIsTheTwoDescents = the removed lines hold the module line and forced's signature, the added lines hold the re-export and no fn), every old or new name held against the lock's file list and directory prefix. "
+     "live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line split into total / hard-blocking / warning-only; the touched receipt as section 32 reads it. "
+     "issues 588 and 589 as section 34. resolverPositions as section 34; sprint735 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or "
+     "following a label's colon in that text; retroNotTrackedCount = the phrase counted; storyDodResults = the story's DoDRn outcomes and shas in the delivery file; itemDodResults = the backlog item's DoDRn outcomes and shas.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
