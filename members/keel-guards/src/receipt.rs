@@ -39,7 +39,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::guards::GuardReport;
+use crate::GuardReport;
 
 /// The layers a receipt may vouch for. `guards` alone comes from `keel gate guard`; all three from the
 /// turn boundary and the commit gate.
@@ -201,10 +201,10 @@ fn walk_keel(dir: &Path, h: &mut impl Hasher, root: &Path) {
 /// never answered from a receipt.
 #[must_use]
 pub fn key(root: &Path) -> Option<Key> {
-    crate::perf::phase("receipt:key", || {
-        let head = crate::gitfacts::head_sha(root)?;
+    keel_perf::perf::phase("receipt:key", || {
+        let head = keel_model::gitfacts::head_sha(root)?;
         let root_s = root.to_string_lossy().to_string();
-        let status = crate::gitx::git()
+        let status = keel_git::gitx::git()
             .args(["-C", &root_s, "status", "--porcelain", "-z", "-uall"])
             .output()
             .ok()
@@ -220,7 +220,7 @@ pub fn key(root: &Path) -> Option<Key> {
         // would normalise it at the commit - yet `working-tree-eol` (and every run over the working
         // tree) reads those bytes. Every tracked path's bytes therefore enter the key, so a receipt
         // never vouches for bytes no guard saw.
-        let tracked = crate::gitx::git()
+        let tracked = keel_git::gitx::git()
             .args(["-C", &root_s, "ls-files", "-z"])
             .output()
             .ok()
@@ -250,7 +250,7 @@ pub fn key(root: &Path) -> Option<Key> {
         build_id().hash(&mut h);
         // Which population the diff-reading guards judged (D0440): a green working-tree run must not
         // answer for a hook's index read over the same paths, nor the reverse.
-        crate::guards::ChangeRead::current().label().hash(&mut h);
+        crate::ChangeRead::current().label().hash(&mut h);
         Some(Key { digest: format!("{:016x}", h.finish()), head })
     })
 }
@@ -269,7 +269,7 @@ pub fn read(root: &Path, key: &Key) -> Option<Receipt> {
     for g in stored.guards {
         // A name this binary does not know cannot be printed as its report; the build id in the key
         // makes this unreachable, and it fails closed if it is not.
-        let name = crate::guards::GUARD_NAMES.iter().find(|n| **n == g.name)?;
+        let name = crate::GUARD_NAMES.iter().find(|n| **n == g.name)?;
         guards.push(GuardReport { name, scanned: g.scanned, warnings: g.warnings, violations: Vec::new() });
     }
     Some(Receipt { age, covers: stored.covers, guards, critical_path: stored.critical_path })
@@ -316,14 +316,14 @@ pub fn record_green(root: &Path, before: &Key, covers: &[&str], reports: &[Guard
                 })
                 .collect()
         },
-        critical_path: crate::guards::critical_path_line(),
+        critical_path: crate::critical_path_line(),
     };
     let Ok(text) = toml::to_string(&stored) else { return false };
     let p = path(root);
     if let Some(dir) = p.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    crate::write::write_atomic(&p, &text).is_ok()
+    keel_write::write::write_atomic(&p, &text).is_ok()
 }
 
 /// A red run leaves no receipt.
@@ -336,7 +336,7 @@ mod tests {
     use super::*;
 
     fn git(dir: &Path, args: &[&str]) {
-        let out = crate::gitx::git().arg("-C").arg(dir).args(args).output().expect("git");
+        let out = keel_git::gitx::git().arg("-C").arg(dir).args(args).output().expect("git");
         assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
     }
 
@@ -352,7 +352,7 @@ mod tests {
     }
 
     fn green() -> Vec<GuardReport> {
-        vec![GuardReport { name: crate::guards::GUARD_NAMES[0], scanned: 3, warnings: vec!["w".into()], violations: Vec::new() }]
+        vec![GuardReport { name: crate::GUARD_NAMES[0], scanned: 3, warnings: vec!["w".into()], violations: Vec::new() }]
     }
 
     /// dcGateAnswersFromItsReceipt: a green run writes the receipt and the next run answers from it,
@@ -437,7 +437,7 @@ mod tests {
         // the index takes the file's stat, so status is clean - and the working copy is still CRLF
         // (issue478's shape).
         git(&d, &["add", "tracked.txt"]);
-        let status = crate::gitx::git().args(["-C", &d.to_string_lossy(), "status", "--porcelain", "--", "tracked.txt"]).output().expect("git");
+        let status = keel_git::gitx::git().args(["-C", &d.to_string_lossy(), "status", "--porcelain", "--", "tracked.txt"]).output().expect("git");
         assert!(status.stdout.is_empty(), "git status calls the CRLF copy clean: {}", String::from_utf8_lossy(&status.stdout));
         let k1 = key(&d).expect("key");
         assert_ne!(k0.digest, k1.digest, "the rewritten bytes move the key");
@@ -452,7 +452,7 @@ mod tests {
         let d = repo("red");
         let k = key(&d).expect("key");
         assert!(record_green(&d, &k, &[GUARDS], &green(), &[]));
-        let red = vec![GuardReport { name: crate::guards::GUARD_NAMES[0], scanned: 1, warnings: Vec::new(), violations: vec!["v".into()] }];
+        let red = vec![GuardReport { name: crate::GUARD_NAMES[0], scanned: 1, warnings: Vec::new(), violations: vec!["v".into()] }];
         assert!(!record_green(&d, &k, &[GUARDS], &red, &[]), "a red run never writes");
         delete(&d);
         assert!(read(&d, &k).is_none(), "a red run leaves no receipt");

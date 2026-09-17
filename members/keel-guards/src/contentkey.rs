@@ -73,7 +73,7 @@ fn hash_file(root: &Path, rel: &str, h: &mut impl Hasher) {
 }
 
 fn git_z(root: &Path, args: &[&str]) -> Option<Vec<String>> {
-    let o = crate::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
+    let o = keel_git::gitx::git().arg("-C").arg(root).args(args).output().ok()?;
     if !o.status.success() {
         return None;
     }
@@ -95,7 +95,7 @@ pub fn paths(root: &Path) -> Option<Vec<String>> {
 /// HEAD's id, read live: `gitfacts::head_sha` memoises per process, and the key is asked for again
 /// after a run that may sit across a commit.
 fn head(root: &Path) -> Option<String> {
-    let o = crate::gitx::git().arg("-C").arg(root).args(["rev-parse", "HEAD"]).output().ok()?;
+    let o = keel_git::gitx::git().arg("-C").arg(root).args(["rev-parse", "HEAD"]).output().ok()?;
     o.status.success().then(|| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
@@ -103,7 +103,7 @@ fn head(root: &Path) -> Option<String> {
 /// listed is never skipped against.
 #[must_use]
 pub fn compute(root: &Path) -> Option<ContentKeys> {
-    crate::perf::phase("contentkey:compute", || {
+    keel_perf::perf::phase("contentkey:compute", || {
         let head = head(root)?;
         let list = paths(root)?;
         let mut code = std::collections::hash_map::DefaultHasher::new();
@@ -143,7 +143,7 @@ mod tests {
     }
 
     fn git(dir: &Path, args: &[&str]) {
-        let out = crate::gitx::git().arg("-C").arg(dir).args(args).output().expect("git");
+        let out = keel_git::gitx::git().arg("-C").arg(dir).args(args).output().expect("git");
         assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
     }
 
@@ -153,7 +153,7 @@ mod tests {
     /// an input any more. `.keel/metrics/` writes move neither.
     #[test]
     fn a_code_edit_moves_both_keys_a_tracking_edit_moves_the_tree_key_and_an_mtime_moves_neither() {
-        let d = std::env::temp_dir().join(format!("keel-contentkey-{}", crate::ident::gen_uuid()));
+        let d = std::env::temp_dir().join(format!("keel-contentkey-{}", keel_model::ident::gen_uuid()));
         std::fs::create_dir_all(d.join("keel-cli").join("src")).expect("mk");
         std::fs::create_dir_all(d.join(".tracking")).expect("mk");
         std::fs::write(d.join("keel-cli").join("src").join("lib.rs"), "pub fn a() {}\n").expect("w");

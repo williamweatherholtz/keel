@@ -184,7 +184,7 @@ fn no_new_engine_surface_writer_is_unrepresented() {
     // Whole-file writes to a committed surface are the class. Machine-local state (`.keel/`) and
     // scaffolding of files that did not exist are NOT: there is nothing of a human's to preserve.
     let src = std::fs::read_to_string(repo().join("keel-cli/src/main.rs")).expect("main.rs")
-        + &std::fs::read_to_string(repo().join("keel-cli/src/claude_surface.rs")).expect("claude_surface.rs");
+        + &std::fs::read_to_string(repo().join("members/keel-write/src/claude_surface.rs")).expect("claude_surface.rs");
     let mut unrepresented = Vec::new();
     for line in src.lines() {
         let t = line.trim();

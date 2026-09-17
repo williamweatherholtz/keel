@@ -339,5 +339,22 @@ package ProjectCodeRegistry {
         :>> abstractness = "0.2";
     }
     #Supersede dependency from ceArchViewsMember to ceArchViews;
+    // sprint 733 (D0479/D0504): keel-cli/src/guards.rs became member keel-guards, one file per guard family
+    // under members/keel-guards/src/ with lib.rs the runner and the family tables. ceGuards is claudeOpus5's,
+    // so the path follows the crate root by a new element and a #Supersede edge (D0108).
+    part ceGuardsMember : CodeElement {
+        :>> id = "f78ce083-2361-4429-897d-23958ce71e8d";
+        :>> title = "The forward guards (member keel-guards)";
+        :>> createdAt = "2026-09-17"; :>> createdBy = "claudeFable5";
+        :>> kind = "module";
+        :>> filePath = "members/keel-guards/src/lib.rs";
+        :>> riskClass = RiskClass::correctness;
+        :>> invariantSafety = InvariantSafety::enforced;
+        :>> stpaRole = StpaRole::controller;
+        :>> designPattern = DesignPattern::strategy;
+        :>> abstractness = "0.1";
+        :>> controlActions = ("block commit", "warn");
+    }
+    #Supersede dependency from ceGuardsMember to ceGuards;
 
 }

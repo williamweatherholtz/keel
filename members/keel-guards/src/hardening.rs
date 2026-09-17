@@ -19,7 +19,7 @@
 //! report on itself cannot be trusted, and the help question in particular is about what the source
 //! claims, not about what one invocation happened to print.
 
-use crate::json::Json;
+use keel_json::json::Json;
 use std::path::Path;
 
 /// The hardening lens set.
@@ -27,7 +27,7 @@ use std::path::Path;
 /// # Errors
 /// Never returns `Err` today; the signature matches the other view functions so it can be served by
 /// `keel serve`'s cache, which is typed over `Result`.
-pub fn hardening(root: &Path) -> Result<String, crate::view::ViewError> {
+pub fn hardening(root: &Path) -> Result<String, keel_view::view::ViewError> {
     Ok(Json::Obj(vec![
         (
             "hardening".to_string(),
@@ -154,7 +154,7 @@ fn string_literals(frag: &str) -> Vec<String> {
 /// facts the help is rendered from, so there is no second text to drift; `main` is accepted and
 /// ignored so the call sites that pass the source keep compiling while the lens is re-aimed.
 fn usage_text(_main: &str) -> String {
-    crate::cli_facts::render_help()
+    keel_schema::cli_facts::render_help()
 }
 
 /// Does the help text NAME this subcommand? WORD-BOUNDED, because a plain substring test lets
@@ -189,12 +189,12 @@ const fn is_cmd_char(b: u8) -> bool {
 /// reports is how much of the catalogue is enforceable, so the unenforceable part is VISIBLE rather than
 /// assumed covered.
 fn process_enforcement(root: &Path) -> Json {
-    let act = crate::activation::Activation::load(root);
+    let act = keel_model::activation::Activation::load(root);
     let declared = enforcement_contract(root);
     let mut enforced: Vec<Json> = Vec::new();
     let mut unenforceable: Vec<Json> = Vec::new();
     let mut undeclared: Vec<Json> = Vec::new();
-    for f in crate::collect_sysml(&root.join(".engine/processes")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".engine/processes")) {
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         let unit = f.file_stem().unwrap_or_default().to_string_lossy().to_string();
         let unit_guards = act.unit(&unit).map_or(0, |u| u.guards.len());
@@ -278,8 +278,8 @@ fn process_enforcement(root: &Path) -> Json {
 /// reader can see how far that guard reaches - a warning-tier guard checks only as far as a warning goes.
 fn step_enforcement(root: &Path) -> Json {
     let declared = enforcement_contract(root);
-    let names = crate::guards::declared_check_names(root);
-    let bound: std::collections::BTreeMap<(String, String), String> = crate::binding::step_check_bindings(root)
+    let names = crate::declared_check_names(root);
+    let bound: std::collections::BTreeMap<(String, String), String> = keel_model::binding::step_check_bindings(root)
         .into_iter()
         .map(|(path, _, step, name)| {
             let unit = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
@@ -288,7 +288,7 @@ fn step_enforcement(root: &Path) -> Json {
         .collect();
     let (mut checked, mut judgment, mut undeclared, mut unresolved) = (Vec::new(), 0usize, 0usize, Vec::new());
     let mut per_unit: Vec<Json> = Vec::new();
-    for f in crate::collect_sysml(&root.join(".engine/processes")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".engine/processes")) {
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         let unit = f.file_stem().unwrap_or_default().to_string_lossy().to_string();
         let processes = top_level_processes(&text);
@@ -400,11 +400,11 @@ fn configured_hook_events(root: &Path) -> Vec<String> {
 /// (the `step-check-resolves` guard's violation), never hidden by a class. AN INDICATOR, NEVER A GATE:
 /// gating the memory count would make the cheapest fix a `triggerCondition` that names an event.
 fn step_trigger(root: &Path) -> Json {
-    let activation = crate::activation::Activation::load(root);
+    let activation = keel_model::activation::Activation::load(root);
     let events = configured_hook_events(root);
-    let names = crate::guards::declared_check_names(root);
-    let guard_names: std::collections::HashSet<&str> = crate::guards::GUARD_NAMES.iter().copied().collect();
-    let bound: std::collections::BTreeMap<(String, String), String> = crate::binding::step_check_bindings(root)
+    let names = crate::declared_check_names(root);
+    let guard_names: std::collections::HashSet<&str> = crate::GUARD_NAMES.iter().copied().collect();
+    let bound: std::collections::BTreeMap<(String, String), String> = keel_model::binding::step_check_bindings(root)
         .into_iter()
         .map(|(path, _, step, name)| {
             let unit = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
@@ -414,7 +414,7 @@ fn step_trigger(root: &Path) -> Json {
     let (mut hook_rows, mut gate_rows, mut unresolved) = (Vec::new(), Vec::new(), Vec::new());
     let mut memory_by_process: Vec<Json> = Vec::new();
     let (mut memory, mut adopted_units, mut skipped_units) = (0usize, 0usize, 0usize);
-    for f in crate::collect_sysml(&root.join(".engine/processes")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".engine/processes")) {
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         let unit = f.file_stem().unwrap_or_default().to_string_lossy().to_string();
         if !activation.is_process_active(&unit) {
@@ -876,7 +876,7 @@ fn enforcement_points(root: &Path) -> Json {
         .unwrap_or(serde_json::Value::Null);
     let has_event = |ev: &str| settings.pointer(&format!("/hooks/{ev}")).is_some();
     // issue240: report ARMED (git can reach the hook), never merely DECLARED (a setting names it).
-    let armed = crate::gitx::commit_gate_armed(root);
+    let armed = keel_git::gitx::commit_gate_armed(root);
     let hooks_wired = armed.is_ok();
     let hooks_note = armed.as_ref().err().cloned();
     let ci = root.join(".github").join("workflows").exists()
@@ -932,7 +932,7 @@ fn enforcement_points(root: &Path) -> Json {
         // never in this inventory - which is how its all-zeros sentinel stayed dead for its whole
         // life. Its network-error path resolves to ALLOW with a warning: the recorded residual.
         row("build-time spec pin (keel-parser build.rs)", root.join("keel-parser").join("build.rs").exists(), "no build-time check on trees without the parser source (every downstream project) - the shipped binary was built against the pinned spec upstream", "SHA mismatch fails the build loudly (sr13SpecPin)", "network error or SYSML_V2_SPEC_OFFLINE resolves to ALLOW with a warning - RECORDED RESIDUAL (issue203)"),
-        row(&format!("guards at gate tiers ({} enforced)", crate::guards::GUARD_NAMES.len()), true, "guards run inside validate/gate/commit paths - absent only if the binary is absent (see pre-commit row)", "guard error = violation, fails loud (issue183 rule)", "n/a - in-process"),
+        row(&format!("guards at gate tiers ({} enforced)", crate::GUARD_NAMES.len()), true, "guards run inside validate/gate/commit paths - absent only if the binary is absent (see pre-commit row)", "guard error = violation, fails loud (issue183 rule)", "n/a - in-process"),
         row("declared rules", true, "report-only until P1.5 wires them into hook stop, pre-commit, and CI - RECORDED RESIDUAL (d0177)", "rule parse error reported", "n/a - in-process"),
     ];
     Json::Obj(vec![
@@ -1033,7 +1033,7 @@ mod tests {
     /// adopted, and this project adopts a subset, so this lens counts no more than that one.
     #[test]
     fn step_trigger_on_this_tree_partitions_the_adopted_steps() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let json = step_trigger(&root).dump();
         let field = |k: &str| -> usize {
             let key = format!("\"{k}\": ");
@@ -1060,10 +1060,10 @@ mod tests {
     /// step - and the classes partition the steps (no step counted twice, none dropped).
     #[test]
     fn step_enforcement_counts_equal_a_hand_count() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut steps = 0usize;
         let mut bound = 0usize;
-        for f in crate::collect_sysml(&root.join(".engine/processes")) {
+        for f in keel_model::corpus::collect_sysml(&root.join(".engine/processes")) {
             let text = std::fs::read_to_string(&f).unwrap();
             for line in text.lines() {
                 let t = line.trim_start();
@@ -1124,7 +1124,7 @@ mod tests {
     /// catalogue line now fails the build instead of quietly shipping an undiscoverable command.
     #[test]
     fn every_dispatched_subcommand_is_documented() {
-        let main = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let main = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/main.rs")).expect("main.rs is readable");
         let dispatched = dispatch_arms(&main);
         // 35 after the D0453 fold (58 before the d0399 folds); a scan under 30 has lost the match.
         assert!(dispatched.len() > 30, "the dispatch scan found {} arms - the lens is mis-aimed", dispatched.len());
@@ -1142,8 +1142,8 @@ mod tests {
     /// that is not registered. The second half has never been checked and would 404 a real consumer.
     #[test]
     fn every_registered_route_is_accounted_for() {
-        let serve = std::fs::read_to_string("src/serve.rs").expect("serve.rs is readable");
-        let html = std::fs::read_to_string("assets/console.html").expect("console.html is readable");
+        let serve = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/serve.rs")).expect("serve.rs is readable");
+        let html = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/assets/console.html")).expect("console.html is readable");
         let routes = registered_routes(&serve);
         let advertised = advertised_endpoints(&serve);
         assert!(routes.len() > 30, "route scan found {} - the lens is mis-aimed", routes.len());
@@ -1174,7 +1174,7 @@ mod tests {
     /// keyword dispatches - blunt, but it found four genuine ones I had missed.
     #[test]
     fn every_positional_read_is_flag_guarded() {
-        let main = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let main = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/main.rs")).expect("main.rs is readable");
         let mut offenders = Vec::new();
         for (i, line) in main.lines().enumerate() {
             let trimmed = line.trim_start();
@@ -1212,7 +1212,7 @@ mod tests {
     /// literal in a comment or an error message is fine; USING it as a fallback is not.
     #[test]
     fn no_write_path_defaults_a_provenance_date() {
-        let main = std::fs::read_to_string("src/main.rs").expect("main.rs is readable");
+        let main = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/main.rs")).expect("main.rs is readable");
         let offenders: Vec<String> = main
             .lines()
             .enumerate()
@@ -1252,7 +1252,7 @@ mod tests {
     #[test]
     fn the_source_lenses_refuse_a_tree_with_no_source() {
         // A directory that exists and contains no `keel-cli/` - the downstream shape.
-        let empty = std::path::Path::new("..").join("target");
+        let empty = std::path::Path::new("../..").join("target");
         let out = help_coverage(&empty);
         let Json::Obj(fields) = &out else { panic!("expected an object") };
         let keys: Vec<&str> = fields.iter().map(|(k, _)| k.as_str()).collect();

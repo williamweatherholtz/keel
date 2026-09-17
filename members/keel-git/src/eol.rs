@@ -108,7 +108,7 @@ pub fn judge(entries: &[Entry]) -> (usize, Vec<Mismatch>) {
 /// the guard reports nothing to judge; the touched run and land, which already needed git to compute
 /// their set, refuse.
 pub fn census(repo: &Path) -> Result<Census, String> {
-    crate::perf::phase("eol:census", || {
+    keel_perf::perf::phase("eol:census", || {
         let t0 = std::time::Instant::now();
         let out = crate::gitx::git().arg("-C").arg(repo).args(["ls-files", "--eol", "-z"]).output().map_err(|e| format!("git ls-files --eol: {e}"))?;
         if !out.status.success() {

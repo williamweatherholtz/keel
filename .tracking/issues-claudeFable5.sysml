@@ -1808,4 +1808,59 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcFactSensorsCarryTheirPair to issue582;
+
+    part issue583 : Issue {
+        :>> id = "1e033034-9969-4b6d-92cb-5d56129f875d";
+        :>> title = "Sprint 733 paid the cwd-relative test-anchor fix dcOneRepoRootHelper predicted";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 733 (dcGuardsAreMembersPerFamily) moved keel-cli/src/guards.rs into member keel-guards, and twelve cwd-relative test anchors (Path::new('../.engine/...'), '../.tracking', '../scripts') broke because the file was one directory deeper. scripts/split_guards.py paid the fix with a DEPTH_REWRITES table. dcOneRepoRootHelper (backlog) predicted exactly this recurrence at sprint 731 for the guards.rs seven and hardening.rs five; the sprint that moved them paid it instead of the helper. Check: the count of Path::new('../ in the pre-move guards.rs (git show 50e171a:keel-cli/src/guards.rs) against the DEPTH_REWRITES table in scripts/split_guards.py. The item is moved to the head of the D0479 cluster (declaration order is priority, D0052) so the next member extraction (dcSuiteIsAMember) inherits no path fix.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcOneRepoRootHelper to issue583;
+
+    part issue584 : Issue {
+        :>> id = "072a377a-e0ae-4aec-8809-2066d155b091";
+        :>> title = "guards.md groups by tier; the DoD assumed it grouped by family";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The backlog DoD of dcGuardsAreMembersPerFamily said the family files follow 'the families guards.md already groups by'. guards.md groups by TIER (grep '^## ' .engine/docs/guards.md gives Hard-blocking, Warning-only, Non-blocking burndown), not by family; the nine families came from the FAMILIES tables in code, and the catalogue's rows do not say which family file a guard lives in. A reader of guards.md cannot find a guard's source. The premise in the DoD was written from memory of the doc, not from the doc.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcGuardsCatalogueNamesTheFamily to issue584;
+
+    part issue585 : Issue {
+        :>> id = "4b9ab78c-9230-4d82-98da-ecd3d4063b93";
+        :>> title = "Two members reach upward to keel-cli/build.rs and modgraph does not see it";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/build.rs (the build-provenance stamp) is the build script of two members that reach upward to it: members/keel-write/Cargo.toml and members/keel-guards/Cargo.toml both carry build = '../../keel-cli/build.rs' (grep 'build = ' members/*/Cargo.toml). modgraph's layering check reads [dependencies], not build =, so a member depending on a file owned by the crate above it passes the check that forbids the same reach in source. Each new member that needs the stamp copies the upward path.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcBuildScriptHasOneHomeBelowItsUsers to issue585;
+
+    part issue586 : Issue {
+        :>> id = "667373fd-62aa-466c-90b5-0e2f4e733d2f";
+        :>> title = "A facts.py block about a fixed commit range read its file from the working tree";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The D0499 block of scripts/exec_brief/facts.py describes a fixed commit range (git diff 1ecbef0 50e171a -- guards.rs) but read the file's TEXT from the working tree via module_home('guards'); when sprint 733 moved the file every fact of the block went null although the range it describes had not changed. Fixed in the sprint by reading git show 50e171a:keel-cli/src/guards.rs. The class (a fact about a range whose text comes from HEAD) has no control; facts.py has no self-probe that flags it.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcFactsAboutARangeReadTheRange to issue586;
+
+    part issue587 : Issue {
+        :>> id = "c0de7e36-227c-494f-be34-ea8edab57d06";
+        :>> title = "A probe scanned keel-cli as the Rust tree and went red when the guard bodies became a member";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "scripts/probes/issue400_reproduction.py census_defective scanned keel-cli/**/*.rs as 'the Rust tree'. Sprint 733 (dcGuardsAreMembersPerFamily) moved the guard bodies to members/keel-guards/src, and the reproduction of the 2026-09-06 defect stopped reproducing: the defective census read 27 of 75 and the known-negative doc-guard-count read False, so the probe exited 1 and the pre-commit script-probe runner (D0496, issue574) aborted the sprint's landing commit. The check was right to be red - a one-crate scan is the class D0504's context names, a control that goes quiet when its subject moves - and the control fired before the commit, as designed. Fix: the scan covers keel-cli and members/**, the workspace's Rust files; the probe reads 75 of 75 on the defective census and 0 failures. A grep of scripts/ for a keel-cli-only .rs glob found this one site (modgraph.py's DEFAULT_SRC is issue581's). Resolved by the sprint that moved the files, dcGuardsAreMembersPerFamily, in its landing commit; the standing control is the script-probe runner, and this Issue records that it fired.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcGuardsAreMembersPerFamily to issue587;
 }

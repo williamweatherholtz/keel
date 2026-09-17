@@ -4,3 +4,4 @@
 //! its old `crate::` path so no caller moved when the code did (sprint 714).
 
 pub mod gitx;
+pub mod eol;

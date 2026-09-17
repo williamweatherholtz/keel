@@ -33,7 +33,7 @@ pub enum Cover {
 
 /// The plan's file under `.engine/decisions/`, if any Decision by that name is declared.
 fn decision_file(root: &Path, dname: &str) -> Option<PathBuf> {
-    crate::collect_sysml(&root.join(".engine").join("decisions"))
+    keel_model::corpus::collect_sysml(&root.join(".engine").join("decisions"))
         .into_iter()
         .find(|p| std::fs::read_to_string(p).is_ok_and(|t| t.contains(&format!("part {dname} : Decision"))))
 }
@@ -80,7 +80,7 @@ pub fn assess(root: &Path, covered: &str, plan_id: &str, step: &str) -> Cover {
     if note.contains(TOKEN) {
         return Cover::Refused { clause: "b", detail: format!("{plan_id} is itself PLAN-COVERED - a plan-covered Decision cannot be a plan (one level: the human's word, then the steps it names, never a chain)") };
     }
-    let deciders: std::collections::BTreeSet<String> = crate::github::deciders(root).into_values().collect();
+    let deciders: std::collections::BTreeSet<String> = keel_github::github::deciders(root).into_values().collect();
     if !deciders.contains(&judge) {
         return Cover::Refused { clause: "b", detail: format!("{plan_id}'s judge '{judge}' is not a decider named in github-actors.toml - the plan's signer must be a declared human decider") };
     }

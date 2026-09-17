@@ -376,3 +376,84 @@ pub fn workspace_members(root_manifest: &str) -> Vec<String> {
     let Some(list) = root_manifest.split("members = [").nth(1).and_then(|s| s.split(']').next()) else { return Vec::new() };
     list.split(',').map(|m| m.trim().trim_matches('"').to_string()).filter(|m| !m.is_empty()).collect()
 }
+
+/// Every target of an authored `#Supersede dependency from X to Y;` line under `.engine/decisions/`
+/// and `.tracking/` - the RETIRED set (D0384 option A / D0398). The edge is the only authored mark of
+/// retirement; `#SupersedeClause` reverses one clause and is NOT collected here. The kernel-free
+/// readers (deck, guards) share this scan; the view layer computes the same set from parsed edges
+/// (`view::Model::retired`).
+#[must_use]
+pub fn supersede_targets(root: &Path) -> std::collections::HashSet<String> {
+    supersede_edges(root).into_iter().map(|(_, to)| to).collect()
+}
+
+/// Every authored `#Supersede dependency from X to Y;` line, as `(X, Y)`: X retired Y.
+///
+/// Scans `.engine/decisions/`, `.engine/cli/` and `.tracking/`. The pair is kept for the readers that
+/// name the superseder in what they report (issue423: a synopsis citing a retired Decision is told
+/// which Decision retired it). `.engine/cli/` joined in issue547: a `CliCommand` fact is retired by an
+/// edge authored beside it in `commands.sysml`, and the retired set every kernel-free reader shares
+/// has to agree with the one `guards::parse_cli_facts` reads from that file.
+#[must_use]
+pub fn supersede_edges(root: &Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let dirs = [root.join(".engine").join("decisions"), root.join(".engine").join("cli"), root.join(".tracking")];
+    for f in dirs.iter().flat_map(|d| collect_sysml(d)) {
+        let Ok(text) = read_to_string(&f) else { continue };
+        for line in text.lines() {
+            if let Some(rest) = line.trim_start().strip_prefix("#Supersede dependency from ") {
+                if let Some((from, to)) = rest.split_once(" to ") {
+                    out.push((from.trim().to_string(), to.trim().trim_end_matches(';').trim().to_string()));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The `[[test]]` targets of a Cargo manifest declared `harness = false` (pure over its text).
+///
+/// nextest lists a binary with `--list --format terse` before it runs it, and a custom harness -
+/// the three cucumber binaries here - does not answer that flag (`unexpected argument '--list'`,
+/// exit 104 before a single test ran, 2026-09-14). Those binaries run under `cargo test` in a second
+/// invocation; everything else runs under nextest.
+#[must_use]
+pub fn custom_harness_tests(manifest: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut in_test = false;
+    let mut name: Option<String> = None;
+    let mut custom = false;
+    for raw in manifest.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') {
+            if custom {
+                out.extend(name.take());
+            }
+            name = None;
+            custom = false;
+            in_test = line == "[[test]]";
+            continue;
+        }
+        if !in_test {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            match k.trim() {
+                "name" => name = Some(v.trim().trim_matches('"').to_string()),
+                "harness" => custom = v.trim().starts_with("false"),
+                _ => {}
+            }
+        }
+    }
+    if custom {
+        out.extend(name.take());
+    }
+    out.sort();
+    out
+}
+
+/// Is this repository the self-build (the one with a suite to run)?
+#[must_use]
+pub fn is_self_build(repo: &Path) -> bool {
+    repo.join("keel-cli").join("Cargo.toml").is_file()
+}

@@ -30,6 +30,8 @@ keel-model = { path = "../members/keel-model" }
 keel-write = { path = "../members/keel-write" }
 # D0479 view layer (sprint 732): view, govern, pm, arch, control_proof; re-exported under their old module paths in lib.rs.
 keel-view = { path = "../members/keel-view" }
+# D0479 forward guards (sprint 733): one module per guard family plus receipt, contentkey, hardening, plan_cover; `guards` is the crate itself.
+keel-guards = { path = "../members/keel-guards" }
 # OS CSPRNG for UUID v4 identity (issue075/D0129) — already in the lock tree transitively.
 getrandom = "0.3"
 # HMAC-SHA256 for device-bound deck taps (D0201 B) - already in the lock tree via keel-parser.

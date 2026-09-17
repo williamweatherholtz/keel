@@ -71,7 +71,7 @@ pub const INSTALL_URL: &str = "https://github.com/williamweatherholtz/sysmlv2-ai
 
 /// The keel output style — the response contract (D0130), embedded from the self-build's own copy
 /// so downstream ships EXACTLY what the self-build runs (K3 parity by construction).
-pub const OUTPUT_STYLE: &str = include_str!("../../.claude/output-styles/keel.md");
+pub const OUTPUT_STYLE: &str = include_str!("../../../.claude/output-styles/keel.md");
 
 /// Protected fact surfaces and the sanctioned command each refusal names (K13 deny-and-provide).
 ///
@@ -445,7 +445,7 @@ fn registry_skills(root: &Path) -> Vec<(String, String)> {
     // "0/0 skill(s)" the moment the declarations moved, and `claude-surface-drift` then passed
     // VACUOUSLY on a population of zero: a false green, which is worse than the failure it hid.
     let mut text = String::new();
-    for f in crate::collect_sysml(&root.join(".engine").join("skills")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".engine").join("skills")) {
         if let Ok(s) = std::fs::read_to_string(&f) {
             text.push('\n');
             text.push_str(&s);
@@ -649,7 +649,7 @@ pub fn sync_claude(root: &Path, check_only: bool) -> Result<SyncReport, String> 
     }
     // skills: one .claude/skills/<name>/SKILL.md per registry entry, deployed as `deployed_skill_text`
     let registry = registry_skills(root);
-    let inactive = crate::activation::Activation::load(root).inactive_processes();
+    let inactive = keel_model::activation::Activation::load(root).inactive_processes();
     drift.extend(skill_drift(root, &claude, &registry, &inactive));
     // GH#51 / D0349: when anything drifted, name the generator that stamped the surface and the one
     // running - two builds of one version generated different surfaces and the report named neither.
@@ -715,10 +715,32 @@ pub fn sync_claude(root: &Path, check_only: bool) -> Result<SyncReport, String> 
     Ok(SyncReport { wrote_settings: true, skills_written, registry_count: registry.len(), version_skew: None, drift: Vec::new() })
 }
 
+/// A RUST-ONLY pre-commit gate scaffolded into a fresh project (`.githooks/pre-commit`).
+///
+/// In the library so `claude_surface` can hold the Claude hooks to the same binary-resolution order
+/// (issue348). Runs
+/// `keel gate validate` + `keel gate guard` — NO conda/JVM kernel (D0048: the Rust path is the authority).
+/// Enabled by the user with `git config core.hooksPath .githooks` (printed in the init Next steps).
+///
+/// FAILS LOUD without the binary (K2/P0.3, D0174): the previous version skipped with a printed
+/// notice, so an uninstalled downstream machine committed ungated while looking gated — the exact
+/// silent-pass class the proposal's §1.1 recorded. The remedy line names the documented install
+/// path (D0175's fence). POSIX sh.
+/// The scaffolded pre-commit hook text. A function, not a const, because its binary probe is the
+/// shared `claude_surface::pin_probe_sh` (issue378/GH#55): one probe text for the git hook and the
+/// Claude hooks, so they cannot resolve the binary differently.
+#[must_use]
+pub fn precommit_hook() -> String {
+    format!(
+        "#!/bin/sh\n# keel pre-commit gate (Rust-only; no JVM kernel) — scaffolded by `keel init` (D0048/D0093/D0174).\n# Enable: git config core.hooksPath .githooks   |   bypass once: SKIP_KEEL=1 git commit ...\n[ \"$SKIP_KEEL\" = \"1\" ] && {{ echo 'pre-commit: SKIP_KEEL=1 — keel gate skipped'; exit 0; }}\n# BINARY RESOLUTION, pinned-first (D0230; issue378/GH#55): KEEL_BIN, then a RELEASED binary dropped\n# at .keel/bin/keel, then the pin's own cache .keel/bin/<engine pin>/<asset> - the layout keelw and\n# keel init write - then PATH. The probe is the SAME text the Claude hooks embed, so the two surfaces\n# cannot resolve differently, and the line after it prints WHICH binary gated: a PATH fallback is\n# loud, never silent - one project's gate came to run an unreleased build with nothing saying so.\n{probe}\nKEEL=\"${{K:-keel}}\"\ncommand -v \"$KEEL\" >/dev/null 2>&1 || {{ echo \"pre-commit: keel binary NOT FOUND — commit BLOCKED (K2: an absent gate must not pass silently).\"; echo \"pre-commit: install keel from https://github.com/williamweatherholtz/sysmlv2-ai-toolkit/releases and put it on PATH (or set KEEL_BIN).\"; exit 1; }}\n# THE GATE IS WORKSPACE-SCOPED, ALWAYS (D0234/issue278). git allows ONE core.hooksPath per\n# repository, so a hook inside a project directory can never gate a sibling project - which is\n# why this hook is installed at the REPOSITORY ROOT. It used to branch on `[ ! -d .engine ]` to\n# decide whether it was at a workspace root; that test is wrong for the commonest layout, a repo\n# whose root is itself a project with peers beside it, where .engine exists and every peer\n# therefore rode out UNGATED. `keel gate --workspace` gates every project the commit touches and\n# is identical to the old single-project path when the repo holds exactly one project.\necho \"pre-commit: keel gate --workspace (every project this commit touches) via $KEEL - $(\"$KEEL\" version 2>/dev/null | head -n1)\"\n\"$KEEL\" gate --workspace . || {{ echo 'pre-commit: keel gate FAILED — commit aborted'; exit 1; }}\n",
+        probe = pin_probe_sh(".")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        hooks_silenced, keel_hooks, marketplace_manifest, merge_settings, pin_probe_sh, plugin_files, plugin_hooks, protected_path_command, resolver, restored_settings,
+        hooks_silenced, keel_hooks, marketplace_manifest, merge_settings, pin_probe_sh, plugin_files, plugin_hooks, precommit_hook, protected_path_command, resolver, restored_settings,
         relative_reference_tokens, same_text, sync_claude, text_sets_kill_switch, unresolved_skill_references, HOOK_KILL_SWITCH, MARKETPLACE_MANIFEST,
         PLUGIN_DIR, PROTECTED_PATHS, RESOLUTION_ORDER,
     };
@@ -826,7 +848,7 @@ mod tests {
         assert!(commands >= 6, "every event's command was checked: {commands}");
         // The scaffolded git hook probes in the same order (D0230) - the two surfaces agree, because
         // both embed the SAME probe text (issue378: two probe texts drifted into two layouts).
-        let hook = crate::precommit_hook();
+        let hook = precommit_hook();
         assert!(probes_in_order(&hook), "the git hook probes in the same order");
         assert!(hook.contains(&pin_probe_sh(".")), "the git hook embeds the shared probe verbatim");
         assert!(!probes_in_order("K=$(command -v keel); [ -x .keel/bin/keel ] && K=.keel/bin/keel; K=${KEEL_BIN:-$K}"), "a PATH-first script is refused by this check");

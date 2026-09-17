@@ -173,7 +173,12 @@ mod tests {
         // The fact travels with the unit or it is useless to an adopting project (D0222/issue253).
         // Population asserted non-empty: a check over zero items is the false green this codebase
         // has already hit twice (issue250, and claude-surface-drift on zero skills).
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        // a member's cwd is two levels down (sprint 733): the repo root is the ancestor holding .git
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|a| a.join(".git").exists())
+            .expect("a member crate sits inside the keel repository")
+            .to_path_buf();
         let a = applicability(&root);
         let declared = crate::activation::declared_processes(&root);
         assert!(!declared.is_empty(), "the population must be non-empty or this passes vacuously");

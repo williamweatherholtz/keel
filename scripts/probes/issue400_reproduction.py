@@ -51,8 +51,11 @@ def guard_names() -> list[str]:
 
 def census_defective(name: str) -> bool:
     """The 2026-09-06 shape: the guard's name near FAIL/violation anywhere in the Rust tree - INCLUDING guards.rs,
-    whose registry lists every name a few hundred bytes from the words it is looking for."""
-    for path in glob.glob(os.path.join(REPO, "keel-cli", "**", "*.rs"), recursive=True):
+    whose registry lists every name a few hundred bytes from the words it is looking for. The Rust tree is the
+    workspace: keel-cli and every member (the guard bodies left keel-cli for members/keel-guards in sprint 733,
+    and a scan of one crate stopped reproducing the defect - the pre-commit probe run caught it, issue574)."""
+    for path in glob.glob(os.path.join(REPO, "keel-cli", "**", "*.rs"), recursive=True) + \
+            glob.glob(os.path.join(REPO, "members", "**", "*.rs"), recursive=True):
         text = open(path, encoding="utf-8", errors="replace").read()
         for m in re.finditer(re.escape(name), text):
             window = text[max(0, m.start() - 400): m.end() + 400]

@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "The write API: every authored fact enters the tree through here, under one lock, atomically, provenance bound."
+# The Claude surface stamps the build that wrote it (claude_surface::SURFACE_BUILD); the script that
+# bakes the commit is keel-cli's, shared, not copied (sprint 733).
+build = "../../keel-cli/build.rs"
 
 [dependencies]
 keel-parser = { path = "../../keel-parser" }
@@ -15,5 +18,6 @@ keel-json = { path = "../keel-json" }
 keel-actor = { path = "../keel-actor" }
 keel-schema = { path = "../keel-schema" }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 toml = "0.8"
 thiserror = "1"

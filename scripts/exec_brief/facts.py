@@ -25,7 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 
 REPO = os.getcwd()
 sys.path.insert(0, os.path.join(REPO, "scripts"))
-from module_home import module_home as _mh, AmbiguousModule as _AmbiguousModule  # noqa: E402  (issue559: no keel-cli/src anchors)
+from module_home import module_home as _mh, crate_text as _crate_text, crate_root as _crate_root, AmbiguousModule as _AmbiguousModule  # noqa: E402  (issue559: no keel-cli/src anchors)
 # The binary is a COPY, never the build image: a running target/release/keel.exe blocks its own relink
 # (issue150), and this script ran it under a cargo build once (issue508). KEEL_BIN wins; then the
 # serve copy; the build image only when nothing else exists.
@@ -1613,7 +1613,7 @@ fact("dominanceSweep", {
 # the record or the Decision's own RESEARCH line - never retyped.
 
 # --- D0465: the working-tree guards.rs - does the second authorising source exist, and how many keystone tests hold it
-_gr = read(_mh("guards") or "") or ""
+_gr = _crate_text("keel-guards")  # sprint 733: the guards are a crate, its text is every file of it
 _kv = re.search(r"fn keystone_violations\((.*?)\) -> ", _gr)
 fact("keystoneCharterPath", {
     "acceptedChartersFn": bool(re.search(r"^\s*fn accepted_charters\(", _gr, re.M)),
@@ -2198,7 +2198,7 @@ fact("rejectVerdictDecision", {
 # --- D0470: the three layers in source - the refusal inside each verdict's lock, and the two command lists
 _wr = read(os.path.join(REPO, "members", "keel-write", "src", "write.rs")) or ""
 _cs = read(_mh("view/control_structure") or "") or ""
-_gr = read(_mh("guards") or "") or ""
+_gr = _crate_text("keel-guards")  # sprint 733: the guards are a crate, its text is every file of it
 
 
 def _fn_body(text, name):
@@ -2365,7 +2365,7 @@ fact("cliReferenceDecision", {
      "and namesEightSites = those spans in the context; processChangeWords = `process-change` anywhere in the four.")
 
 # --- D0471: the guard in source - its name in GUARD_NAMES, its dispatch arm, the shared walk, and the three declaration surfaces
-_gr = read(_mh("guards") or "") or ""
+_gr = _crate_text("keel-guards")  # sprint 733: the guards are a crate, its text is every file of it
 _gl = read(_mh("guard_names") or "") or ""  # sprint 732: the list is keel-schema's, the arms stay in guards.rs
 _gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gl, re.S)
 _gnames = re.findall(r'"([a-z0-9-]+)"', _gn.group(2)) if _gn else []
@@ -2376,21 +2376,21 @@ fact("cliReferenceGuardSource", {
     "guardCount": int(_gn.group(1)) if _gn else None,
     "guardCountMatchesList": bool(_gn) and int(_gn.group(1)) == len(_gnames),
     "inGuardNames": "cli-reference" in _gnames,
-    "dispatchArm": bool(re.search(r'"cli-reference"\s*=>\s*Some\(cli_reference\(root\)\)', _gr)),
+    "dispatchArm": bool(re.search(r'"cli-reference"\s*=>\s*Some\(cli_reference\(root\)\)|\("cli-reference",\s*cli_reference\)', _gr)),
     "sharedWalk": {"toolReference": bool(re.search(r"pub fn tool_reference\(root: &Path\) -> GuardReport \{[^}]*?living_doc_files\(root\)", _gr, re.S)),
                    "cliReference": bool(re.search(r"pub fn cli_reference\(root: &Path\) -> GuardReport \{[^}]*?living_doc_files\(root\)", _gr, re.S))},
-    "readsDispatch": {"hasCommand": "crate::cli_surface::has_command(&r.verb)" in _gr,
-                      "hasLens": "crate::cli_surface::has_lens(" in _gr,
-                      "subVerbsOf": "crate::cli_facts::sub_verbs_of(f.invocation)" in _gr},
+    "readsDispatch": {"hasCommand": bool(re.search(r"(crate|keel_schema)::cli_surface::has_command\(&r\.verb\)", _gr)),
+                      "hasLens": bool(re.search(r"(crate|keel_schema)::cli_surface::has_lens\(", _gr)),
+                      "subVerbsOf": bool(re.search(r"(crate|keel_schema)::cli_facts::sub_verbs_of\(f\.invocation\)", _gr))},
     "unitTests": len(re.findall(r"^\s*#\[test\]\s*\n\s*fn (\w+)", _gr[_gr.find("mod cli_reference_tests"):_gr.find("\n}\n", _gr.find("mod cli_reference_tests")) + 3], re.M)) if "mod cli_reference_tests" in _gr else 0,
     "catalogueRow": bool(re.search(r"^\| `cli-reference` \| HARD \(D0471 / issue528\)", _gmd, re.M)),
     "constraintDecl": bool(re.search(r"constraint def cliReference;\s*// guard 74 \(D0471/issue528\)", _gcs)),
     "controlMapPart": bool(re.search(r"part gCliReference : SystemSafetyConstraint \{", _cmap)),
     "controlMapHazard": (re.search(r"dependency from gCliReference to (ehz\d+);", _cmap) or [None, None])[1],
 } if _gr else None, "the guard as source declares it",
-     "keel-cli/src/guards.rs: `pub const GUARD_NAMES: [&str; N] = [...]` (N and the quoted names), the dispatch arm "
-     "`\"cli-reference\" => Some(cli_reference(root))`, both `pub fn tool_reference` and `pub fn cli_reference` bodies calling "
-     "`living_doc_files(root)`, the three dispatch reads by their literal call text, `#[test] fn` count inside `mod "
+     "the keel-guards crate's text (keel-cli/src/guards.rs until sprint 733; GUARD_NAMES from keel-schema since 732): `pub const GUARD_NAMES: [&str; N] = [...]` (N and the quoted names), the dispatch arm "
+     "`\"cli-reference\" => Some(cli_reference(root))` or, since sprint 733, the family-table entry `(\"cli-reference\", cli_reference)`, both `pub fn tool_reference` and `pub fn cli_reference` bodies calling "
+     "`living_doc_files(root)`, the three dispatch reads by their literal call text (`crate::` while the guards were in keel-cli, `keel_schema::` since sprint 733), `#[test] fn` count inside `mod "
      "cli_reference_tests`; .engine/docs/guards.md row `| `cli-reference` | HARD (D0471 / issue528)`; "
      ".engine/rules/guard-constraints.sysml `constraint def cliReference; // guard 74 (D0471/issue528)`; "
      ".tracking/architecture/control-map.sysml `part gCliReference : SystemSafetyConstraint {` and its `dependency from "
@@ -2502,7 +2502,7 @@ fact("sharedWalkDecision", {
      "named; pathWordsInDecision = the D0469 PATH_WORDS present as whole lower-case words in the decision text.")
 
 # --- D0472: the relation in source - tool_reference's first statement, one definition of the walk, and who calls it
-_gr = read(_mh("guards") or "") or ""
+_gr = read(_mh("surface", crate="keel-guards") or "") or ""  # sprint 733: the walk and both guards live in the surface family
 _grl = _gr.splitlines()
 def _lineno(pattern):
     for _i, _l in enumerate(_grl, 1):
@@ -2513,22 +2513,22 @@ _tr_line = _lineno(r"^pub fn tool_reference\(root: &Path\) -> GuardReport \{")
 _tr_body = ""
 if _tr_line:
     for _l in _grl[_tr_line:]:
-        if re.match(r"^(pub )?fn ", _l):
+        if re.match(r"^(pub(\(crate\))? )?fn ", _l):
             break
         _tr_body += _l + "\n"
 fact("sharedWalkSource", {
     "toolReferenceLine": _tr_line,
     "cliReferenceLine": _lineno(r"^pub fn cli_reference\(root: &Path\) -> GuardReport \{"),
-    "livingDocFilesLine": _lineno(r"^fn living_doc_files\(root: &Path\)"),
-    "livingDocFilesDefinitions": len(re.findall(r"^fn living_doc_files\(", _gr, re.M)),
+    "livingDocFilesLine": _lineno(r"^(?:pub\(crate\) )?fn living_doc_files\(root: &Path\)"),
+    "livingDocFilesDefinitions": len(re.findall(r"^(?:pub\(crate\) )?fn living_doc_files\(", _gr, re.M)),
     "callers": len(re.findall(r"living_doc_files\(root\)", _gr)),
     "toolReferenceFirstStatement": (_grl[_tr_line].strip() if _tr_line and _tr_line < len(_grl) else None),
     "toolReferenceCallsSharedWalk": bool(_tr_line) and _grl[_tr_line].strip() == "let files = living_doc_files(root);",
     "toolReferenceHasInlineWalk": "fn walk(" in _tr_body,
     "toolReferenceBodyLines": _tr_body.count("\n"),
 } if _gr else None, "the guard source",
-     "keel-cli/src/guards.rs read as lines: the 1-based line of `pub fn tool_reference(...) {`, `pub fn cli_reference(...) {` and "
-     "`fn living_doc_files(...)`; definitions = lines beginning `fn living_doc_files(`; callers = occurrences of "
+     "members/keel-guards/src/surface.rs (keel-cli/src/guards.rs until sprint 733) read as lines: the 1-based line of `pub fn tool_reference(...) {`, `pub fn cli_reference(...) {` and "
+     "`fn living_doc_files(...)` (pub(crate) since sprint 733); definitions = lines beginning `[pub(crate) ]fn living_doc_files(`; callers = occurrences of "
      "`living_doc_files(root)` (two = both guards, since the definition's own line does not carry `(root)` followed by `)`); "
      "toolReferenceFirstStatement = the stripped line after the fn header, compared to `let files = living_doc_files(root);`; "
      "toolReferenceHasInlineWalk = `fn walk(` anywhere in the body up to the next top-level `fn`.")
@@ -2757,17 +2757,18 @@ fact("cliInForceDecision", _f477 if _d0477 else None, "the Decision's fields as 
      "in context; D0108 / D0271 in decision; `one invocation drift, zero duplicate names` in rationale; `Removal path:` in consequences.")
 
 # --- D0477: the reader and the comparison in source, and the shared retired set
-_gr = read(_mh("guards") or "") or ""
+_gr = _crate_text("keel-guards")  # sprint 733: the guards are a crate, its text is every file of it
 _lib = read(_mh("lib", crate="keel-cli") or "") or ""
 # the reader moved from guards.rs to members/keel-schema/src/cli_facts.rs in sprint 717 (D0479: down into a leaf); the page reads it where it is
 _cf = read(os.path.join(REPO, "members", "keel-schema", "src", "cli_facts.rs")) or ""
 _pcf = _fn_body(_cf, "parse_cli_facts") if _cf else ""
 _csv = _fn_body(_gr, "cli_surface_violations") if _gr else ""
-_se = _fn_body(_lib, "supersede_edges") if _lib else ""
-_tests_mod = re.search(r"^mod cli_surface_declared_tests \{(.*)", _gr, re.S | re.M)
+_corpus = read(_mh("corpus", crate="keel-model") or "") or ""  # sprint 733: supersede_edges descended into keel-model
+_se = _fn_body(_corpus, "supersede_edges") if _corpus else ""
+_tests_mod = re.search(r"^mod cli_surface_declared_tests \{(.*?)(?=^// FILE: |\Z)", _gr, re.S | re.M)  # one file of the crate text
 _tests_body = _tests_mod.group(1) if _tests_mod else ""
 _test_names = re.findall(r"^\s*fn (\w+)\(\)", _tests_body, re.M)
-_gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", _gr, re.S)
+_gn = re.search(r"pub const GUARD_NAMES: \[&str; (\d+)\] =\s*\[([^\]]*)\]", read(_mh("guard_names") or "") or "", re.S)  # sprint 732: the list is keel-schema's
 _gnames = re.findall(r'"([^"]+)"', _gn.group(2)) if _gn else []
 fact("cliInForceSource", {
     "authoredFactHasPart": bool(re.search(r"pub struct AuthoredCliFact \{[^}]*pub part: String", _cf, re.S)),
@@ -2782,12 +2783,12 @@ fact("cliInForceSource", {
     "guardInNames": "cli-surface-declared" in _gnames,
     "guardCount": int(_gn.group(1)) if _gn else None,
     "guardCountMatchesList": bool(_gn) and int(_gn.group(1)) == len(_gnames),
-} if _gr and _lib else None, "the reader, the comparison and the shared retired set in source",
+} if _gr and _corpus else None, "the reader, the comparison and the shared retired set in source",
      "members/keel-schema/src/cli_facts.rs (guards.rs until sprint 717): `pub struct AuthoredCliFact {` carrying `pub part: String`; the body of `parse_cli_facts` carrying "
      "`strip_prefix(\"#Supersede dependency from \")` and `retired.contains(&part)`; the body of `cli_surface_violations` carrying "
      "the `(\"invocation\", f.invocation.as_str(), m.invocation)` tuple and the sentence `is declared by two CliCommand facts in "
-     "force`; `fn x()` names inside `mod cli_surface_declared_tests`; GUARD_NAMES count and members. keel-cli/src/lib.rs: the body "
-     "of `supersede_edges` joining `.engine/cli`.")
+     "force`; `fn x()` names inside `mod cli_surface_declared_tests`; GUARD_NAMES count and members (members/keel-schema/src/guard_names.rs since sprint 732). "
+     "members/keel-model/src/corpus.rs (keel-cli/src/lib.rs until sprint 733): the body of `supersede_edges` joining `.engine/cli`.")
 
 # --- D0477: the facts on disk - every CliCommand line, the #Supersede edges beside them, the set in force
 _cmds = read(os.path.join(REPO, ".engine", "cli", "commands.sysml")) or ""
@@ -3155,7 +3156,7 @@ def _module_home(name):
 
 
 _view_mod = read(_module_home("view/mod") or "") or ""
-_guards_rs = read(_mh("guards") or "") or ""
+_guards_rs = _crate_text("keel-guards")  # sprint 733: the crate's every file
 _main_rs = read(_mh("main", crate="keel-cli") or "") or ""
 _leaves = ["textscan", "ident", "done", "evidence", "suspect", "gitfacts", "binding"]
 _ups = ["reports", "priority"]
@@ -3273,7 +3274,7 @@ fact("processHookChain", _chain if all(_chain.values()) else None,
 
 # what the chain is about: where step order is enforced today
 _cursor = read(_module_home("cursor") or "") or ""
-_guards_src = read(_module_home("guards") or "") or ""
+_guards_src = _crate_text("keel-guards")  # sprint 733: the crate's every file
 _precommit = read(os.path.join(REPO, ".githooks", "pre-commit")) or ""
 _ci = read(os.path.join(REPO, ".github", "workflows", "ci.yml")) or ""
 _act = read(os.path.join(REPO, ".engine", "contracts", "activation.toml")) or ""
@@ -3885,11 +3886,13 @@ fact("verifyWaitsForItsPid", {
 _d0499 = _dec_file("0499-")
 _f499 = _decision_facts(_d0499, "d0499")
 _d0498 = _dec_file("0498-")
-_gd99_path = _module_home("guards")                  # wherever the workspace holds them (issue559/560), never a path typed here
+# the Decision describes commit 50e171a against 1ecbef0; guards.rs is read AT 50e171a under the path it had there
+# (keel-cli/src/guards.rs became member keel-guards in sprint 733, so the working tree has no file to read for this diff)
+_gd99_rel = "keel-cli/src/guards.rs"
+_ok99s, _gd99 = run(["git", "show", f"50e171a:{_gd99_rel}"])
+_gd99 = _gd99 if _ok99s else ""
 _td99_path = _module_home("touched")
-_gd99 = read(_gd99_path or "") or ""
 _td99 = read(_td99_path or "") or ""
-_gd99_rel = os.path.relpath(_gd99_path, REPO).replace(os.sep, "/") if _gd99_path else None
 _fs99 = read(os.path.join(REPO, "members", "keel-fs", "src", "fsx.rs")) or ""
 _ob99 = read(os.path.join(REPO, ".tracking", "obligations", "red-yield-637916a4.sysml")) or ""
 _first_cfg99 = next((i + 1 for i, l in enumerate(_gd99.splitlines()) if l.strip() == "#[cfg(test)]"), None)
@@ -3951,7 +3954,7 @@ fact("guardTestsNameScratchPerProcess", {
      "first line that is exactly `#[cfg(test)]`; the test region is that line to EOF and the production region is above it; scratch calls = "
      "`keel_fs::scratch(` in each region; fixedJoinsInTestRegion = `temp_dir().join(` lines in the test region whose rest of line has neither "
      "`process::id()` nor `gen_uuid()` (the census's own rule, touched.rs fixed_scratch_joins); lockedByName = the resolved path, repo-relative, inside GUARD_SOURCE_FILES; "
-     "diff = `git diff --numstat 1ecbef0 50e171a -- <the guards module as module_home resolves it>` and the `@@ -N` starts of `git diff -U0` over the same range, every one "
+     "diff = `git diff --numstat 1ecbef0 50e171a -- keel-cli/src/guards.rs` (guardsRs = `git show 50e171a:keel-cli/src/guards.rs`, the file at the commit the Decision describes; it is member keel-guards since sprint 733) and the `@@ -N` starts of `git diff -U0` over the same range, every one "
      "compared against firstCfgTestLine. control: fsx.rs searched for the scratch signature and the pid inside its body; touched.rs for the census and "
      "the two probe fn names (helperCarriesPid = the one-line body between the signature and its closing brace holds `std::process::id()`); scratchSitesInTree = `scratch(` calls (bare, keel_fs:: or fsx::) over every .rs file under keel-cli/src, keel-cli/tests "
      "and members/*/src. obligation from .tracking/obligations/red-yield-637916a4.sysml: its #Resolves edge and whether its description opens on the "
@@ -4295,8 +4298,8 @@ _d0503 = _dec_file("0503-")
 _f503 = _decision_facts(_d0503, "d0503")
 _gn03_path = os.path.join(REPO, "members", "keel-schema", "src", "guard_names.rs")
 _gn03 = read(_gn03_path) or ""
-_gd03_path = _module_home("guards")
-_gd03 = read(_gd03_path or "") or ""
+_gd03_path = _crate_root("keel-guards")  # sprint 733: the module is a crate; its root carries the lock and the two tests
+_gd03 = _crate_text("keel-guards")
 _gd03_rel = os.path.relpath(_gd03_path, REPO).replace(os.sep, "/") if _gd03_path else None
 _cp03 = read(os.path.join(REPO, "members", "keel-view", "src", "control_proof.rs")) or ""
 _vc03 = read(os.path.join(REPO, "members", "keel-view", "Cargo.toml")) or ""
@@ -4421,7 +4424,7 @@ fact("guardNameListIsASchemaFact", {
      "the held record for the guard-name list's move: Decision, the list and the lock in source, the member's read set, the landed diff, the declaration homes, live version and lock verdict, issues 579-581, sprint 732",
      _DEC_HOW + " Names by literal search in the field named; dependsOnD0479 = the `#DependsOn dependency from d0503 to d0479;` line. source: "
      "members/keel-schema/src/guard_names.rs searched for `pub const GUARD_NAMES: [&str; N] = [...]` (N and the quoted members counted apart); the guards "
-     "module wherever module_home resolves it searched for the same declaration (absent = moved), the `pub use keel_schema::guard_names::GUARD_NAMES;` "
+     "module (the keel-guards crate's every file since sprint 733) searched for the same declaration (absent = moved), the `pub use keel_schema::guard_names::GUARD_NAMES;` "
      "re-export, GUARD_SOURCE_FILES' quoted paths, the sprint-732 comment above it and the two test fn names; members/keel-view/src/control_proof.rs for the "
      "census call reading keel_schema; keel-view's Cargo.toml [dependencies] `x = { path = ...}` names; the .rs files under members/keel-view/src/view "
      "other than mod.rs; keel-view's lib.rs `pub mod x;` lines; keel-cli's lib.rs `pub use keel_view::x;` lines; .rs files and their line counts under "

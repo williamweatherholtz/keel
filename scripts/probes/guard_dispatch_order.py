@@ -1,6 +1,6 @@
 """Does dispatch ORDER move the guard set's wall clock? (dcGuardPoolDispatchesLongestFirst, issue455, D0388)
 
-The guard pool (keel-cli/src/guards.rs run_in_parallel) is greedy list scheduling: W workers, each takes the
+The guard pool (members/keel-guards/src/lib.rs run_in_parallel; keel-cli/src/guards.rs until sprint 733) is greedy list scheduling: W workers, each takes the
 next guard in GUARD_NAMES order when it frees. The question is whether handing them out longest-first (LPT)
 would shorten the makespan on the REAL durations. This script answers it by simulation, and per D0388 it
 states its two known cases before it reads the real set:

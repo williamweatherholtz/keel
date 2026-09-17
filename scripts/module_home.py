@@ -15,7 +15,7 @@ two crates is REFUSED, never guessed; a module found nowhere is None, so the cal
     module_home("no_such")    -> None
     rust_sources()            -> every .rs under every crate's src/ (the census walkers' corpus)
 
-    python scripts/module_home.py reverify guards        # print each home, or MISSING
+    python scripts/module_home.py reverify receipt       # print each home, or MISSING
     python scripts/module_home.py --probe                # the known cases + the anchor scan; exit 1 on any failure
 
 The probe also scans scripts/**/*.py and .engine/tools/*.py for a path EXPRESSION that anchors a .rs
@@ -69,7 +69,7 @@ EVERY_CRATE_HAS = ("lib", "main")
 
 
 def module_home(name: str, root: str | None = None, crate: str | None = None) -> str | None:
-    """The file for module `name` ("guards", "view/mod", "view"): `<src>/<name>.rs`, else `<src>/<name>/mod.rs`.
+    """The file for module `name` ("reverify", "view/mod", "view"): `<src>/<name>.rs`, else `<src>/<name>/mod.rs`.
 
     `crate` (a crate directory's basename, "keel-cli" or "keel-model") restricts the search to that crate.
     Raises AmbiguousModule when two crates both hold it, or when `name` is one every crate has and no crate
@@ -98,6 +98,45 @@ def rust_sources(root: str | None = None) -> list[str]:
         for dirpath, _dirs, files in os.walk(src):
             out.extend(os.path.join(dirpath, f) for f in sorted(files) if f.endswith(".rs"))
     return out
+
+
+# A module that became a CRATE (sprint 733: keel-cli's `guards` is `pub use keel_guards as guards`) has no
+# `guards.rs` anywhere, and its source is every file of that crate - so a caller asking "the guard source"
+# names the crate, and reads all of it, rather than one file that would be a fourteenth of the answer.
+def crate_dir(crate: str, root: str | None = None) -> str | None:
+    """The directory of workspace member `crate` (its Cargo.toml basename, "keel-guards"); None if no member has that name."""
+    hits = [c for c in crate_dirs(root) if os.path.basename(c) == crate]
+    return hits[0] if hits else None
+
+
+def crate_root(crate: str, root: str | None = None) -> str | None:
+    """`<crate>/src/lib.rs` - the file a `pub use <crate> as <module>;` re-export resolves to; None if the crate has no lib."""
+    d = crate_dir(crate, root)
+    lib = os.path.join(d, "src", "lib.rs") if d else None
+    return lib if lib and os.path.isfile(lib) else None
+
+
+def crate_sources(crate: str, root: str | None = None) -> list[str]:
+    """Every .rs under `<crate>/src/`, path order; empty when there is no such member."""
+    d = crate_dir(crate, root)
+    if not d or not os.path.isdir(os.path.join(d, "src")):
+        return []
+    out = []
+    for dirpath, _dirs, files in os.walk(os.path.join(d, "src")):
+        out.extend(os.path.join(dirpath, f) for f in sorted(files) if f.endswith(".rs"))
+    return sorted(out)
+
+
+def crate_text(crate: str, root: str | None = None) -> str:
+    """The crate's whole source as one text, files in path order, each led by a `// FILE: <rel>` line so a
+    match can still be placed; "" when there is no such member. The text a "does the guard source say X"
+    fact reads after the guards became a member."""
+    d = crate_dir(crate, root)
+    parts = []
+    for f in crate_sources(crate, root):
+        with open(f, encoding="utf-8", errors="replace") as fh:
+            parts.append(f"// FILE: {os.path.relpath(f, d).replace(os.sep, '/')}\n{fh.read()}")
+    return "\n".join(parts)
 
 
 # --- the anchor scan: a path expression naming a .rs file under keel-cli/src -----------------------------------
@@ -170,6 +209,14 @@ def probe() -> int:
         check("known-negative: the scan passes one that names its crate",
               not (BARE_EVERY_CRATE.search('_mh("lib", crate="keel-cli")') and "crate=" not in '_mh("lib", crate="keel-cli")'), "crate= present")
         check("rust_sources walks every crate's src", len(rust_sources(tmp)) == 6, f"{len(rust_sources(tmp))} files, expected 6 (only_a, deep/mod, both x2, lib x2)")
+        # a module that became a crate (sprint 733): the crate resolvers, positive then negative
+        open(os.path.join(tmp, "members", "b", "src", "deep", "mod.rs"), "w").write("pub fn run_one() {}\n")
+        check("known-positive: crate_root names the member's lib.rs",
+              crate_root("b", tmp) == os.path.join(tmp, "members", "b", "src", "lib.rs"), "b -> members/b/src/lib.rs")
+        check("known-positive: crate_text carries every file of the crate, each placed",
+              "// FILE: src/deep/mod.rs\npub fn run_one() {}" in crate_text("b", tmp) and len(crate_sources("b", tmp)) == 3,
+              f"{len(crate_sources('b', tmp))} files (deep/mod, both, lib)")
+        check("known-negative: a name no member has is None and empty", crate_root("zz", tmp) is None and crate_text("zz", tmp) == "", "zz -> None, \"\"")
 
     # The scan's own pair, chosen before the tree is read: the line that broke, and its replacement.
     broke = 'REVERIFY_RS = os.path.join(ROOT, "keel-cli", "src", "reverify.rs")'
@@ -186,11 +233,16 @@ def probe() -> int:
     # The real tree.
     root = repo_root()
     for name, tail in (("reverify", os.path.join("members", "keel-write", "src", "reverify.rs")),
-                       ("guards", os.path.join("keel-cli", "src", "guards.rs")),
+                       ("receipt", os.path.join("members", "keel-guards", "src", "receipt.rs")),
                        ("view", os.path.join("members", "keel-view", "src", "view", "mod.rs")),
                        ("guard_names", os.path.join("members", "keel-schema", "src", "guard_names.rs"))):
         home = module_home(name, root)
         check(f"this tree: {name} resolves", home is not None and home.endswith(tail), home or "MISSING")
+    # the guards are a crate (sprint 733): no file answers for the module, the crate answers for the source
+    check("this tree: guards is no single file", module_home("guards", root) is None, module_home("guards", root) or "None")
+    gt = crate_text("keel-guards", root)
+    check("this tree: keel-guards' text holds the runner and a family table",
+          "pub fn run_one(" in gt and "pub(crate) const FAMILY: Family" in gt, f"{len(crate_sources('keel-guards', root))} files")
     hits = anchored_lines(root)
     check("this tree: no script anchors a .rs file under keel-cli/src", not hits,
           "; ".join(f"{p}:{i}" for p, i, _ in hits) or "none")

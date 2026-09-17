@@ -44,14 +44,14 @@ pub mod currency;
 pub mod suite;
 pub mod touched;
 pub mod verify;
-pub mod eol;
+pub use keel_git::eol;
 pub use keel_github::github;
 pub mod github_ingest;
 pub mod adoption_check;
 pub mod attestation;
 pub use keel_write::intake_write;
 pub mod workspace;
-pub mod onboard;
+pub use keel_model::onboard;
 pub mod proactive;
 pub use keel_write::claim;
 pub mod deck;
@@ -62,31 +62,34 @@ pub mod library;
 pub mod enroll;
 pub use keel_git::gitx;
 pub use keel_model::corpus;
-pub mod receipt;
-pub mod contentkey;
+pub use keel_guards::receipt;
+pub use keel_guards::contentkey;
 pub use keel_model::gitfacts;
 pub use keel_model::binding;
 pub use keel_model::done;
 pub use keel_model::evidence;
-pub mod priority;
+pub use keel_view::priority;
 pub mod reports;
 pub use keel_model::ident;
 pub use keel_model::suspect;
 pub use keel_model::textscan;
 pub use keel_view::govern;
-pub mod guards;
+// The forward guards are member keel-guards (D0479, sprint 733), one module per family; `crate::guards::` keeps resolving.
+pub use keel_guards as guards;
 pub mod hook_binary;
-pub mod hardening;
+pub use keel_guards::hardening;
 pub use keel_model::indexer;
 pub mod migrate;
 use keel_json::json;
 pub use keel_model::fingerprint;
 pub use keel_perf::perf;
 pub use keel_view::pm;
-pub mod plan_cover;
+pub use keel_guards::plan_cover;
 pub use keel_model::orient;
 pub mod process_cmd;
-pub mod claude_surface;
+pub use keel_write::claude_surface;
+// The scaffolded pre-commit hook text rides with the surface whose probe it shares (sprint 733).
+pub use keel_write::claude_surface::precommit_hook;
 pub mod console_registry;
 pub use keel_model::queries;
 pub use keel_write::reverify;
@@ -105,45 +108,8 @@ pub use keel_model::model;
 // The corpus walk, the parse report type and the workflow cursor are the read model's (sprint 718).
 pub use keel_model::corpus::{collect_sysml, collect_sysml_uncached, parse_pkg, CheckError};
 pub use keel_model::indexer::{parse_cursor, Cursor};
-
-/// Recursively collect every `.sysml` file under `dir`, sorted by path.
-///
-/// Returns an empty `Vec` if `dir` does not exist or is not readable. Served from the process's
-/// remembered walk while every directory it entered still carries the mtime it had
-/// ([`corpus::collect_sysml`]); the change detector uses [`collect_sysml_uncached`].
-/// Every target of an authored `#Supersede dependency from X to Y;` line under `.engine/decisions/`
-/// and `.tracking/` - the RETIRED set (D0384 option A / D0398). The edge is the only authored mark of
-/// retirement; `#SupersedeClause` reverses one clause and is NOT collected here. The kernel-free
-/// readers (deck, guards) share this scan; the view layer computes the same set from parsed edges
-/// (`view::Model::retired`).
-#[must_use]
-pub fn supersede_targets(root: &Path) -> std::collections::HashSet<String> {
-    supersede_edges(root).into_iter().map(|(_, to)| to).collect()
-}
-
-/// Every authored `#Supersede dependency from X to Y;` line, as `(X, Y)`: X retired Y.
-///
-/// Scans `.engine/decisions/`, `.engine/cli/` and `.tracking/`. The pair is kept for the readers that
-/// name the superseder in what they report (issue423: a synopsis citing a retired Decision is told
-/// which Decision retired it). `.engine/cli/` joined in issue547: a `CliCommand` fact is retired by an
-/// edge authored beside it in `commands.sysml`, and the retired set every kernel-free reader shares
-/// has to agree with the one `guards::parse_cli_facts` reads from that file.
-#[must_use]
-pub fn supersede_edges(root: &Path) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let dirs = [root.join(".engine").join("decisions"), root.join(".engine").join("cli"), root.join(".tracking")];
-    for f in dirs.iter().flat_map(|d| collect_sysml(d)) {
-        let Ok(text) = corpus::read_to_string(&f) else { continue };
-        for line in text.lines() {
-            if let Some(rest) = line.trim_start().strip_prefix("#Supersede dependency from ") {
-                if let Some((from, to)) = rest.split_once(" to ") {
-                    out.push((from.trim().to_string(), to.trim().trim_end_matches(';').trim().to_string()));
-                }
-            }
-        }
-    }
-    out
-}
+// The supersede scan the kernel-free readers share descended with the guards (sprint 733).
+pub use keel_model::corpus::{supersede_edges, supersede_targets};
 
 // ── report types ─────────────────────────────────────────────────────────────
 
@@ -538,27 +504,6 @@ pub fn walk_longest(dir: &std::path::Path) -> usize {
     longest
 }
 
-/// A RUST-ONLY pre-commit gate scaffolded into a fresh project (`.githooks/pre-commit`).
-///
-/// In the library so `claude_surface` can hold the Claude hooks to the same binary-resolution order
-/// (issue348). Runs
-/// `keel gate validate` + `keel gate guard` — NO conda/JVM kernel (D0048: the Rust path is the authority).
-/// Enabled by the user with `git config core.hooksPath .githooks` (printed in the init Next steps).
-///
-/// FAILS LOUD without the binary (K2/P0.3, D0174): the previous version skipped with a printed
-/// notice, so an uninstalled downstream machine committed ungated while looking gated — the exact
-/// silent-pass class the proposal's §1.1 recorded. The remedy line names the documented install
-/// path (D0175's fence). POSIX sh.
-/// The scaffolded pre-commit hook text. A function, not a const, because its binary probe is the
-/// shared `claude_surface::pin_probe_sh` (issue378/GH#55): one probe text for the git hook and the
-/// Claude hooks, so they cannot resolve the binary differently.
-#[must_use]
-pub fn precommit_hook() -> String {
-    format!(
-        "#!/bin/sh\n# keel pre-commit gate (Rust-only; no JVM kernel) — scaffolded by `keel init` (D0048/D0093/D0174).\n# Enable: git config core.hooksPath .githooks   |   bypass once: SKIP_KEEL=1 git commit ...\n[ \"$SKIP_KEEL\" = \"1\" ] && {{ echo 'pre-commit: SKIP_KEEL=1 — keel gate skipped'; exit 0; }}\n# BINARY RESOLUTION, pinned-first (D0230; issue378/GH#55): KEEL_BIN, then a RELEASED binary dropped\n# at .keel/bin/keel, then the pin's own cache .keel/bin/<engine pin>/<asset> - the layout keelw and\n# keel init write - then PATH. The probe is the SAME text the Claude hooks embed, so the two surfaces\n# cannot resolve differently, and the line after it prints WHICH binary gated: a PATH fallback is\n# loud, never silent - one project's gate came to run an unreleased build with nothing saying so.\n{probe}\nKEEL=\"${{K:-keel}}\"\ncommand -v \"$KEEL\" >/dev/null 2>&1 || {{ echo \"pre-commit: keel binary NOT FOUND — commit BLOCKED (K2: an absent gate must not pass silently).\"; echo \"pre-commit: install keel from https://github.com/williamweatherholtz/sysmlv2-ai-toolkit/releases and put it on PATH (or set KEEL_BIN).\"; exit 1; }}\n# THE GATE IS WORKSPACE-SCOPED, ALWAYS (D0234/issue278). git allows ONE core.hooksPath per\n# repository, so a hook inside a project directory can never gate a sibling project - which is\n# why this hook is installed at the REPOSITORY ROOT. It used to branch on `[ ! -d .engine ]` to\n# decide whether it was at a workspace root; that test is wrong for the commonest layout, a repo\n# whose root is itself a project with peers beside it, where .engine exists and every peer\n# therefore rode out UNGATED. `keel gate --workspace` gates every project the commit touches and\n# is identical to the old single-project path when the repo holds exactly one project.\necho \"pre-commit: keel gate --workspace (every project this commit touches) via $KEEL - $(\"$KEEL\" version 2>/dev/null | head -n1)\"\n\"$KEEL\" gate --workspace . || {{ echo 'pre-commit: keel gate FAILED — commit aborted'; exit 1; }}\n",
-        probe = claude_surface::pin_probe_sh(".")
-    )
-}
 
 #[cfg(test)]
 mod engine_instance_tests {

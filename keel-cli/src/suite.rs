@@ -30,11 +30,9 @@ pub const DELIVERABLE_PATHS: [&str; 5] = ["keel-cli", ".engine", "keelw", "Cargo
 /// Where the receipt lives, repo-relative.
 pub const RECEIPT: &str = ".keel/metrics/suite-receipt.toml";
 
-/// Is this repository the self-build (the one with a suite to run)?
-#[must_use]
-pub fn is_self_build(repo: &Path) -> bool {
-    repo.join("keel-cli").join("Cargo.toml").is_file()
-}
+// The self-build predicate descended to the read model (sprint 733); re-exported so `crate::suite::is_self_build`
+// keeps resolving.
+pub use crate::corpus::is_self_build;
 
 /// The deliverable fingerprint: SHA-256 over `(path, content)` for every file git knows or would add
 /// under `DELIVERABLE_PATHS`, sorted by path, content read from DISK so an uncommitted edit counts.

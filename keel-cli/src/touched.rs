@@ -794,46 +794,9 @@ pub fn member_libs(repo: &Path) -> Vec<String> {
     out
 }
 
-/// The `[[test]]` targets of a Cargo manifest declared `harness = false` (pure over its text).
-///
-/// nextest lists a binary with `--list --format terse` before it runs it, and a custom harness -
-/// the three cucumber binaries here - does not answer that flag (`unexpected argument '--list'`,
-/// exit 104 before a single test ran, 2026-09-14). Those binaries run under `cargo test` in a second
-/// invocation; everything else runs under nextest.
-#[must_use]
-pub fn custom_harness_tests(manifest: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut in_test = false;
-    let mut name: Option<String> = None;
-    let mut custom = false;
-    for raw in manifest.lines() {
-        let line = raw.trim();
-        if line.starts_with('[') {
-            if custom {
-                out.extend(name.take());
-            }
-            name = None;
-            custom = false;
-            in_test = line == "[[test]]";
-            continue;
-        }
-        if !in_test {
-            continue;
-        }
-        if let Some((k, v)) = line.split_once('=') {
-            match k.trim() {
-                "name" => name = Some(v.trim().trim_matches('"').to_string()),
-                "harness" => custom = v.trim().starts_with("false"),
-                _ => {}
-            }
-        }
-    }
-    if custom {
-        out.extend(name.take());
-    }
-    out.sort();
-    out
-}
+// The manifest reader descended to the read model beside `workspace_members` (sprint 733); re-exported so
+// `crate::touched::custom_harness_tests` keeps resolving.
+pub use crate::corpus::custom_harness_tests;
 
 /// Which runner executes the set, and what the receipt says it was.
 #[derive(Debug, Clone, PartialEq, Eq)]

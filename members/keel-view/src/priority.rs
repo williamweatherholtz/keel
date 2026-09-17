@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use crate::json::Json;
+use keel_json::json::Json;
 use crate::view::{inversion_pairs, Model, ViewError};
 
 /// The deliberate-rank records (D0429): every `#PrioritizedBy` edge, as `item -> citation` when its
@@ -73,15 +73,15 @@ fn class_rank(s: &str) -> u8 {
 /// the item sat (D0311, the heredoc case: eight recurrences under "already tracked").
 fn retro_citations(root: &Path) -> HashMap<String, usize> {
     let mut counts: HashMap<String, usize> = HashMap::new();
-    for f in crate::collect_sysml(&root.join(".tracking").join("delivery")) {
+    for f in keel_model::corpus::collect_sysml(&root.join(".tracking").join("delivery")) {
         let Ok(t) = std::fs::read_to_string(&f) else { continue };
-        for retro in crate::textscan::retro_texts(&t) {
+        for retro in keel_model::textscan::retro_texts(&t) {
             let lower = retro.to_lowercase();
-            if !crate::textscan::RETRO_NO_ITEM_JUSTIFICATIONS.iter().any(|j| lower.contains(*j)) {
+            if !keel_model::textscan::RETRO_NO_ITEM_JUSTIFICATIONS.iter().any(|j| lower.contains(*j)) {
                 continue;
             }
             let mut seen: HashSet<String> = HashSet::new();
-            for n in crate::textscan::named_items(&retro) {
+            for n in keel_model::textscan::named_items(&retro) {
                 if seen.insert(n.clone()) {
                     *counts.entry(n).or_insert(0) += 1;
                 }
@@ -109,8 +109,8 @@ pub fn priority_signals(root: &Path) -> Result<Vec<PrioritySignal>, ViewError> {
     let model = Model::build(root)?;
     // The frontier alone (issue439): the guard built on this paid orient::compute whole - suspect
     // walk, drift, burndown - to read `ready`, and was the critical path of every slow hook fire.
-    let (ready, _compute_failures, _outstanding) = crate::perf::phase("priority:frontier", || crate::orient::ready(root));
-    let citations = crate::perf::phase("priority:retro-citations", || retro_citations(root));
+    let (ready, _compute_failures, _outstanding) = keel_perf::perf::phase("priority:frontier", || keel_model::orient::ready(root));
+    let citations = keel_perf::perf::phase("priority:retro-citations", || retro_citations(root));
     let (records, _) = priority_records(&model);
     let severity_of = |task: &str| -> Option<String> {
         model

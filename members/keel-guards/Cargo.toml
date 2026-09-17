@@ -1,0 +1,26 @@
+[package]
+name = "keel-guards"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The forward guards, one module per family, with the runner, the guard receipts, the content key, the hardening census and the plan-cover check."
+# The guard receipt keys on the build that wrote it (receipt.rs: KEEL_BUILD_COMMIT); the script that
+# bakes the commit is keel-cli's, shared, not copied (sprint 733, as keel-write).
+build = "../../keel-cli/build.rs"
+
+[dependencies]
+keel-parser = { path = "../../keel-parser" }
+keel-fs = { path = "../keel-fs" }
+keel-perf = { path = "../keel-perf" }
+keel-git = { path = "../keel-git" }
+keel-json = { path = "../keel-json" }
+keel-actor = { path = "../keel-actor" }
+keel-schema = { path = "../keel-schema" }
+keel-github = { path = "../keel-github" }
+keel-model = { path = "../keel-model" }
+keel-write = { path = "../keel-write" }
+keel-view = { path = "../keel-view" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
