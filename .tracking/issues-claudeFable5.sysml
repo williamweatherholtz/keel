@@ -1973,4 +1973,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcSittingReviewIsFinishedByAnalysis to issue597;
+
+    part issue598 : Issue {
+        :>> id = "d374b519-d2d3-4704-ac98-ae6aa2d14074";
+        :>> title = "The touched test set is measured under the committing shell's environment - KEEL_ACTOR leaked into keel-land and refused the D0510 push";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The touched test set is measured under whatever environment the committing shell had. Commit 619d6b0f (D0510 held) was made from a shell with KEEL_ACTOR=claudeFable5 exported; keel-land inherited it and the lib set read 859 passed, 1 failed: keel-serve launcher::tests::empty_diff_stays_local_and_written_diff_gets_gated_summary panicked at members/keel-serve/src/launcher.rs:379 'the RUN'S stamped actor, not the machine binding' (.keel/metrics/touched-1789678321.log:698,713), and the push was refused. The same test at the same code passed in sprint 738's landing run (e5e71f2a, 736 passed) from a shell without the variable. Cause, read from source: keel-actor's resolution order (members/keel-actor/src/actor.rs:159) takes KEEL_ACTOR before the .keel/actor file, and the test bound the file to 'hum' without clearing the variable, so its verdict depended on the runner's shell, not on the tree. The test-level fix (std::env::remove_var('KEEL_ACTOR') in the two launcher tests that bind the file, the idiom keel-actor's own tests already use at actor.rs:317 and :325) rides this commit. The class is wider than one test: any test that reaches actor::resolve, or reads KEEL_BIN, KEEL_ROOT or another session variable, is green or red by the shell that spawned keel-land, and CI (which has none of them) and the pre-push run then disagree - the local gate stops equalling CI (D0421's premise). The control belongs in the runner: keel land and keel suite --touched run the set with the session variables the engine documents (KEEL_ACTOR, KEEL_BIN, and the rest of the KEEL_* family the binary reads) removed from the child environment, and the receipt says so, so a green depends on the content the receipt keys (D0474) and on nothing the shell carried.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcTouchedRunEnvironmentIsNormalized to issue598;
 }

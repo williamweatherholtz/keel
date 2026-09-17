@@ -350,6 +350,7 @@ mod tests {
         let ledger = std::fs::read_to_string(root.join(".keel").join("metrics").join("hooks.jsonl")).expect("ledger");
         assert!(ledger.contains("launch-dirty-refusal"), "the refusal is PM's watch metric");
         std::fs::remove_file(root.join("scratch.txt")).expect("rm");
+        std::env::remove_var("KEEL_ACTOR");   // the file binding is under test (issue598)
         std::fs::write(root.join(".keel").join("actor"), "hum").expect("bind");
         let setup = prepare(&root, "critique", "tester").expect("clean tree prepares");
         assert!(!setup.head_at_spawn.is_empty(), "K12 needs the spawn HEAD");
@@ -361,6 +362,9 @@ mod tests {
     fn empty_diff_stays_local_and_written_diff_gets_gated_summary() {
         let root = git_root("finish");
         std::fs::create_dir_all(root.join(".keel")).expect("mkdir");
+        // the file binding is what this test measures; a session's KEEL_ACTOR outranks it
+        // (keel-actor resolution order 2 before 3), so the runner's shell must not leak in (issue598)
+        std::env::remove_var("KEEL_ACTOR");
         std::fs::write(root.join(".keel").join("actor"), "hum").expect("bind");
         let setup = prepare(&root, "demo", "tester").expect("prepare");
         let clean = finish(&root, &setup, Some(0), 3, false).expect("finish clean");
