@@ -3530,8 +3530,12 @@ else:
     _eng94["landing"] = None
 _ok94s, _o94s = run(["git", "status", "--short", "--", ".engine"])
 _eng94["workingTree"] = sorted(l for l in _o94s.splitlines() if l.strip()) if _ok94s else None
-# the binary's own test for the rule, run live (the lib test binary is the one keel land just built; ~a minute cold)
-_t94_rc, _t94_out = run_rc(["cargo", "test", "--release", "--manifest-path", "keel-cli/Cargo.toml", "--lib", "--",
+# the binary's own test for the rule, run live (the lib test binary is the one keel land just built; ~a minute cold) - in
+# the crate that holds the module, wherever the workspace holds it (sprint 735 moved it to keel-suite; issue559/issue574)
+_t94_home = _module_home("touched") or ""
+_t94_crate = os.path.dirname(os.path.dirname(_t94_home)) if _t94_home else ""
+_t94_manifest = os.path.relpath(os.path.join(_t94_crate, "Cargo.toml"), REPO).replace("\\", "/") if _t94_crate else "keel-cli/Cargo.toml"
+_t94_rc, _t94_out = run_rc(["cargo", "test", "--release", "--manifest-path", _t94_manifest, "--lib", "--",
                             "touched::tests::a_change_under_the_embedded_tree_names_init"], timeout=600)
 _t94_res = re.search(r"test result: (\w+)\. (\d+) passed; (\d+) failed", _t94_out or "")
 _i530 = _issue_facts("530", "dcTouchedReceiptStatesItsOwnAttribution")
@@ -3578,7 +3582,7 @@ fact("verifierStemsRow", {
         "ownTestFound": bool(_emb94_test), "ownTestLine": _emb94_test_line,
     },
     "live": {
-        "ownTest": {"exit": _t94_rc, "result": _t94_res.group(1) if _t94_res else None,
+        "ownTest": {"exit": _t94_rc, "manifest": _t94_manifest, "result": _t94_res.group(1) if _t94_res else None,
                     "passed": int(_t94_res.group(2)) if _t94_res else None, "failed": int(_t94_res.group(3)) if _t94_res else None},
         "verifierReceipt": _vr94,
         "landingReceipt": _tr94, "landingCommitEnginePaths": _eng94["landing"],
@@ -3598,8 +3602,9 @@ fact("verifierStemsRow", {
      "`| `stems` |`, searched for `PLUS `init``, `.engine/`, `embedded_stem`, `issue530`, `git status --short -- .engine`; "
      "claudeCopyIdentical = byte equality with .claude/skills/test-verify/SKILL.md. binary: the `pub fn embedded_stem` body in "
      "members/keel-suite/src/touched.rs (its 1-based line), searched for the strip_prefix, the `Some(\"init\")` return and the empty-rel None; "
-     "ownTestLine = the line of `fn a_change_under_the_embedded_tree_names_init`. live.ownTest = `cargo test --release --lib -- "
-     "touched::tests::a_change_under_the_embedded_tree_names_init` exit and its `test result:` line. verifierReceipt / landingReceipt "
+     "ownTestLine = the line of `fn a_change_under_the_embedded_tree_names_init`. live.ownTest = `cargo test --release --manifest-path <the crate holding the "
+     "touched module>/Cargo.toml --lib -- touched::tests::a_change_under_the_embedded_tree_names_init` exit and its `test result:` line "
+     "(manifest = the path used). verifierReceipt / landingReceipt "
      "= head, outcome, stems, passed, failed read from .keel/metrics/verify-receipt.toml and touched-receipt.toml (a verify receipt "
      "carries no run of its own: its [[rung]] name/verdict pairs, rungsGreen and stopped_at are read instead); landingCommitEnginePaths = `git show --name-only --format= <head> -- .engine`, "
      "the .engine paths the commit that receipt names changed; workingTreeEngineChanges = `git status --short -- .engine` now. "
@@ -4820,6 +4825,17 @@ _rc06v, _out06v = run_rc([KEEL, "version"], timeout=60)
 _guards06_line = next((l for l in (_out06v or "").splitlines() if l.strip().startswith("guards:")), "")
 _guards06 = re.search(r"guards:\s*(\d+)\D+(\d+) hard-blocking\D+(\d+) warning-only", _guards06_line)
 _tr06 = _receipt94("touched-receipt.toml")
+# the receipt is overwritten by every run, so once a later commit lands the landing's run survives only as its log: the
+# touched-<epoch>.log written between the landing commit's time and the next commit's, its nextest `Summary` lines summed
+_ok06t, _out06t = run(["git", "log", "-1", "--format=%ct", _LAND735_TO])
+_ok06n2, _out06n2 = run(["git", "rev-list", "--reverse", _LAND735_TO + "..HEAD"])
+_next06 = (_out06n2.split() or [None])[0] if _ok06n2 else None
+_ok06t2, _out06t2 = run(["git", "log", "-1", "--format=%ct", _next06]) if _next06 else (False, "")
+_win06 = (int(_out06t.strip()), int(_out06t2.strip()) if _ok06t2 and _out06t2.strip() else None) if _ok06t and _out06t.strip() else None
+_logs06 = sorted(int(m.group(1)) for f in os.listdir(os.path.join(REPO, ".keel", "metrics")) for m in [re.match(r"touched-(\d+)\.log$", f)] if m)
+_inwin06 = [e for e in _logs06 if _win06 and e >= _win06[0] and (_win06[1] is None or e < _win06[1])]
+_log06 = read(os.path.join(REPO, ".keel", "metrics", f"touched-{_inwin06[-1]}.log")) if _inwin06 else ""
+_sum06 = re.findall(r"^\s*Summary \[\s*([\d.]+)s\] (\d+) tests run: (\d+) passed(?: \(\d+ slow\))?(?:, (\d+) failed)?, (\d+) skipped", _log06 or "", re.M)
 _i588 = _issue_facts("588", "dcSuiteMeasuresTheWorkspace")
 _i589 = _issue_facts("589", "dcSprintNamesTheItemItDelivers")
 _s735 = _sprint_facts("sprint735_suiteIsAMember.sysml", "d0479")
@@ -4894,6 +4910,10 @@ fact("suiteDependsOnNoViewOrGuard", {
                           "violations": int(_pc06.group(4)) if _pc06 else None, "line": _pc06_last[:240] or None},
         "guards": {"total": int(_guards06.group(1)), "hardBlocking": int(_guards06.group(2)), "warningOnly": int(_guards06.group(3))} if _guards06 else None,
         "landingReceipt": _tr06,
+        "landingLog": {"window": _win06, "nextCommit": _next06[:8] if _next06 else None, "logsInWindow": len(_inwin06), "epoch": _inwin06[-1] if _inwin06 else None,
+                       "binaries": len(_sum06), "run": sum(int(r[1]) for r in _sum06), "passed": sum(int(r[2]) for r in _sum06),
+                       "failed": sum(int(r[3] or 0) for r in _sum06), "skipped": sum(int(r[4]) for r in _sum06),
+                       "seconds": round(sum(float(r[0]) for r in _sum06), 1)} if _sum06 else None,
     },
     "issue588": _i588,
     "issue589": _i589,
@@ -4927,7 +4947,9 @@ fact("suiteDependsOnNoViewOrGuard", {
      "suite.rs's DELIVERABLE_PATHS members and whether the run names keel-cli/Cargo.toml without --workspace (the issue588 shape, read as it stands). landed = `git diff --name-status -M " + _LAND735_FROM + " " + _LAND735_TO +
      "` first letters counted, rename rows kept with their similarity (movedWhole = 100), `--shortstat` over the range, `--numstat` and `-U0` over the range for members/keel-guards/src/lib.rs and receipt.rs alone "
      "(added and removed lines verbatim; lockedDiffIsTheTwoDescents = the removed lines hold the module line and forced's signature, the added lines hold the re-export and no fn), every old or new name held against the lock's file list and directory prefix. "
-     "live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line split into total / hard-blocking / warning-only; the touched receipt as section 32 reads it. "
+     "live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line split into total / hard-blocking / warning-only; the touched receipt as section 32 reads it; landingLog = the latest "
+     ".keel/metrics/touched-<epoch>.log whose epoch lies in [the landing commit's %ct, the next commit's %ct) - the receipt itself is overwritten by every run - with its nextest "
+     "`Summary [..s] N tests run: N passed[, N failed], N skipped` lines summed over the binaries. "
      "issues 588 and 589 as section 34. resolverPositions as section 34; sprint735 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or "
      "following a label's colon in that text; retroNotTrackedCount = the phrase counted; storyDodResults = the story's DoDRn outcomes and shas in the delivery file; itemDodResults = the backlog item's DoDRn outcomes and shas.")
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
