@@ -2317,7 +2317,7 @@ package IssuesClaudeOpus5 {
     }
     #Resolves dependency from dcRecordSubVerbsAreControlActions to issue497;
 
-    part issue608 : Issue {
+    part issue609 : Issue {
         :>> id = "52719ba6-7ead-416b-8e74-0f61499257ed";
         :>> title = "keel migrate reverts itself in every downstream project: the D0108 exemption is on a path a migration cannot write";
         :>> createdAt = "2026-09-18";
@@ -2326,5 +2326,5 @@ package IssuesClaudeOpus5 {
         :>> discoveredInField = false;
         :>> severity = Severity::High;
     }
-    #Resolves dependency from d0519 to issue608;
+    #Resolves dependency from d0519 to issue609;
 }
