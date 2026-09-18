@@ -11,9 +11,13 @@
 //! the fingerprint of the deliverable as it was tested, the HEAD it was tested near, when, and the
 //! counts. It is evidence about THIS machine's run and never travels — CI reruns the suite itself.
 //!
-//! THE FINGERPRINT is over the deliverable's CONTENT ON DISK, tracked or not: `keel-cli/`, the
-//! embedded `.engine/`, `keelw`, and the two Cargo manifests. It still answers "was this exact tree
-//! tested", which is worth knowing even when nothing refuses on the answer.
+//! THE FINGERPRINT is over the deliverable's CONTENT ON DISK, tracked or not: every workspace member
+//! the root `Cargo.toml` lists (read, never typed - issue588 was the typed list stopping at `keel-cli`
+//! while the members held their own tests), the embedded `.engine/`, `keelw`, and the two Cargo
+//! manifests. The receipt carries one digest PER ROOT, so the staleness message names the member
+//! whose edit moved it. It still answers "was this exact tree tested", which is worth knowing even
+//! when nothing refuses on the answer. The run is `cargo test --release --workspace`: the receipt's
+//! counts are the workspace's, the members' lib tests and the `harness = false` binaries included.
 //!
 //! THE RECEIPT SAYS WHAT WAS MEASURED (issue386). Two ways a run can end without measuring the code
 //! are told apart from a red: launched from the very image `cargo test --release` relinks, the
@@ -24,26 +28,41 @@
 use sha2::{Digest as _, Sha256};
 use std::path::{Path, PathBuf};
 
-/// The paths whose content is the deliverable, repo-relative.
-pub const DELIVERABLE_PATHS: [&str; 5] = ["keel-cli", ".engine", "keelw", "Cargo.toml", "Cargo.lock"];
+/// The deliverable paths NO workspace member owns, repo-relative: the embedded engine, the wrapper
+/// script and the two manifests. The members themselves come from the root manifest
+/// ([`deliverable_paths_of`]), never from a list typed here (issue588).
+pub const UNOWNED_DELIVERABLE_PATHS: [&str; 4] = [".engine", "keelw", "Cargo.toml", "Cargo.lock"];
 
-/// Where the receipt lives, repo-relative.
-pub const RECEIPT: &str = ".keel/metrics/suite-receipt.toml";
+/// The deliverable's roots from a root manifest text: each `[workspace] members` entry in manifest
+/// order, then [`UNOWNED_DELIVERABLE_PATHS`]. Pure.
+#[must_use]
+pub fn deliverable_paths_of(root_manifest: &str) -> Vec<String> {
+    let mut paths = keel_model::corpus::workspace_members(root_manifest);
+    paths.extend(UNOWNED_DELIVERABLE_PATHS.iter().map(|p| (*p).to_owned()));
+    paths
+}
 
-// The self-build predicate descended to the read model (sprint 733); re-exported so `crate::suite::is_self_build`
-// keeps resolving.
-pub use keel_model::corpus::is_self_build;
-
-/// The deliverable fingerprint: SHA-256 over `(path, content)` for every file git knows or would add
-/// under `DELIVERABLE_PATHS`, sorted by path, content read from DISK so an uncommitted edit counts.
+/// The deliverable's roots of the repository at `repo`.
 ///
 /// # Errors
-/// When git cannot list the tree.
-pub fn fingerprint(repo: &Path) -> Result<String, String> {
+/// When the root `Cargo.toml` cannot be read.
+pub fn deliverable_paths(repo: &Path) -> Result<Vec<String>, String> {
+    let root = std::fs::read_to_string(repo.join("Cargo.toml")).map_err(|e| format!("cannot read {}: {e}", repo.join("Cargo.toml").display()))?;
+    Ok(deliverable_paths_of(&root))
+}
+
+/// One digest per deliverable root: `(root, SHA-256 over (path, content) of every file git knows or
+/// would add under it, sorted by path)`, roots in [`deliverable_paths`] order, content read from DISK
+/// so an uncommitted edit counts. A root with no file on disk digests the empty set (present, empty).
+///
+/// # Errors
+/// When the root manifest cannot be read or git cannot list the tree.
+pub fn fingerprint_parts(repo: &Path) -> Result<Vec<(String, String)>, String> {
+    let roots = deliverable_paths(repo)?;
     let mut files: Vec<String> = Vec::new();
     for args in [vec!["ls-files", "-z", "--"], vec!["ls-files", "-z", "-o", "--exclude-standard", "--"]] {
         let mut a: Vec<&str> = args;
-        a.extend(DELIVERABLE_PATHS);
+        a.extend(roots.iter().map(String::as_str));
         let out = keel_git::gitx::git().arg("-C").arg(repo).args(&a).output().map_err(|e| format!("git ls-files: {e}"))?;
         if !out.status.success() {
             return Err(format!("git ls-files failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
@@ -52,16 +71,63 @@ pub fn fingerprint(repo: &Path) -> Result<String, String> {
     }
     files.sort();
     files.dedup();
+    Ok(roots
+        .iter()
+        .map(|root| {
+            let mut h = Sha256::new();
+            for rel in files.iter().filter(|f| *f == root || f.starts_with(&format!("{root}/"))) {
+                let Ok(bytes) = std::fs::read(repo.join(rel)) else { continue }; // deleted on disk: absent from the hash
+                h.update(rel.as_bytes());
+                h.update([0u8]);
+                h.update(&bytes);
+                h.update([0u8]);
+            }
+            (root.clone(), keel_actor::device::hex(&h.finalize()))
+        })
+        .collect())
+}
+
+/// The deliverable fingerprint over its parts: SHA-256 over `(root, digest)` in order. Pure.
+#[must_use]
+pub fn fingerprint_of(parts: &[(String, String)]) -> String {
     let mut h = Sha256::new();
-    for rel in &files {
-        let Ok(bytes) = std::fs::read(repo.join(rel)) else { continue }; // deleted on disk: absent from the hash
-        h.update(rel.as_bytes());
+    for (root, digest) in parts {
+        h.update(root.as_bytes());
         h.update([0u8]);
-        h.update(&bytes);
+        h.update(digest.as_bytes());
         h.update([0u8]);
     }
-    Ok(keel_actor::device::hex(&h.finalize()))
+    keel_actor::device::hex(&h.finalize())
 }
+
+/// The deliverable fingerprint of the repository at `repo` ([`fingerprint_of`] its
+/// [`fingerprint_parts`]).
+///
+/// # Errors
+/// As [`fingerprint_parts`].
+pub fn fingerprint(repo: &Path) -> Result<String, String> {
+    Ok(fingerprint_of(&fingerprint_parts(repo)?))
+}
+
+/// The roots whose digest differs between two part lists, or that only one side carries - the
+/// members a staleness message names. Pure; empty when both agree.
+#[must_use]
+pub fn moved_parts(before: &[(String, String)], now: &[(String, String)]) -> Vec<String> {
+    let mut moved: Vec<String> = now
+        .iter()
+        .filter(|(root, digest)| before.iter().find(|(r, _)| r == root).is_none_or(|(_, d)| d != digest))
+        .map(|(root, _)| root.clone())
+        .collect();
+    moved.extend(before.iter().filter(|(root, _)| !now.iter().any(|(r, _)| r == root)).map(|(root, _)| root.clone()));
+    moved
+}
+
+/// Where the receipt lives, repo-relative.
+pub const RECEIPT: &str = ".keel/metrics/suite-receipt.toml";
+
+// The self-build predicate descended to the read model (sprint 733); re-exported so `crate::suite::is_self_build`
+// keeps resolving.
+pub use keel_model::corpus::is_self_build;
 
 /// What the last suite run on this machine recorded.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +140,9 @@ pub struct Receipt {
     pub outcome: String,
     /// The run's wall clock; 0 on a running stub (issue472 - the touched receipt's word).
     pub seconds: u64,
+    /// One `(root, digest)` per deliverable root as the run saw it (`[[part]]` rows); empty on a
+    /// receipt written before the rows existed, and then no member can be named as moved.
+    pub parts: Vec<(String, String)>,
 }
 
 impl Receipt {
@@ -89,14 +158,28 @@ pub fn parse_receipt(text: &str) -> Option<Receipt> {
     let v = text.parse::<toml::Value>().ok()?;
     let s = |k: &str| v.get(k).and_then(toml::Value::as_str).map(str::to_owned);
     let n = |k: &str| v.get(k).and_then(toml::Value::as_integer).and_then(|i| u64::try_from(i).ok());
-    Some(Receipt { fingerprint: s("fingerprint")?, head: s("head").unwrap_or_default(), at: n("at").unwrap_or(0), passed: n("passed").unwrap_or(0), failed: n("failed").unwrap_or(0), outcome: s("outcome").unwrap_or_else(|| "fail".into()), seconds: n("seconds").unwrap_or(0) })
+    let parts = v
+        .get("part")
+        .and_then(toml::Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| Some((row.get("path")?.as_str()?.to_owned(), row.get("digest")?.as_str()?.to_owned())))
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(Receipt { fingerprint: s("fingerprint")?, head: s("head").unwrap_or_default(), at: n("at").unwrap_or(0), passed: n("passed").unwrap_or(0), failed: n("failed").unwrap_or(0), outcome: s("outcome").unwrap_or_else(|| "fail".into()), seconds: n("seconds").unwrap_or(0), parts })
 }
 
 fn render_receipt(r: &Receipt, log: &Path) -> String {
-    format!(
-        "# suite receipt: the deliverable as the full suite last saw it ON THIS MACHINE, and what that run\n# cost. Nothing refuses on it (D0356) - it is a measurement, not a gate. `outcome = \"running\"` is the\n# stub written before cargo starts (D0387): a run in progress, or one that was killed - not an answer.\n# `at` is when this file was WRITTEN - the end of a done run, the start of a stub - and `seconds` the\n# run's wall clock, the same two words the touched receipt uses (issue472).\nfingerprint = \"{}\"\nhead = \"{}\"\nat = {}\npassed = {}\nfailed = {}\noutcome = \"{}\"\nseconds = {}\nlog = \"{}\"\n",
+    use std::fmt::Write as _;
+    let mut text = format!(
+        "# suite receipt: the deliverable as the full suite last saw it ON THIS MACHINE, and what that run\n# cost. Nothing refuses on it (D0356) - it is a measurement, not a gate. `outcome = \"running\"` is the\n# stub written before cargo starts (D0387): a run in progress, or one that was killed - not an answer.\n# `at` is when this file was WRITTEN - the end of a done run, the start of a stub - and `seconds` the\n# run's wall clock, the same two words the touched receipt uses (issue472). `[[part]]` is one digest per\n# deliverable root - every workspace member the root manifest lists, then the paths no member owns -\n# so a later reader can name the member whose edit moved the fingerprint (issue588).\nfingerprint = \"{}\"\nhead = \"{}\"\nat = {}\npassed = {}\nfailed = {}\noutcome = \"{}\"\nseconds = {}\nlog = \"{}\"\n",
         r.fingerprint, r.head, r.at, r.passed, r.failed, r.outcome, r.seconds, log.to_string_lossy().replace('\\', "/")
-    )
+    );
+    for (root, digest) in &r.parts {
+        let _ = write!(text, "\n[[part]]\npath = \"{root}\"\ndigest = \"{digest}\"\n");
+    }
+    text
 }
 
 /// Read this machine's receipt, if any.
@@ -135,15 +218,27 @@ pub fn land_refusal(repo: &Path) -> Option<String> {
     if !is_self_build(repo) {
         return None;
     }
-    let now = match fingerprint(repo) {
-        Ok(f) => f,
+    let now = match fingerprint_parts(repo) {
+        Ok(p) => p,
         Err(e) => return Some(format!("the deliverable could not be fingerprinted ({e})")),
     };
-    match receipt(repo) {
+    staleness(receipt(repo).as_ref(), &now)
+}
+
+/// The reason `receipt` does not cover a tree whose parts are `now`, or `None` when it does. Pure.
+/// A CHANGED message names the roots that moved ([`moved_parts`]) - the member whose edit it was -
+/// or says the receipt predates the rows when it carries none.
+#[must_use]
+pub fn staleness(receipt: Option<&Receipt>, now: &[(String, String)]) -> Option<String> {
+    let now_fp = fingerprint_of(now);
+    match receipt {
         None => Some(format!("no suite receipt at {RECEIPT} - the full suite has not run on this machine since the receipt existed. Run `keel suite` (it writes the receipt), then land.")),
         Some(r) if r.outcome == "running" => Some(format!("a suite run started at {} on this machine and has not completed (or was killed) - its receipt is a running stub, not a verdict. Wait for it or run `keel suite` again.", r.at)),
         Some(r) if !r.green() => Some(format!("the last suite run on this machine was RED ({} passed, {} failed; head {}). Fix, run `keel suite` to green, then land.", r.passed, r.failed, r.head)),
-        Some(r) if r.fingerprint != now => Some(format!("the deliverable CHANGED since the last green suite run (receipt {} at head {}, {} passed; the tree now fingerprints {}). Run `keel suite`, then land.", &r.fingerprint[..12], r.head, r.passed, &now[..12])),
+        Some(r) if r.fingerprint != now_fp => {
+            let moved = if r.parts.is_empty() { "the receipt predates the per-root digests, so the moved member is not named".to_owned() } else { format!("moved: {}", moved_parts(&r.parts, now).join(", ")) };
+            Some(format!("the deliverable CHANGED since the last green suite run (receipt {} at head {}, {} passed; the tree now fingerprints {}; {moved}). Run `keel suite`, then land.", &r.fingerprint[..12], r.head, r.passed, &now_fp[..12]))
+        }
         Some(_) => None,
     }
 }
@@ -215,8 +310,9 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     // --help must not RUN the suite. It did, once, and cost 185 seconds to discover.
     if args.iter().take_while(|a| *a != "--").any(|a| a == "--help" || a == "-h") {
         println!("usage: keel suite [ROOT] [--touched] [-- <cargo test args>]");
-        println!("  runs the full suite (--release --no-fail-fast), logs under .keel/metrics/, and writes");
-        println!("  {RECEIPT}: the deliverable fingerprint, counts and outcome of that run.");
+        println!("  runs the full suite (--release --workspace --no-fail-fast: every member's tests), logs under");
+        println!("  .keel/metrics/, and writes {RECEIPT}: the deliverable fingerprint - one [[part]] digest per");
+        println!("  workspace member the root manifest lists plus .engine, keelw and the manifests - counts and outcome.");
         println!("  --touched: instead run ONLY the integration tests that name a module changed since the base");
         println!("  of the push (origin/<branch>, else the last suite receipt's head, else HEAD~1) and write");
         println!("  {}: the base, stems, set and cost - an empty set is recorded too (D0421).", crate::touched::RECEIPT);
@@ -259,15 +355,17 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     // completed run's verdict standing over a tree it never saw. Same fingerprint as the final receipt
     // will carry, so a reader comparing fingerprints is told the run is in progress, not stale.
     let head = keel_git::gitx::git().arg("-C").arg(repo).args(["rev-parse", "--short", "HEAD"]).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-    if let Ok(fp) = fingerprint(repo) {
-        let stub = Receipt { fingerprint: fp, head: head.clone(), at: started, passed: 0, failed: 0, outcome: "running".to_string(), seconds: 0 };
+    if let Ok(parts) = fingerprint_parts(repo) {
+        let stub = Receipt { fingerprint: fingerprint_of(&parts), head: head.clone(), at: started, passed: 0, failed: 0, outcome: "running".to_string(), seconds: 0, parts };
         if let Err(e) = keel_fs::fsx::write_atomic(&repo.join(RECEIPT), render_receipt(&stub, &log)) {
             eprintln!("keel suite: running stub could not be written: {e}");
         }
     }
-    println!("keel suite: cargo test --release --no-fail-fast (log -> {})", log.display());
+    // --workspace: every member's tests, the harness = false binaries included - the receipt's counts
+    // are the workspace's, not keel-cli's alone (issue588).
+    println!("keel suite: cargo test --release --workspace --no-fail-fast (log -> {})", log.display());
     let mut cmd = std::process::Command::new("cargo");
-    cmd.arg("test").arg("--release").arg("--manifest-path").arg(repo.join("keel-cli").join("Cargo.toml")).arg("--no-fail-fast");
+    cmd.arg("test").arg("--release").arg("--workspace").arg("--manifest-path").arg(repo.join("Cargo.toml")).arg("--no-fail-fast");
     for a in extra {
         cmd.arg(a);
     }
@@ -301,14 +399,14 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         return 2;
     }
     let outcome = if out.status.success() && failed == 0 { "pass" } else { "fail" };
-    let fp = match fingerprint(repo) {
-        Ok(f) => f,
+    let parts = match fingerprint_parts(repo) {
+        Ok(p) => p,
         Err(e) => {
             eprintln!("keel suite: ran ({passed} passed, {failed} failed) but the deliverable could not be fingerprinted: {e} - no receipt written");
             return if outcome == "pass" { 1 } else { 101 };
         }
     };
-    let r = done_receipt(fp, head, started, now_secs(), passed, failed, outcome);
+    let r = done_receipt(parts, head, started, now_secs(), passed, failed, outcome);
     if let Err(e) = keel_fs::fsx::write_atomic(&repo.join(RECEIPT), render_receipt(&r, &log)) {
         eprintln!("keel suite: receipt could not be written: {e}");
     }
@@ -322,8 +420,8 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
 /// The receipt a finished run writes: `at` is `finished` - the moment of the write, the touched
 /// receipt's meaning - and `seconds` the wall clock since `started` (issue472). Pure, tested.
 #[must_use]
-pub fn done_receipt(fingerprint: String, head: String, started: u64, finished: u64, passed: u64, failed: u64, outcome: &str) -> Receipt {
-    Receipt { fingerprint, head, at: finished, passed, failed, outcome: outcome.to_string(), seconds: finished.saturating_sub(started) }
+pub fn done_receipt(parts: Vec<(String, String)>, head: String, started: u64, finished: u64, passed: u64, failed: u64, outcome: &str) -> Receipt {
+    Receipt { fingerprint: fingerprint_of(&parts), head, at: finished, passed, failed, outcome: outcome.to_string(), seconds: finished.saturating_sub(started), parts }
 }
 
 /// Did cargo fail without a single `test result:` line - a build or tool failure, not a verdict?
@@ -341,7 +439,7 @@ pub fn receipt_path(repo: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{count_results, done_receipt, image_collides, never_ran, parse_receipt, render_receipt, Receipt};
+    use super::{count_results, deliverable_paths, deliverable_paths_of, done_receipt, fingerprint_of, fingerprint_parts, image_collides, moved_parts, never_ran, parse_receipt, render_receipt, staleness, Receipt, UNOWNED_DELIVERABLE_PATHS};
     use std::path::Path;
 
     /// THE CONTROL for issue386, meaningful on any host: the image cargo relinks collides, the
@@ -381,7 +479,7 @@ mod tests {
     fn a_running_stub_is_not_green_and_a_killed_run_leaves_it() {
         // D0387/issue399: the stub `cmd` writes before cargo starts is what a killed run leaves behind;
         // it must read as no verdict, never as the previous run's pass.
-        let stub = Receipt { fingerprint: "abc".into(), head: "1234567".into(), at: 7, passed: 0, failed: 0, outcome: "running".into(), seconds: 0 };
+        let stub = Receipt { fingerprint: "abc".into(), head: "1234567".into(), at: 7, passed: 0, failed: 0, outcome: "running".into(), seconds: 0, parts: Vec::new() };
         let text = render_receipt(&stub, Path::new("x.log"));
         let back = parse_receipt(&text).expect("parses");
         assert_eq!(back, stub);
@@ -394,7 +492,7 @@ mod tests {
         // issue472 known-positive: started=100, finished=700 -> at=700 (the write), seconds=600. Before
         // this `at` was `started`, one second after launch on every run, so a reader told to check `at`
         // against the launch epoch saw the run's identity and never its completion.
-        let r = done_receipt("abc".into(), "1234567".into(), 100, 700, 5, 0, "pass");
+        let r = done_receipt(vec![("keel-cli".into(), "abc".into())], "1234567".into(), 100, 700, 5, 0, "pass");
         assert_eq!((r.at, r.seconds), (700, 600));
         let text = render_receipt(&r, Path::new("x.log"));
         assert!(text.contains("at = 700\n") && text.contains("seconds = 600\n"), "{text}");
@@ -405,11 +503,91 @@ mod tests {
     fn a_running_stub_is_stamped_at_its_start_with_no_seconds() {
         // issue472 known-negative: the stub is written BEFORE cargo starts, so its `at` IS the start
         // and it has run for no time - the only receipt whose `at` equals the launch.
-        let stub = Receipt { fingerprint: "abc".into(), head: "1234567".into(), at: 100, passed: 0, failed: 0, outcome: "running".into(), seconds: 0 };
+        let stub = Receipt { fingerprint: "abc".into(), head: "1234567".into(), at: 100, passed: 0, failed: 0, outcome: "running".into(), seconds: 0, parts: Vec::new() };
         let text = render_receipt(&stub, Path::new("x.log"));
         assert!(text.contains("at = 100\n") && text.contains("seconds = 0\n"), "{text}");
         // and a receipt from before the field existed still parses, reading 0
         let old = parse_receipt("fingerprint = \"f\"\nhead = \"h\"\nat = 5\npassed = 1\nfailed = 0\noutcome = \"pass\"\n").expect("parses");
         assert_eq!(old.seconds, 0);
+    }
+
+    /// issue588: the deliverable's roots are READ from the root manifest - every member it lists, in
+    /// its order, then the four paths no member owns - never a list typed beside the code that stopped
+    /// at keel-cli while eighteen members held their own tests.
+    #[test]
+    fn the_deliverable_is_every_member_the_root_manifest_lists_plus_what_no_member_owns() {
+        let manifest = "[workspace]\nmembers = [\n    \"keel-parser\",\n    \"members/keel-fs\",\n    \"keel-cli\",\n]\nresolver = \"2\"\n";
+        assert_eq!(
+            deliverable_paths_of(manifest),
+            vec!["keel-parser", "members/keel-fs", "keel-cli", ".engine", "keelw", "Cargo.toml", "Cargo.lock"],
+            "members first in manifest order, then the unowned paths"
+        );
+        assert_eq!(deliverable_paths_of("[package]\nname = \"x\"\n"), UNOWNED_DELIVERABLE_PATHS.iter().map(|p| (*p).to_owned()).collect::<Vec<_>>(), "no members list: the unowned paths alone");
+        // The tree this test runs in: every listed member is a root, and keel-cli is no longer the only one.
+        let here = deliverable_paths(&keel_fs::test_support::repo_root()).expect("this repository's manifest");
+        assert!(here.iter().any(|p| p == "members/keel-fs") && here.iter().any(|p| p == "keel-parser") && here.iter().any(|p| p == "keel-cli"), "{here:?}");
+        assert!(here.len() > 10, "the workspace's members, not a typed handful: {}", here.len());
+    }
+
+    /// issue588 known-positive, chosen before the tree is read: an edit under a member's `src/`
+    /// moves that member's part alone, the fingerprint with it, and the CHANGED message names the
+    /// member. Known-negative: files under `target/` and `.keel/` - outside every root - move nothing.
+    #[test]
+    fn a_member_edit_moves_its_own_part_and_the_staleness_names_it() {
+        let dir = std::env::temp_dir().join(format!("keel-suite-fp-{}", keel_model::ident::gen_uuid()));
+        for sub in ["members/a/src", "members/b/src", "keel-cli/src", ".engine", "target/release", ".keel/metrics"] {
+            std::fs::create_dir_all(dir.join(sub)).unwrap();
+        }
+        let git = |args: &[&str]| {
+            let o = keel_git::gitx::git().arg("-C").arg(&dir).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["init", "-q"]);
+        std::fs::write(dir.join("Cargo.toml"), "[workspace]\nmembers = [\n    \"members/a\",\n    \"members/b\",\n    \"keel-cli\",\n]\n").unwrap();
+        std::fs::write(dir.join("Cargo.lock"), "# lock\n").unwrap();
+        std::fs::write(dir.join("keelw"), "#!/bin/sh\n").unwrap();
+        std::fs::write(dir.join("members/a/src/lib.rs"), "pub fn a() {}\n").unwrap();
+        std::fs::write(dir.join("members/b/src/lib.rs"), "pub fn b() {}\n").unwrap();
+        std::fs::write(dir.join("keel-cli/src/main.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(dir.join(".engine/x.sysml"), "package X;\n").unwrap();
+        std::fs::write(dir.join(".gitignore"), "target/\n.keel/\n").unwrap();
+        git(&["add", "-A"]);
+        let before = fingerprint_parts(&dir).expect("parts");
+        assert_eq!(before.iter().map(|(r, _)| r.as_str()).collect::<Vec<_>>(), vec!["members/a", "members/b", "keel-cli", ".engine", "keelw", "Cargo.toml", "Cargo.lock"]);
+        let green = done_receipt(before.clone(), "1234567".into(), 1, 2, 9, 0, "pass");
+        assert_eq!(staleness(Some(&green), &before), None, "the receipt covers the tree it was written over");
+
+        // known-negative: outside every root, uncommitted and ignored - the deliverable did not move
+        std::fs::write(dir.join("target/release/keel.exe"), "binary\n").unwrap();
+        std::fs::write(dir.join(".keel/metrics/x-receipt.toml"), "at = 1\n").unwrap();
+        assert_eq!(fingerprint_parts(&dir).expect("parts"), before, "target/ and .keel/ are outside the deliverable");
+
+        // known-positive: one member's source, uncommitted - that part moves, the others stay, the message names it
+        std::fs::write(dir.join("members/a/src/lib.rs"), "pub fn a() { /* edited */ }\n").unwrap();
+        let after = fingerprint_parts(&dir).expect("parts");
+        assert_eq!(moved_parts(&before, &after), vec!["members/a".to_owned()]);
+        assert_ne!(fingerprint_of(&before), fingerprint_of(&after));
+        let why = staleness(Some(&green), &after).expect("the deliverable changed");
+        assert!(why.contains("CHANGED") && why.contains("moved: members/a") && !why.contains("members/b"), "{why}");
+
+        // a receipt from before the rows existed cannot name the member, and says so
+        let old = Receipt { parts: Vec::new(), ..green };
+        let why = staleness(Some(&old), &after).expect("still changed");
+        assert!(why.contains("predates the per-root digests"), "{why}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_receipt_carries_one_row_per_root_and_round_trips_them() {
+        let parts = vec![("members/keel-fs".to_owned(), "d1".to_owned()), ("keel-cli".to_owned(), "d2".to_owned())];
+        let r = done_receipt(parts.clone(), "1234567".into(), 100, 700, 5, 0, "pass");
+        let text = render_receipt(&r, Path::new("x.log"));
+        assert_eq!(text.matches("\n[[part]]\npath = ").count(), 2, "two rows (the header comment names the table once more): {text}");
+        assert!(text.contains("path = \"members/keel-fs\"\ndigest = \"d1\"\n"), "{text}");
+        let back = parse_receipt(&text).expect("parses");
+        assert_eq!(back, r);
+        assert_eq!(back.parts, parts);
+        assert_eq!(back.fingerprint, fingerprint_of(&parts), "the fingerprint is the rows' digest, so a reader can recompute it");
+        assert_eq!(moved_parts(&parts, &[("keel-cli".to_owned(), "d2".to_owned())]), vec!["members/keel-fs".to_owned()], "a root only one side carries is moved");
     }
 }
