@@ -3,6 +3,7 @@ members = [
     "keel-parser",
     "members/keel-perf",
     "members/keel-git",
+    "members/keel-args",
     "members/keel-json",
     "members/keel-actor",
     "members/keel-schema",

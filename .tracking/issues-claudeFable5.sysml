@@ -2006,4 +2006,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcRecordTaskPlacesTheItemBeforeANamedOne to issue600;
+
+    part issue601 : Issue {
+        :>> id = "7b6a3bee-2996-45c6-90a4-b04e6daaa715";
+        :>> title = "a slice that starts at the fn line strands its doc comment - second sprint running";
+        :>> createdAt = "2026-09-17";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A slice that starts at the fn line leaves the fn's doc comment behind, and the stranded doc attaches to whatever item follows. Second sprint running: sprint 739 reattached three docs stranded in keel-cli/src/main.rs by earlier moves (cmd_check_engine's and gate --fast's above gate_subverb, why's above budget_arg) and called it a one-off; sprint 740 found two more (root_arg's doc left in members/keel-process/src/workspace.rs when root_arg went to main.rs and then to keel-args, cmd_init's doc above positional_arg) and reattached them in extract_seams.py. Neither rustdoc nor clippy has a lint for a doc that describes a different item, so the hand reattachment is the only thing that has caught it. The control belongs in the transform class that causes it: a codemod's plan asserts that the line preceding every slice start is neither a doc line nor an attribute, and its reconciliation line prints the count checked, so a slice that would strand a doc fails the dry run. Resolver: dcKeelCliIsThinDispatch, the last body-slicing transform, whose DoD now names the assertion.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcKeelCliIsThinDispatch to issue601;
 }

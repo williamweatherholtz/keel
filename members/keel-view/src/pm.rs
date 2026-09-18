@@ -33,28 +33,9 @@ pub const LEDGER_FIELDS: [&str; 6] = ["ts", "session", "event", "decision", "exi
 /// a schema drift the test names.
 pub const LEDGER_ADDITIVE_FIELDS: [&str; 5] = ["bin", "build", "phases", "control", "actorKind"];
 
-/// A hook fire at or past this many ms is SLOW (issue429 / D0414).
-///
-/// It carries `phases` in its ledger line and appears in `enforcement-report`'s `slowFires`. Set from
-/// the measurement that opened issue429: an idle full stop-hook run on the reference host is
-/// 2 650-2 990 ms, so a fire at 3 000 is one that did more than the idle run - and the tails (28 s,
-/// 35 s, 38 s, the 120 s watchdog) are the fires this exists to explain. A fire under it explains
-/// nothing and carries nothing.
-pub const SLOW_FIRE_MS: u64 = 3000;
-
-/// The `phases` value for a fire of `total_ms`, or `None` when the fire is not slow - the
-/// known-negative of D0414's probe pair: a fast fire carries no field at all.
-#[must_use]
-pub fn slow_fire_phases(total_ms: u64) -> Option<serde_json::Value> {
-    if total_ms < SLOW_FIRE_MS {
-        return None;
-    }
-    let rows = keel_perf::perf::attribution(total_ms)
-        .into_iter()
-        .map(|(name, ms)| serde_json::json!({"name": name, "ms": ms}))
-        .collect::<Vec<_>>();
-    Some(serde_json::Value::Array(rows))
-}
+// The threshold and the `phases` builder are the ledger writer's (`keel_write::ledger`, sprint 740, D0479):
+// the writer that stamps a slow fire and this reader share one constant. Both keep resolving as `pm::`.
+pub use keel_write::ledger::{slow_fire_phases, SLOW_FIRE_MS};
 
 /// One `slowFires` row (D0414 / issue429): the fire's identity and its own attribution. A line
 /// recorded before D0414 has no `phases`; the row says so instead of reading as an empty attribution.

@@ -5,3 +5,5 @@
 
 pub mod gitx;
 pub mod eol;
+// Project discovery (D0234 / issue281), below every verb's argument parsing (sprint 740, D0479).
+pub mod projects;

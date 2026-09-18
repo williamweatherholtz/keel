@@ -1032,6 +1032,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "keel-args"
+version = "0.4.1"
+dependencies = [
+ "keel-fs",
+ "keel-git",
+]
+
+[[package]]
 name = "keel-cli"
 version = "0.4.1"
 dependencies = [
@@ -1039,6 +1047,7 @@ dependencies = [
  "getrandom 0.3.4",
  "include_dir",
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-github",
@@ -1074,6 +1083,7 @@ dependencies = [
 name = "keel-git"
 version = "0.4.1"
 dependencies = [
+ "keel-fs",
  "keel-perf",
 ]
 
@@ -1118,7 +1128,6 @@ dependencies = [
  "keel-guards",
  "keel-model",
  "keel-perf",
- "keel-process",
  "keel-suite",
  "keel-view",
  "keel-write",
@@ -1269,6 +1278,7 @@ dependencies = [
  "keel-json",
  "keel-model",
  "keel-parser",
+ "keel-perf",
  "keel-schema",
  "serde",
  "serde_json",

@@ -116,7 +116,7 @@ pub fn enabled() -> bool {
 /// A hook fire that took 28 s wrote a ledger line saying `ms: 28000` and nothing else, and no measurement
 /// taken afterwards could say which phase it was: the tails are the fires nobody is watching. So a hook
 /// process collects phases WITHOUT `KEEL_PERF` - the counters stay relaxed atomics, `phase` pays one
-/// `Instant` and a map insert per named step - and a fire past `pm::SLOW_FIRE_MS` writes its attribution
+/// `Instant` and a map insert per named step - and a fire past `ledger::SLOW_FIRE_MS` writes its attribution
 /// into the line. `enabled()` still decides whether the report is PRINTED; this only decides whether the
 /// numbers exist.
 static PHASES_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

@@ -20,3 +20,21 @@
 pub mod fsx;
 pub mod test_support;
 pub use fsx::scratch;
+
+/// The character length of the longest path under `dir`, used by `keel init` to warn before a host
+/// path limit turns into an opaque `git add` failure (issue313).
+#[must_use]
+pub fn walk_longest(dir: &std::path::Path) -> usize {
+    let mut longest = 0;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = entry.path();
+            longest = longest.max(p.to_string_lossy().chars().count());
+            if p.is_dir() {
+                stack.push(p);
+            }
+        }
+    }
+    longest
+}

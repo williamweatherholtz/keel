@@ -61,114 +61,11 @@ pub(crate) fn decision_digest(root: &Path, rel_file: &str) -> Option<(String, St
     Some((field("context").unwrap_or_default(), field("decision").unwrap_or_default()))
 }
 
-/// Extract `OPTION X (short label)` enumerations from a Decision file's text. Two or more make the
-/// decision a FORK; fewer yield an empty list and the ordinary single Sign button.
-pub fn fork_options(root: &Path, rel_file: &str) -> Vec<(String, String)> {
-    let Ok(text) = std::fs::read_to_string(root.join(rel_file)) else { return Vec::new() };
-    let mut out = Vec::new();
-    let mut rest = text.as_str();
-    while let Some(pos) = rest.find("OPTION ") {
-        rest = &rest[pos + 7..];
-        let Some(tok) = rest.chars().next().filter(char::is_ascii_uppercase) else { continue };
-        let Some(open) = rest.find('(') else { continue };
-        if rest[1..open].trim().is_empty() {
-            if let Some(close) = rest.find(')') {
-                let label = rest[open + 1..close].trim().to_string();
-                if !label.is_empty() && !out.iter().any(|(t, _)| *t == tok.to_string()) {
-                    out.push((tok.to_string(), label));
-                }
-            }
-        }
-    }
-    if out.len() >= 2 { out } else { Vec::new() }
-}
-
-/// The words that mark a Decision as WEIGHING alternatives rather than stating one course (D0322,
-/// issue373). Each is a signal; two distinct signals in the `decision` field is the disguised-fork shape.
-const FORK_SIGNALS: [(&str, &[&str]); 8] = [
-    ("alternative", &["alternative", "alternatives"]),
-    ("either", &["either"]),
-    ("or-we-could", &["or we could", "we could instead", "could instead"]),
-    ("option", &["option", "options"]),
-    ("versus", &["versus", " vs ", " vs. "]),
-    ("trade-off", &["trade-off", "tradeoff", "trade-offs", "tradeoffs"]),
-    ("enumeration", &["(a)", "(b)", " a: ", " b: ", " a) ", " b) "]),
-    ("recommend", &["recommend", "recommends", "recommended", "recommendation"]),
-];
-
-/// The author's stated way out: a Decision that weighs alternatives in passing and IS a decision says
-/// so, in these words, and the record carries the assertion.
-pub const NOT_A_FORK: &str = "NOT A FORK";
-
-/// Which fork signals a Decision's `decision` text carries, by name - the disguised-fork detector
-/// (D0322 / issue373, found by stpa-self run 1 as UCA-R1).
-///
-/// `fork_options` reads ONE lexical shape, `OPTION X (label)`; a Decision that weighs alternatives in
-/// prose without it auto-accepted under standing consent, and the author controlled the lexicon that
-/// decided whether the human was asked. This reads the words that weigh: two distinct signals hold the
-/// Decision proposed. Measured before the threshold was set (the D0102 way): over 109 auto-accepted
-/// Decisions, four carry two signals - three describe the surfacing process itself (D0207, D0269,
-/// D0288, false positives an author answers with `NOT A FORK`) and one (D0292) recommended a routing
-/// and executed it, which is the class this exists to catch. No auto-accepted Decision carries three.
-#[must_use]
-pub fn fork_signals(decision_text: &str) -> Vec<&'static str> {
-    let lower = format!(" {} ", decision_text.to_lowercase());
-    let word = |w: &str| -> bool {
-        // whole-word for alphabetic tokens; the punctuation-bearing ones match as written
-        if w.chars().all(|c| c.is_ascii_alphabetic() || c == '-') {
-            lower.match_indices(w).any(|(i, _)| {
-                let before = lower[..i].chars().last().is_none_or(|c| !c.is_alphanumeric());
-                let after = lower[i + w.len()..].chars().next().is_none_or(|c| !c.is_alphanumeric());
-                before && after
-            })
-        } else {
-            lower.contains(w)
-        }
-    };
-    FORK_SIGNALS.iter().filter(|(_, words)| words.iter().any(|w| word(w))).map(|(name, _)| *name).collect()
-}
-
-/// Is this Decision a fork in substance without the marker - and not declared otherwise?
-#[must_use]
-pub fn disguised_fork(decision_text: &str) -> Option<Vec<&'static str>> {
-    if decision_text.contains(NOT_A_FORK) {
-        return None;
-    }
-    let s = fork_signals(decision_text);
-    (s.len() >= 2).then_some(s)
-}
-
-#[cfg(test)]
-mod fork_shape_tests {
-    use super::{disguised_fork, fork_signals};
-
-    /// The D0292 shape: a routing RECOMMENDED with per-item OPTIONS, then executed under consent - held.
-    #[test]
-    fn a_recommendation_naming_options_is_a_disguised_fork() {
-        let d = "Route as recommended. Eleven Issues with resolver tasks; a deactivated process's skill is deployed stating its state, option B.";
-        assert_eq!(disguised_fork(d), Some(vec!["option", "recommend"]));
-    }
-
-    /// A genuine decision that mentions the rejected alternative in passing carries ONE signal: it
-    /// auto-accepts as before. The author's `NOT A FORK` also clears a two-signal text.
-    #[test]
-    fn one_signal_in_passing_is_a_decision_and_the_author_may_say_so() {
-        assert_eq!(fork_signals("Adopt the merge; the alternative of a never-overwrite list would freeze the engine's sections."), vec!["alternative"]);
-        assert!(disguised_fork("Adopt the merge; the alternative would freeze the engine's sections.").is_none());
-        assert!(disguised_fork("The surfacing page carries the options and my recommendation. NOT A FORK: this defines the page, it chooses nothing.").is_none());
-        assert!(fork_signals("optional fields and a recommender system").is_empty(), "whole words only: `optional`, `recommender` are not the signals");
-    }
-
-    /// Enumerated courses with a verdict phrase read as weighing.
-    #[test]
-    fn enumerated_courses_are_a_signal() {
-        assert_eq!(disguised_fork("Two ways: (a) refuse at record time; (b) warn at the gate. Either works; we take (a)."), Some(vec!["either", "enumeration"]));
-    }
-}
-
 // The consent-marker classifier descended to the read model's textscan (sprint 733): one classifier for the
 // write path's hold, guard `consent-scope` and the deck, re-exported so `crate::deck::` paths keep resolving.
 pub use keel_model::textscan::{marker_text_without_marker, marker_words, MARKER_WORDS, NOT_A_PROCESS_CHANGE};
+// Fork detection descended there too (sprint 740, D0479), so the record verbs reach it without the console.
+pub use keel_model::textscan::{disguised_fork, fork_options, fork_signals, NOT_A_FORK};
 
 /// `keel render decision-card [NAME] [--proposed]` (D0205 githubChannel; under `render` since D0449).
 ///
@@ -793,36 +690,6 @@ document.body.setAttribute('data-local-js','ok');
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// issue223: a Decision enumerating `OPTION X (label)` choices is a FORK — the deck must offer
-    /// one sign button per option, because a bare Sign tap on a fork cannot bind (D0192's tap was
-    /// solicited and wasted). Pinned to D0192's actual text shape.
-    #[test]
-    fn fork_options_parse_the_d0192_shape() {
-        let dir = keel_fs::scratch("keel-deck-forkcheck");
-        let _ = std::fs::create_dir_all(&dir);
-        std::fs::write(
-            dir.join("d.sysml"),
-            ":>> decision = \"PROPOSED, two options costed - accepting this Decision means choosing ONE: \
-             OPTION A (amend the requirement): supersede srK06 ... OPTION B (close the path): acceptances \
-             become human-gesture-only ...\";",
-        )
-        .expect("write");
-        let opts = fork_options(&dir, "d.sysml");
-        assert_eq!(
-            opts,
-            vec![
-                ("A".to_string(), "amend the requirement".to_string()),
-                ("B".to_string(), "close the path".to_string())
-            ]
-        );
-        // A single option is NOT a fork: the ordinary Sign button stays.
-        std::fs::write(dir.join("one.sysml"), "OPTION A (only one)").expect("write");
-        assert!(fork_options(&dir, "one.sysml").is_empty());
-        // No options at all.
-        std::fs::write(dir.join("none.sysml"), "an ordinary decision text").expect("write");
-        assert!(fork_options(&dir, "none.sysml").is_empty());
-    }
 
     /// PASS ZERO (issue191, now enforced at the source): the emitted script must PARSE. Checked with
     /// node when available; a missing node SKIPS LOUDLY rather than passing vacuously (issue183's

@@ -40,9 +40,12 @@ use keel_cli::embedded::ENGINE_DIR;
 use keel_cli::{check_files, collect_sysml, validate_root};
 use keel_cli::orient;
 use keel_cli::write as w;
-// The hooks are member keel-hooks (D0479, sprint 739); project discovery is the process layer's.
-use keel_cli::hooks::{cmd_hook, ledger_gate, ledger_refused, override_path, override_target, refused_injected_prose, OVERRIDE_TTL_SECS, RECALL_BUDGET};
-use keel_cli::workspace::{engine_version_skew, find_repo_root};
+// The hooks are member keel-hooks (D0479, sprint 739).
+use keel_cli::hooks::{cmd_hook, override_path, override_target, OVERRIDE_TTL_SECS, RECALL_BUDGET};
+// Project discovery is keel-git's, the ledger writers the write API's, the shared argument helpers keel-args' (D0479, sprint 740).
+use keel_cli::projects::{engine_version_skew, find_repo_root};
+use keel_cli::ledger::{ledger_gate, ledger_refused, refused_injected_prose};
+use keel_cli::args::{flag, positional_arg, prose_args, prose_flag, provenance_date, refuse_flag_as_path, repo_arg, root_arg, without_flag_values};
 
 // ── engine scaffold payload (D0093 `init`): `keel_cli::embedded::ENGINE_DIR`, embedded ONCE in the
 //    library so the process-change guard reads the same bytes `init` and `migrate` write (D0441). ──
@@ -76,66 +79,6 @@ const GITIGNORE: &str = "# keel machine-local state — never commit these.
 # Generated views/reports — regenerable from the model, so they are outputs, not facts.
 *.keel.html
 ";
-
-/// Drop each named flag AND ITS VALUE, leaving only true positionals for [`root_arg`].
-///
-/// THE CLASS THIS ENDS, third instance in one session: `root_arg` takes the first bare token as ROOT
-/// and cannot know which flags consume the token after them, so every command that adds a
-/// value-taking flag re-creates the bug. `keel github decider --root X` read X as a login,
-/// `keel recall --prompt -` read `-` as a root, and `keel why t --budget 1500` read 1500 as a root —
-/// each silently answering about the wrong thing until the issue281 project precondition started
-/// refusing outright, which is the only reason the last two were visible at all.
-///
-/// It is NOT fixed inside `root_arg` because a known flag's following positional is legitimately the
-/// root for existing callers (`--explain /r`), so the distinction has to be stated by the caller that
-/// knows it.
-fn without_flag_values(args: &[String], value_flags: &[&str]) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut skip = false;
-    for a in args {
-        if skip {
-            skip = false;
-            continue;
-        }
-        if let Some(name) = a.strip_prefix("--") {
-            if value_flags.contains(&name) {
-                skip = true;
-                continue;
-            }
-        }
-        out.push(a.clone());
-    }
-    out
-}
-
-fn root_arg(args: &[String], usage: &str, known: &[&str], positionals: usize) -> Result<PathBuf, i32> {
-    let mut positional: Vec<&String> = Vec::new();
-    for a in args {
-        if let Some(name) = a.strip_prefix("--") {
-            // A flag's VALUE is consumed by the caller's own parse; only the flag NAME is judged here.
-            if !known.contains(&name) {
-                eprintln!("error: unknown flag `{a}`");
-                eprintln!("usage: {usage}");
-                return Err(2);
-            }
-        } else {
-            positional.push(a);
-        }
-    }
-    if let Some(p) = positional.get(positionals) {
-        let root = PathBuf::from(p.as_str());
-        keel_cli::workspace::require_project(&root, usage)?;
-        return Ok(root);
-    }
-    let root = find_repo_root().ok_or_else(|| {
-        eprintln!("error: no .engine/ directory found from the current directory upward");
-        eprintln!("  (the search stops at the repository boundary — it will not answer for another repo).");
-        eprintln!("usage: {usage}");
-        2
-    })?;
-    keel_cli::workspace::require_project(&root, usage)?;
-    Ok(root)
-}
 
 // ── subcommands ───────────────────────────────────────────────────────────────
 
@@ -637,28 +580,6 @@ fn cmd_github(args: &[String]) -> i32 {
     }
     eprintln!("usage: keel github pull|ingest|decider|gesture|decision-id ...   (D0453: the five channel verbs under one router, each keeping its arguments - `keel github <sub-verb>` with none is its own usage)");
     2
-}
-
-/// Refuse an argument that LOOKS like a flag where a path or a name is expected (GH#14).
-///
-/// A mistyped or unsupported `--flag` used to be accepted as the ROOT: `keel gate guard --read` gated a
-/// directory named `--read`, found nothing, and reported every guard PASS with 0 scanned. Silent
-/// mis-parsing plus pass-at-zero produces a GREEN RUN OVER NOTHING, which is worse than an error
-/// because it is indistinguishable from a clean tree. The same shape was hit again while building
-/// `github ingest`, where a trailing `--at` value was read as the root.
-///
-/// Returns the exit code to use, or `None` when the argument is fine. `cmd_activation` already did
-/// this for process names (issue179); this generalises it to every path-taking entry point.
-fn refuse_flag_as_path(arg: Option<&String>, cmd: &str) -> Option<i32> {
-    let a = arg?;
-    if !a.starts_with("--") {
-        return None;
-    }
-    eprintln!("keel {cmd}: `{a}` looks like a flag, not a path.");
-    eprintln!("  It would otherwise be taken as the ROOT — and a root that does not exist scans");
-    eprintln!("  NOTHING, so every check would report PASS over an empty tree (GH#14). Refusing");
-    eprintln!("  rather than answering green about a directory that is not there.");
-    Some(2)
 }
 
 /// A string that names a runnable guard (an enforced one, or a runnable-only diagnostic).
@@ -1662,96 +1583,6 @@ fn cmd_ls(args: &[String]) -> i32 {
     0
 }
 
-/// Parse simple `--key value` flag pairs from a flat args slice.
-fn flag(args: &[String], name: &str) -> Option<String> {
-    let key = format!("--{name}");
-    args.windows(2).find_map(|w| match w {
-        [k, v] if *k == key => Some(v.clone()),
-        _ => None,
-    })
-}
-
-/// A PROSE flag: `--<name>-from FILE` read verbatim (trimmed), else `--<name> TEXT`. One reader for
-/// every prose input of `record` (D0224, issue543). The trap this closes: a backtick inside a
-/// double-quoted shell argument is command substitution, so the shell RUNS the command the prose
-/// merely names - it fired into `decision` twice, `issue` once, `task` once, and on 2026-09-14 a
-/// FIFTH time into `result`'s evidence, because the file form had been added verb by verb, each
-/// after its own occurrence. Refuses both flags at once by name (the caller learns which would
-/// have won) and a file it cannot read. `Ok(None)` is neither flag given.
-fn prose_flag(args: &[String], name: &str, verb: &str) -> Result<Option<String>, String> {
-    let from = flag(args, &format!("{name}-from"));
-    let inline = flag(args, name);
-    match (from, inline) {
-        (Some(_), Some(_)) => Err(format!("{verb}: --{name}-from and --{name} were both given; pass one")),
-        (Some(f), None) => match std::fs::read_to_string(&f) {
-            Ok(t) => Ok(Some(t.trim().to_string())),
-            Err(e) => Err(format!("{verb}: cannot read {f}: {e}")),
-        },
-        (None, inline) => Ok(inline),
-    }
-}
-
-/// The argument list with every `--<name>-from FILE` of `names` rewritten into `--<name> TEXT`
-/// through `prose_flag`, for a command whose prose is read DOWNSTREAM of its entry - `accept`'s
-/// `--note` is read by `fold_words_into_note`, `fold_warnings_into_note` and the channel layer
-/// before the command itself reads it (issue546, sprint 713). Normalising the arguments once at
-/// the entry means every reader sees one form and none learns about files; the alternative,
-/// teaching each of seven reads about `-from`, is the verb-by-verb path D0224 refused. Both forms
-/// of one name is refused by name (the error is `prose_flag`'s) and nothing downstream runs.
-fn prose_args(args: &[String], names: &[&str], verb: &str) -> Result<Vec<String>, i32> {
-    let mut out = args.to_vec();
-    for name in names {
-        let from_key = format!("--{name}-from");
-        if !out.contains(&from_key) {
-            continue;
-        }
-        let text = match prose_flag(&out, name, verb) {
-            Ok(Some(t)) => t,
-            Ok(None) => continue,
-            Err(msg) => {
-                eprintln!("error: {msg}");
-                return Err(2);
-            }
-        };
-        let mut next = Vec::with_capacity(out.len());
-        let mut skip_value = false;
-        for a in &out {
-            if skip_value {
-                skip_value = false;
-            } else if *a == from_key {
-                skip_value = true;
-            } else {
-                next.push(a.clone());
-            }
-        }
-        next.push(format!("--{name}"));
-        next.push(text);
-        out = next;
-    }
-    Ok(out)
-}
-
-/// A provenance DATE, refused rather than defaulted (issue182).
-///
-/// Five write paths read this as `flag(args, ..).unwrap_or_else(|| "2026-01-01".to_owned())`. CLAUDE.md
-/// says provenance is never defaulted; that rule was implemented for the ACTOR, where a missing actor
-/// makes the write refuse, and the DATE fell back to a false constant. A result written without a date
-/// claimed it happened on 2026-01-01, which corrupts any series and feeds guard 36 - whose whole job is
-/// catching evidence that cites a date it could not have had.
-///
-/// REFUSED, not defaulted to today: an AI has no clock it can honestly attest to, and guessing is what
-/// produced the constant in the first place. The caller states the date or the write does not happen.
-fn provenance_date(args: &[String], flag_name: &str, usage: &str) -> Result<String, i32> {
-    flag(args, flag_name).ok_or_else(|| {
-        eprintln!("error: --{flag_name} YYYY-MM-DD is required.");
-        eprintln!(
-"  A provenance date is never defaulted: it used to fall back to 2026-01-01."
-        );
-        eprintln!("usage: {usage}");
-        2
-    })
-}
-
 fn cmd_append_result(args: &[String]) -> i32 {
     let Some(file_str) = flag(args, "file") else {
         eprintln!("usage: keel record result --file FILE --task TASK --sha SHA [--verdict pass|fail] [--judged-by ACTOR] [--judged-at DATE]");
@@ -2155,7 +1986,7 @@ fn cmd_record(args: &[String]) -> i32 {
             // the OPTION marker is a fork in substance; standing consent must not accept it on the spot.
             // Two distinct signals in the decision text hold it proposed and say which words; the
             // author writes it as a fork or states `NOT A FORK` in the text.
-            let disguised = keel_cli::deck::disguised_fork(&decision);
+            let disguised = keel_cli::textscan::disguised_fork(&decision);
             // D0396 / D0375 option C: a marker Decision naming a STEP of a plan the human signed
             // themselves is covered by that signature - the human signed once, on the plan, and its
             // enumerated steps do not re-ask. Checked BEFORE standing consent, because the cover flows
@@ -2171,12 +2002,12 @@ fn cmd_record(args: &[String]) -> i32 {
             if let Some(code) = consent_scope_gate(&root, Path::new(&path), &nnnn, marker, &[&context, &decision, &rationale, &consequences]) {
                 return code;
             }
-            match (keel_cli::activation::standing_consent(&root), keel_cli::deck::fork_options(&root, &rel).is_empty(), disguised) {
+            match (keel_cli::activation::standing_consent(&root), keel_cli::textscan::fork_options(&root, &rel).is_empty(), disguised) {
                 (Some(consent), true, Some(signals)) => {
                     println!(
                         "HELD as a fork in substance: the decision text weighs alternatives ({}) without the `OPTION X (label)` marker, so standing consent {consent} does not apply (D0322/issue373). Write it as a fork (OPTION A (label) ... COST ...; OPTION B ...), or state `{}: <why it chooses one course>` in the text and re-record; a human may still accept it with their quoted word (D0289).",
                         signals.join(", "),
-                        keel_cli::deck::NOT_A_FORK
+                        keel_cli::textscan::NOT_A_FORK
                     );
                 }
                 (Some(consent), true, None) => auto_accept_under_consent(&root, &path, &dname, &nnnn, &consent, &date, &author),
@@ -2834,33 +2665,6 @@ fn scaffold_engine(dir: &include_dir::Dir, dst_engine: &Path, count: &mut u32) -
     Ok(())
 }
 
-/// `keel init DIR` (D0093) — scaffold a fresh project: the embedded engine (`.engine/`, with the
-/// architecture decisions remapped to read-only `reference/`), `CLAUDE.md`, and a starter `.tracking/`.
-/// Self-contained cold start; refuses to overwrite an existing `.engine/`.
-/// The first positional argument, REFUSING anything that looks like a flag (issue179).
-///
-/// `keel init --help` created a directory named `--help` and scaffolded a complete engine into it; 277
-/// files reached this repository and were committed before the CRLF warnings gave it away. `cmd_init`
-/// read `args.first()` directly and so never passed through `root_arg`, which has rejected unknown
-/// flags all along - the bypass was the bug, not the parsing.
-///
-/// A leading `-` is refused wherever a PATH or a NAME is expected. For `init` the stakes are highest,
-/// because its whole job is writing a tree to disk, so any string it accepts is a filesystem mutation.
-fn positional_arg<'a>(args: &'a [String], usage: &str, what: &str) -> Result<&'a String, i32> {
-    let Some(first) = args.first() else {
-        eprintln!("usage: {usage}");
-        return Err(2);
-    };
-    if first.starts_with('-') {
-        eprintln!("error: `{first}` looks like a flag, not {what}.");
-        eprintln!("  Refused rather than used: `keel init --help` once created a directory named");
-        eprintln!("  `--help` and scaffolded an engine into it (issue179).");
-        eprintln!("usage: {usage}");
-        return Err(2);
-    }
-    Ok(first)
-}
-
 /// Write the scaffolded pre-commit gate at `repo_root` and arm `core.hooksPath` there (issue278).
 ///
 /// `repo_root` is the git repository root, which is the only place a hook can be invoked from, and
@@ -3138,6 +2942,9 @@ fn init_wrapper(dir: &Path) -> Result<(), i32> {
     Ok(())
 }
 
+/// `keel init DIR` (D0093) — scaffold a fresh project: the embedded engine (`.engine/`, with the
+/// architecture decisions remapped to read-only `reference/`), `CLAUDE.md`, and a starter `.tracking/`.
+/// Self-contained cold start; refuses to overwrite an existing `.engine/`.
 fn cmd_init(args: &[String]) -> i32 {
     const USAGE: &str = "keel init DIR [--profile strict|guided]";
     let target = match positional_arg(args, USAGE, "a directory") {
@@ -3831,7 +3638,7 @@ fn decision_options_and_title(root: &Path, dec: &str) -> (Vec<String>, String) {
             continue;
         }
         let rel = p.strip_prefix(root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
-        letters = keel_cli::deck::fork_options(root, &rel).into_iter().map(|(l, _)| l).collect();
+        letters = keel_cli::textscan::fork_options(root, &rel).into_iter().map(|(l, _)| l).collect();
         // the title AND the decision text: quoting the decision's own words is a read-back of it
         for key in [":>> title = \"", ":>> decision = \""] {
             if let Some(i) = text.find(key) {
@@ -4343,13 +4150,6 @@ fn cmd_view0(
     0
 }
 
-/// The repo a git-touching subcommand acts on: the first non-flag argument, else the discovered root.
-fn repo_arg(rest: &[String]) -> PathBuf {
-    rest.iter()
-        .find(|a| !a.starts_with("--"))
-        .map_or_else(|| find_repo_root().unwrap_or_else(|| PathBuf::from(".")), PathBuf::from)
-}
-
 fn cmd_version(args: &[String]) -> i32 {
     let hard = keel_cli::guards::GUARD_NAMES.len() - WARNING_ONLY_GUARDS.len();
     if args.iter().any(|a| a == "--json") {
@@ -4553,37 +4353,8 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_guard_args, remap_engine_content, remap_engine_path, root_arg, Path,
+        classify_guard_args, remap_engine_content, remap_engine_path, Path,
     };
-
-    #[test]
-    fn an_unknown_flag_is_a_mistake_and_never_a_root() {
-        // issue133: the whole class. A mistyped flag used to BECOME the root path (or, in the
-        // skip-flags variant, be silently ignored), so a typo produced a confident wrong answer
-        // somewhere downstream instead of an error where the mistake was made.
-        let a = |v: &[&str]| v.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        assert_eq!(root_arg(&a(&["--explan"]), "u", &[], 0), Err(2));
-        assert_eq!(root_arg(&a(&["--explan"]), "u", &["explain"], 0), Err(2), "a NEAR-MISS of a known flag is still unknown");
-        // A REAL project path, because `root_arg` now VALIDATES as well as parses (issue281): it
-        // refuses a root that is not a keel project, so a synthetic `/r` no longer reaches the caller.
-        // The assertions below still test what they always did — that the positional is FOUND around a
-        // declared flag — they just use a root that a caller could really pass.
-        let repo = keel_fs::test_support::repo_root();
-        let r = repo.to_string_lossy().to_string();
-        let found = |v: &[&str], pos: usize| {
-            root_arg(&a(v), "u", &["explain"], pos).ok().map(|p| p.to_string_lossy().to_string())
-        };
-        assert_eq!(found(&["--explain", &r], 0), Some(r.clone()));
-        assert_eq!(found(&[&r, "--explain"], 0), Some(r.clone()));
-        // `positionals` skips the subcommand's own leading argument (`keel show view <name> [ROOT]`)
-        assert_eq!(found(&["decisions", &r], 1), Some(r.clone()));
-        // and a leading positional alone leaves ROOT to repo discovery, not to the positional
-        assert_ne!(root_arg(&a(&["decisions"]), "u", &[], 1).map(|p| p.to_string_lossy().to_string()), Ok("decisions".to_string()));
-        // The new half of the contract: a path that exists but is NOT a project is refused, never
-        // answered over. This is the false green issue281 closed.
-        let tmp = std::env::temp_dir();
-        assert_eq!(root_arg(&a(&[&tmp.to_string_lossy()]), "u", &[], 0), Err(2), "a non-project root is refused");
-    }
 
     #[test]
     fn guard_args_distinguish_name_from_root() {

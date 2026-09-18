@@ -7,8 +7,9 @@
 //! `proactive` (the post-edit advisories), whose only readers they are. keel-cli re-exports the crate as
 //! `hooks` and the two modules at their old paths, and `main.rs` dispatches `keel hook` to [`cmd_hook`]
 //! exactly as before. The crate reads the write API, the guards, the view layer, the suite's hook-binary
-//! refresh and the process layer's project discovery, and nothing reads it but the binary - so an edit to
-//! a hook rebuilds this crate and keel-cli only.
+//! refresh and keel-git's project discovery, and nothing reads it but the binary - so an edit to
+//! a hook rebuilds this crate and keel-cli only. The ledger writers descended to `keel_write::ledger`
+//! in sprint 740 (`scripts/extract_seams.py`); this crate re-exports the three the binary calls.
 #![forbid(unsafe_code)]
 #![deny(warnings, clippy::all, clippy::pedantic, clippy::nursery)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::todo, clippy::unimplemented)]
@@ -21,7 +22,11 @@ pub mod shellcheck;
 
 use std::path::{Path, PathBuf};
 
-use keel_process::workspace::{engine_version_skew, find_repo_root};
+use keel_git::projects::{engine_version_skew, find_repo_root};
+// The ledger writers are the write API's (`keel_write::ledger`, sprint 740, D0479); the three the binary
+// calls keep resolving as `keel_hooks::`, and `ledger_fire` below writes through the same line writer.
+pub use keel_write::ledger::{ledger_gate, ledger_refused, refused_injected_prose};
+use keel_write::ledger::ledger_line;
 
 /// Hard latency cap for prompt-path recall. Measured at 641-863ms on this repo's 13.6k-item corpus, so
 /// the cap leaves headroom while bounding the worst case: a prompt-path cost that grows with the corpus
@@ -236,97 +241,6 @@ fn ledger_fire(root: &Path, session: &str, event: &str, exit: i32, ms: u128) {
     let emitted = EMITTED_VERDICT.lock().ok().and_then(|mut g| g.take());
     ledger_line(root, session, event, exit, ms, emitted);
 }
-
-/// A write-path refusal is a ledger fact (issue445): `keel accept` / `reject` and the other API writes
-/// that refuse used to exit non-zero and write nothing anywhere, so the question "has an agent ever
-/// tried this" had no record to be read from. `event = refused`, `control` names the check, `verb` the
-/// command; ms is 0 because the refusal is the whole run.
-pub fn ledger_refused(root: &Path, verb: &str, control: &str) {
-    let session = std::env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
-    // issue449: the control name is a registry fact (`write::WRITE_PATH_REFUSALS`), not a free string.
-    // A name the registry never declared is still a fire, so it is written - marked, so the census
-    // cannot count it under a row that does not exist.
-    let name = if keel_write::write::write_path_refusal(verb, control).is_some() {
-        format!("{verb}:{control}")
-    } else {
-        eprintln!("keel: refusal {verb}:{control} is not in the write-path registry (issue449); ledgered as unregistered");
-        format!("unregistered:{verb}:{control}")
-    };
-    ledger_line(root, &session, "refused", 1, 0, Some(("refused".to_string(), name)));
-}
-
-/// `record decision` / `record issue` refused prose that reads as captured tool output (D0224/issue256):
-/// the refusal is a ledger fact - `record:tool-output-prose` is the census row (issue449) - and the
-/// verb's exit code.
-pub fn refused_injected_prose(root: &Path, e: &dyn std::fmt::Display) -> i32 {
-    ledger_refused(root, "record", "tool-output-prose");
-    eprintln!("error: {e}");
-    1
-}
-/// The commit tier is in the ledger with the in-loop tiers (dcRefusalIsALedgerFact clause d): the
-/// scaffolded pre-commit hook runs `keel gate validate`, `keel gate guard` and `keel gate check-engine` as separate
-/// processes, so each writes one `commit-gate-<tier>` line - `allow` when green, `block` naming the
-/// refusing controls (the failing guard names, or the tier itself) when red. A run by hand writes the same line; the ledger does not know who
-/// invoked it, and a rate over both is still a rate.
-pub fn ledger_gate(root: &Path, tier: &str, failing: &[String], ms: u128) {
-    let session = std::env::var("CLAUDE_CODE_SESSION_ID").unwrap_or_default();
-    let verdict = if failing.is_empty() { None } else { Some(("block".to_string(), failing.join(","))) };
-    ledger_line(root, &session, &format!("commit-gate-{tier}"), i32::from(!failing.is_empty()), ms, verdict);
-}
-
-/// The kind of actor this process runs as - `human`, `ai` or `unknown` from actors.sysml, `undeclared`
-/// when the bound actor has no part there, `unbound` when no actor resolves at all - so a refusal
-/// line says whose act the control fell on.
-fn ledger_actor_kind(root: &Path) -> String {
-    keel_actor::actor::resolve(root, None).map_or_else(
-        |_| "unbound".to_string(),
-        |name| keel_actor::actor::kind_of(root, &name).unwrap_or_else(|| "undeclared".to_string()),
-    )
-}
-
-fn ledger_line(root: &Path, session: &str, event: &str, exit: i32, ms: u128, verdict: Option<(String, String)>) {
-    use std::io::Write as _;
-    let dir = root.join(".keel").join("metrics");
-    if std::fs::create_dir_all(&dir).is_err() {
-        eprintln!("[keel] fire-ledger unavailable: cannot create {}", dir.display());
-        return;
-    }
-    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-    let (decision, control) = match verdict {
-        Some((d, c)) => (d, Some(c)),
-        None => ((if exit == 0 { "allow" } else { "block" }).to_string(), None),
-    };
-    let ms = u64::try_from(ms).unwrap_or(u64::MAX);
-    // issue378 / GH#55: WHICH binary ran this hook, and which build - the turn-boundary surface's
-    // answer to "did the pinned engine gate this", readable from `keel show status`.
-    let mut record = serde_json::json!({"ts": ts, "session": session, "event": event, "decision": decision, "exit": exit, "ms": ms,
-        "bin": std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(), "build": env!("KEEL_BUILD_COMMIT")});
-    if let Some(obj) = record.as_object_mut() {
-        // issue446: a line that is not an allow names the control that refused and the kind of actor
-        // it refused. An allow carries neither - 16 000 lines a day should not each pay for a fact that
-        // only a refusal has.
-        if decision != "allow" {
-            obj.insert("control".to_string(), serde_json::Value::String(control.unwrap_or_else(|| "exit-code".to_string())));
-            obj.insert("actorKind".to_string(), serde_json::Value::String(ledger_actor_kind(root)));
-        }
-        // D0414 / issue429: a SLOW fire explains itself - the phases it measured, longest first, with the
-        // remainder no counter covered named as unattributed. A fast fire carries no field (pm.rs owns the
-        // threshold and the reader).
-        if let Some(phases) = keel_view::pm::slow_fire_phases(ms) {
-            obj.insert("phases".to_string(), phases);
-        }
-    }
-    let line = format!("{record}\n");
-    let appended = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(dir.join("hooks.jsonl"))
-        .and_then(|mut f| f.write_all(line.as_bytes()));
-    if let Err(e) = appended {
-        eprintln!("[keel] fire-ledger write failed: {e}");
-    }
-}
-
 
 /// Minimal raw-HTTP call to the LOCAL console (dependency-free; localhost only). Returns the body.
 fn console_http(method: &str, path: &str, body: Option<&str>) -> Option<String> {

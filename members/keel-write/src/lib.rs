@@ -26,6 +26,7 @@ pub mod scaffold;
 pub mod reverify;
 pub mod claim;
 pub mod claude_surface;
+pub mod ledger;
 
 use std::path::Path;
 

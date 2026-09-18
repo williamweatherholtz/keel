@@ -8,3 +8,7 @@ description = "The single git spawn point (ceGitSpawn): every git the engine run
 
 [dependencies]
 keel-perf = { path = "../keel-perf" }
+
+[dev-dependencies]
+# keel_fs::test_support::repo_root, the real project the discovery tests read.
+keel-fs = { path = "../keel-fs" }

@@ -56,6 +56,9 @@ pub use keel_serve::launcher;
 pub use keel_process::library;
 pub mod enroll;
 pub use keel_git::gitx;
+// Project discovery and the shared argument helpers descended below the verbs (D0479, sprint 740).
+pub use keel_git::projects;
+pub use keel_args as args;
 pub use keel_model::corpus;
 pub use keel_guards::receipt;
 pub use keel_suite::contentkey;
@@ -95,6 +98,8 @@ pub use keel_process::sync;
 // The Claude hooks are member keel-hooks (D0479, sprint 739): cmd_hook and its ledger, shellcheck, proactive; the old paths keep resolving.
 pub use keel_hooks as hooks;
 pub use keel_hooks::shellcheck;
+// The hook ledger writers are the write API's (D0479, sprint 740).
+pub use keel_write::ledger;
 // The item views and the issue write are member keel-issues' (D0480, sprint 737): `view` and `write` are
 // wrapper modules so `crate::view::open_issues` and `crate::write::record_issue` keep resolving.
 pub mod view {
@@ -122,24 +127,5 @@ pub use keel_model::validate::{check_files, validate_engine_instances, validate_
 // The orient computation is the read model's (sprint 738, D0479); the four keep resolving at the root.
 pub use keel_model::readiness::{compute_orient_state, orient_root, whats_next_root, OrientReport};
 
-// ── internal parse helper ─────────────────────────────────────────────────────
-
-/// The character length of the longest path under `dir`, used by `keel init` to warn before a host
-/// path limit turns into an opaque `git add` failure (issue313).
-#[must_use]
-pub fn walk_longest(dir: &std::path::Path) -> usize {
-    let mut longest = 0;
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
-            let p = entry.path();
-            longest = longest.max(p.to_string_lossy().chars().count());
-            if p.is_dir() {
-                stack.push(p);
-            }
-        }
-    }
-    longest
-}
-
-
+// The init path-length walk is keel-fs's (sprint 740, D0479); `keel_cli::walk_longest` keeps resolving.
+pub use keel_fs::walk_longest;

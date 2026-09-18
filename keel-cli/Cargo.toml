@@ -20,6 +20,8 @@ keel-parser = { path = "../keel-parser" }
 # D0479 leaf members (sprint 714); each is re-exported under its old module path in lib.rs.
 keel-perf = { path = "../members/keel-perf" }
 keel-git = { path = "../members/keel-git" }
+# D0479 shared argument helpers (sprint 740): root_arg, flag, prose_flag and the rest; re-exported as `args` in lib.rs.
+keel-args = { path = "../members/keel-args" }
 keel-json = { path = "../members/keel-json" }
 keel-actor = { path = "../members/keel-actor" }
 keel-schema = { path = "../members/keel-schema" }

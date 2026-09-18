@@ -477,4 +477,25 @@ package EngineInstruments {
         :>> reading = SensorReading::verdict;
         :>> producesFeedback = fbModuleHome;
     }
+
+    // verbHomes: scripts/verb_homes.py (D0479, D0512, sprint 740)
+    // KNOWN FAILURE MODES: it reads the crates a body names by `keel_<x>::` and `crate::<module>` tokens with `//` comments and string literals stripped, so a name reached through a `use` alias or a glob import is attributed to the alias's home; the call graph among main.rs items is by bare identifier followed by `(`, so a fn called through a variable or a method of one name is missed (a miss, never a false positive); the least-member rule lets a member ADD a crate that reaches neither the member nor anything the member does not, read from the manifests' [dependencies] only, so a dev- or build-dependency is not a reach; the binary is the answer only when no member could hold the body.
+    // PUBLISHED TO: the DoD of dcSharedHelpersDescendBelowTheVerbs (its D0388 pair, pos740.py) and dcKeelCliIsThinDispatch (--check exit 0 is its gate; --by-member names each body's home); the CI script-probe step (D0394) runs --probe.
+    part fbVerbHomes : Feedback {
+        :>> id = "3f682729-ed04-41a3-bc6d-365a113b1d22";
+        :>> title = "for every top-level item of keel-cli/src/main.rs, which members its body reaches and the least member that could hold it - whether any body has no home but the binary";
+        :>> createdAt = "2026-09-17"; :>> createdBy = "claudeFable5";
+        :>> sensedFrom = cpDeliverable;
+        :>> reportsTo = ctAgent;
+    }
+    part snVerbHomes : Sensor {
+        :>> id = "d807cfcd-45f5-4695-bca1-b479f89d8bcf";
+        :>> title = "verbHomes";
+        :>> createdAt = "2026-09-17"; :>> createdBy = "claudeFable5";
+        :>> mechanism = "scripts/verb_homes.py";
+        :>> measures = "per top-level item of main.rs: the crates its body names directly and through the main.rs items it calls, the members reaching them all, and the least members (fewest additions, then undominated) labelled member(+added) - a table, --by-member totals, and under --check exit 1 naming any item whose least member is keel-cli or which no member reaches (main, cmd_show and mod tests excluded); --probe runs a fixture workspace of four members as the D0388 pair first";
+        :>> determinism = Determinism::tree;
+        :>> reading = SensorReading::verdict;
+        :>> producesFeedback = fbVerbHomes;
+    }
 }

@@ -1,0 +1,15 @@
+[package]
+name = "keel-args"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The argument helpers every keel verb shares: the [ROOT] positional that refuses unknown flags and non-projects, the flag-looks-like-a-path refusal, `--key value`, the prose flag with its `-from FILE` form, the never-defaulted provenance date."
+
+[dependencies]
+# root_arg / repo_arg resolve the discovered project root; keel-git is the one member below every verb (sprint 740, D0479).
+keel-git = { path = "../keel-git" }
+
+[dev-dependencies]
+# keel_fs::test_support::repo_root, the real project the root_arg test parses around.
+keel-fs = { path = "../keel-fs" }
