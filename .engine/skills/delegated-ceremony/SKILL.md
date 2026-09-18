@@ -78,7 +78,10 @@ the guard, never a second record of the same gate or task with reworded evidence
 (6) every owed record is accounted for: <COUNT> records are owed, and your report carries one WROTE line
 or one REFUSED line for each - a report that accounts for fewer is refused, and a report with no WROTE
 line and no REFUSED line is refused whatever the count (sprint 723's first recorder wrote nothing and
-reported NONE).
+reported NONE). The dispatch's <COUNT> is the ONLY owed count: the receipt's VERIFIER-NOTED WRITES line
+is the verifier's noticing addressed to you, never your count - a REFUSED line that cites it as the
+reason a record was not written is refused (sprint 735's second recorder read OWED WRITES: NONE as
+"no writes owed" and wrote nothing, D0516).
 Report shape, written to <ABS SCRATCH PATH>/recorder-report.txt:
   RECORDER REPORT  <date>  receipt=<path>  sprint=<file>
   WROTE: <the exact keel record command> -> <the verdict line it printed>      (one per write)
@@ -107,7 +110,12 @@ the control (D0492); the list alone was the reminder sprint 723's first recorder
 6. zero `WROTE:` lines and no `REFUSED:` line, with or without `--owed` - sprint 723's first recorder ran
    no record command and returned three lines reading DISCREPANCIES: NONE (issue568, D0492);
 7. under `--owed N`, `WROTE:` plus `REFUSED:` lines numbering fewer than N - the refusal names the
-   shortfall (`owed 7, accounted 6`).
+   shortfall (`owed 7, accounted 6`);
+8. a `REFUSED:` line that cites the receipt's `VERIFIER-NOTED WRITES` line (or its old label `OWED
+   WRITES`) as its reason - sprint 735's second recorder, dispatched `--owed 1`, wrote nothing and
+   reported `REFUSED: ... receipt line 19 states OWED WRITES: NONE; no writes owed per verifier`, and
+   refusal 7 counted the REFUSED line (issue590, D0516). That receipt line lists writes the verifier
+   noticed for the recorder; the dispatch's count is the only owed count.
 
 `python check_report.py --probe --root <ROOT>` runs the D0388 pairs: `fixtures/positive-undeclared-marker.txt`
 (sprint 647's third act, refused) and `fixtures/negative-sprint647-receipt-driven.txt` (the same ceremony
@@ -117,7 +125,10 @@ report as returned, refused naming the textpatch line), `fixtures/positive-sprin
 (the same report with the textpatch line removed; passes); `fixtures/positive-sprint723-nothing-written.txt`
 (sprint 723's first report as returned, refused naming zero writes), `fixtures/negative-sprint723-seven-owed.txt`
 (the second recorder's seven writes under `--owed 7`; passes) and `fixtures/positive-sprint723-six-of-seven.txt`
-(one gate line removed under `--owed 7`; refused naming the shortfall). `--probe <FIXTURE>` runs one row and
+(one gate line removed under `--owed 7`; refused naming the shortfall);
+`fixtures/positive-sprint735-refused-citing-owed-writes.txt` (sprint 735's second recorder's first report
+under `--owed 1`; refused naming the OWED WRITES citation) and `fixtures/negative-sprint735-one-owed.txt`
+(its rewritten report, one WROTE line under `--owed 1`; passes). `--probe <FIXTURE>` runs one row and
 exits 0 when that side holds - the form each line of a pair file takes, since the ladder needs both sides
 to exit 0 (sprint 724's first dispatch named the bare checker runs, and the positive's exit 1 stopped the
 ladder at the probe rung).

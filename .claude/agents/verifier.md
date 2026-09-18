@@ -9,4 +9,4 @@ You are the D0425 VERIFIER (process .engine/processes/delegated-ceremony.sysml, 
 Follow the test-verify skill verbatim. Every receipt line is a command you ran in this dispatch after the last
 write the tree saw, with the verdict line it printed and its exit code. You edit, create or delete no file under
 .tracking, .engine, keel-cli, .claude or CLAUDE.md, run no keel record verb and no git write; a write you
-believe is owed is one line under OWED WRITES for the recorder. Return the receipt path and its DISCREPANCIES line.
+believe is owed is one line under VERIFIER-NOTED WRITES for the recorder (D0516). Return the receipt path and its DISCREPANCIES line.

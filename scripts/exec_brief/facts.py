@@ -5809,6 +5809,100 @@ fact("sprintNamesTheItemItDelivers", {
      "place among the backlog's declared actions (D0052); resolverDodNamesFourSteps = the four `DO:` step literals in backlog.sysml; resolverReadyRank = its line in "
      "`keel show whats-next .`, readyItems = that list's length.")
 
+# ================================================================ 49. D0516 - a recorder's REFUSED line cannot cite the verifier's writes line (held, brief 48)
+# The Decision is held (marker process-change, D0337) and the change is APPLIED under the marker as D0492's was
+# (sprint 724): the eighth refusal, its two fixtures and the relabel are in the tree and the human's word decides
+# whether they stay. Every fact below reads the surfaces as they stand and runs the checker's own probe.
+_d0516 = _dec_file("0516-")
+_f516 = _decision_facts(_d0516, "d0516")
+_CR16 = os.path.join("skills", "delegated-ceremony", "references", "check_report.py")
+_cr16_engine = read(os.path.join(REPO, ".engine", _CR16)) or ""
+_cr16_claude = read(os.path.join(REPO, ".claude", _CR16)) or ""
+_fx16_dir = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "fixtures")
+_FX16_POS, _FX16_NEG = "positive-sprint735-refused-citing-owed-writes.txt", "negative-sprint735-one-owed.txt"
+_fx16_pos = read(os.path.join(_fx16_dir, _FX16_POS)) or ""
+_fx16_neg = read(os.path.join(_fx16_dir, _FX16_NEG)) or ""
+_doc16 = _cr16_engine.split('"""')[1] if _cr16_engine.count('"""') >= 2 else ""
+_pairs16 = (re.search(r"^PAIRS = \[(.*?)^\]", _cr16_engine, re.S | re.M) or [None, ""])[1]
+def _probe16(fixture):
+    _rc, _out = run_rc([sys.executable, os.path.join(REPO, ".claude", _CR16), "--probe", fixture, "--root", REPO], timeout=60)
+    return {"exit": _rc, "holds": f"probe: {fixture} holds." in (_out or ""), "lastLine": ((_out or "").strip().splitlines() or [""])[-1][:160]}
+_rc16, _out16 = run_rc([sys.executable, os.path.join(REPO, ".claude", _CR16), "--probe", "--root", REPO], timeout=120)
+_SURF16 = {
+    "testVerifySkill": os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md"),
+    "delegatedCeremonyProcess": os.path.join(REPO, ".engine", "processes", "delegated-ceremony.sysml"),
+    "delegatedCeremonySkill": os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "SKILL.md"),
+    "verifierAgent": os.path.join(REPO, ".claude", "agents", "verifier.md"),
+    "recorderAgent": os.path.join(REPO, ".claude", "agents", "recorder.md"),
+    "claudeMd": os.path.join(REPO, "CLAUDE.md"),
+}
+def _labels16(path):
+    _t = read(path) or ""
+    return {"verifierNotedWrites": _t.count("VERIFIER-NOTED WRITES"), "owedWrites": _t.count("OWED WRITES"),
+            "owedWritesOnlyAsOldLabel": all(("old label" in _t[max(0, m.start() - 160): m.end() + 160]) or ("sprint 735" in _t[max(0, m.start() - 400): m.end() + 400]) or ("issue590" in _t[max(0, m.start() - 400): m.end() + 400])
+                                          for m in re.finditer(r"OWED WRITES", _t))}
+_i590 = _issue_facts("590", "dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine")
+_i604 = _issue_facts("604", "dcRecordDecisionRefusesACompoundText")
+_SPR16_DOD = "dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine"
+_S744 = "sprint744_recorderRefusalCannotCiteTheVerifiersWritesLine.sysml"
+_s744 = read(os.path.join(REPO, ".tracking", "delivery", _S744)) or ""
+fact("recorderRefusalCannotCiteTheVerifiersWritesLine", {
+    **_f516,
+    "dependsOnD0492": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0516\s+to\s+d0492\s*;", _d0516)),
+    "dependsOnD0473": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0516\s+to\s+d0473\s*;", _d0516)),
+    "dependsOnD0438": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0516\s+to\s+d0438\s*;", _d0516)),
+    "namesIssue590": "issue590" in (_f516["context"] or ""),
+    "namesTheMisreadVerbatim": "receipt line 19 states OWED WRITES: NONE; no writes owed per verifier" in (_f516["context"] or ""),
+    "namesTheSecondMessage": "dcSuiteIsAMemberDoDR1 at 7394a28" in (_f516["context"] or ""),
+    "namesOneClause": "One clause, one control" in (_f516["decision"] or ""),
+    "namesEighthRefusal": "gains an eighth refusal" in (_f516["decision"] or ""),
+    "namesBothLabels": "OWED WRITES or VERIFIER-NOTED WRITES" in (_f516["decision"] or ""),
+    "namesTheRelabelAsDocSync": "both are the doc-sync of this control, not decisions of their own" in (_f516["decision"] or ""),
+    "namesTheFixtures": _FX16_POS in (_f516["decision"] or "") and _FX16_NEG in (_f516["decision"] or ""),
+    "namesSevenUnchanged": "Refusals 1 to 7 are unchanged" in (_f516["decision"] or ""),
+    "namesTheLegitimateShape": "negative-sprint647-receipt-driven.txt" in (_f516["rationale"] or ""),
+    "namesTheRelabelResidual": "A verifier that still writes OWED WRITES is not refused" in (_f516["consequences"] or ""),
+    "namesHeld": "HELD proposed under D0337" in (_f516["consequences"] or ""),
+    "checker": {
+        "engineEqualsClaudeCopy": bool(_cr16_engine) and _cr16_engine == _cr16_claude,
+        "docstringRefusals": len(re.findall(r"^\s{2}\d\. ", _doc16, re.M)),
+        "docstringSaysEight": "Eight refusals" in _doc16,
+        "hasCitesRegex": bool(re.search(r"^CITES_VERIFIER_WRITES_LINE = re\.compile\(", _cr16_engine, re.M)),
+        "regexNamesBothLabels": bool(re.search(r"CITES_VERIFIER_WRITES_LINE = re\.compile\(r\"[^\"]*OWED\|VERIFIER-NOTED[^\"]*WRITES", _cr16_engine)),
+        "appliedInsideRefusedBranch": bool(re.search(r"if REFUSED_LINE\.match\(stripped\):\n\s+refused \+= 1\n\s+cited = CITES_VERIFIER_WRITES_LINE\.search\(stripped\)", _cr16_engine)),
+        "pairsRows": len(re.findall(r"^\s+\(\"", _pairs16, re.M)),
+        "pairsNamePositive": _FX16_POS in _pairs16, "pairsNameNegative": _FX16_NEG in _pairs16,
+        "positiveFixture": {"present": bool(_fx16_pos), "lines": len(_fx16_pos.strip().splitlines()),
+                            "refusedLineCitesOwedWrites": bool(re.search(r"^REFUSED:.*OWED WRITES", _fx16_pos, re.M)), "wroteLines": len(re.findall(r"^WROTE:", _fx16_pos, re.M))},
+        "negativeFixture": {"present": bool(_fx16_neg), "lines": len(_fx16_neg.strip().splitlines()),
+                            "wroteLines": len(re.findall(r"^WROTE:", _fx16_neg, re.M)), "refusedLines": len(re.findall(r"^REFUSED:", _fx16_neg, re.M)),
+                            "wroteNamesTheTask": "--task dcSuiteIsAMember" in _fx16_neg},
+    },
+    "live": {
+        "probeAll": {"exit": _rc16, "everyPairHolds": "probe: every pair holds." in (_out16 or ""), "rows": len(re.findall(r"^probe: known-", _out16 or "", re.M))},
+        "probePositive": _probe16(_FX16_POS), "probeNegative": _probe16(_FX16_NEG),
+    },
+    "labels": {k: _labels16(p) for k, p in _SURF16.items()},
+    "issue590": _i590, "issue604": _i604,
+    "sprint744": {"present": bool(_s744), "chartersD0516": "#CharteredBy dependency from recorderRefusalCannotCiteTheVerifiersWritesLineStory to d0516;" in _s744,
+                  "storyDodPass": bool(re.search(r"part storyRecorderRefusalCannotCiteTheVerifiersWritesLineDoDR\d+ : TestResult \{[^}]*outcome = VerdictKind::pass", _s744)),
+                  "retroNamesIssue604": "issue604" in _s744, "retroNamesTheLibRow": "touched.rs line 575" in _s744},
+    "resolverPosition": ({"place": _bl00_actions.index(_SPR16_DOD) + 1, "def": _bl00_defs.get(_SPR16_DOD)} if _SPR16_DOD in _bl00_actions else None),
+    "resolverDodResults": _dod_results(_SPR16_DOD),
+    "resolverReadyRank": (_ready_names.index(_SPR16_DOD) + 1) if _SPR16_DOD in _ready_names else None,
+    "backlogItems": len(_bl00_actions),
+}, "the held Decision, the checker and fixtures as applied, the checker's own probe run now, the label census, the findings",
+     _DEC_HOW + " Names by literal search in the Decision's fields (issue590, the misread line verbatim and `dcSuiteIsAMemberDoDR1 at 7394a28` in context; "
+     "`One clause, one control`, `gains an eighth refusal`, `OWED WRITES or VERIFIER-NOTED WRITES`, the doc-sync sentence, both fixture names and `Refusals 1 to 7 "
+     "are unchanged` in decision; the 647 fixture in rationale; the relabel residual and `HELD proposed under D0337` in consequences); the three edges as "
+     "`#DependsOn dependency from d0516 to X;` lines. checker: .engine/skills/delegated-ceremony/references/check_report.py read whole and compared byte-for-byte "
+     "with its .claude copy; docstringRefusals = the `  N. ` items of the module docstring; the CITES_VERIFIER_WRITES_LINE compile line, its alternation, and "
+     "its call in the two lines after `refused += 1`; pairsRows = the tuple lines of PAIRS; the two fixtures read whole, their REFUSED/WROTE lines counted. live: "
+     "the .claude copy run three times - `--probe` over every row (rows = `probe: known-` lines), then `--probe <FIXTURE>` per fixture, exit code and `holds.` line. "
+     "labels: per surface the counts of `VERIFIER-NOTED WRITES` and `OWED WRITES`, and whether every `OWED WRITES` sits within 160-400 characters of `old label`, "
+     "`sprint 735` or `issue590`. issues 590 and 604 as section 34; sprint744 = the delivery file's charter edge, story DoDRn pass, and two retro phrases; "
+     "resolverPosition / resolverDodResults / resolverReadyRank / backlogItems as section 48.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

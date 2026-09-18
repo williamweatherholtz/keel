@@ -36,7 +36,9 @@ this skill, the sprint's probe pair, and nothing else.
 | say `NONE` under discrepancies only when every check below ran to completion | summarise: the receipt carries the counts and the exact lines, not your reading of them |
 
 A write you believe is owed (an untriaged obligation, a missing `#Resolves` edge, a gate result)
-is ONE LINE in your receipt under `OWED WRITES`, addressed to the recorder. issue471 is what
+is ONE LINE in your receipt under `VERIFIER-NOTED WRITES`, addressed to the recorder - the label names whose
+noticing it is, because a recorder once read `OWED WRITES: NONE` as its own count and wrote nothing
+(sprint 735, issue590, D0516). issue471 is what
 happens otherwise: a verifier hand-wrote `#Resolves d0437 part obligation... : Issue {` — a
 marker on a part, not an edge — the parser skipped both Issues, parser-coverage went red, and the
 receipt cited a validate run from before the edit.
@@ -60,8 +62,8 @@ after the red is `not-run`, a pair not named is `not-named`. Its last rung is th
 will honour:
 
 `keel suite --touched .` is the set the land will run (D0421/D0432): the integration tests whose
-text names a changed `keel-cli/src/<stem>.rs`, plus the lib's own unit tests whenever any
-`keel-cli/src` path changed. With the lib it takes 7-12 minutes on this host (434 s, 623 s, 713 s,
+text names a changed `keel-cli/src/<stem>.rs`, plus the lib's own unit tests whenever any stem
+was contributed (a `keel-cli/src` path, or `init` from `.engine/`). With the lib it takes 7-12 minutes on this host (434 s, 623 s, 713 s,
 727 s measured) and a harness foreground call is capped at 600 s — the cap killed one run
 (issue469). A binary observed green at the current content by an earlier run is SKIPPED and
 named in the receipt's `skipped` (D0474): a rerun over an unchanged tree executes nothing, and that
@@ -165,7 +167,7 @@ sprint 726). When its table says `stopped_at` is `none` or `touched`, read
 | `outcome` | is not `"running"` | the stub written at launch says `running`; a killed run leaves it |
 | `at` | > the epoch in `verify-launch.epoch` | otherwise this is the PREVIOUS run's receipt; sprint 661 was recorded on one 46 minutes stale |
 | `stems` | == the sorted set of module stems for every changed `keel-cli/src/<stem>.rs` or `members/<crate>/src/<stem>.rs` (`git diff --name-only origin/main -- keel-cli/src members` plus untracked; `view/mod.rs` -> `view`, D0479), PLUS `init` when any path under `.engine/` changed or is untracked (`git status --short -- .engine`): that tree is compiled into the binary, so `members/keel-suite/src/touched.rs` `embedded_stem` attributes it to the tests that run `keel init` (issue530) | the receipt must be over THIS change set |
-| `lib` | `true` whenever any `keel-cli/src` path changed | the lib run is where pass-alone/fail-together tests show (issue459) |
+| `lib` | `true` whenever `stems` is non-empty - so also when the only stem is `init` from a changed `.engine/` path - or a changed source no member owns, or `keel-cli` itself is a touched member (`lib` at touched.rs:575; sprint 744's verifier read the old row, "any `keel-cli/src` path", as the whole rule and filed a discrepancy against an honest receipt) | the lib run is where pass-alone/fail-together tests show (issue459) |
 | `passed` / `failed` / `failing` | copied verbatim | the recorder's `--evidence` quotes these |
 | `ran` / `skipped` | together they are the set; `skipped` names only binaries with an `[[observed]]` row at `code_key` (and `tree_key` when in `self_reading`) | a skipped binary was observed green at this content by an earlier run (D0474) - report it as skipped, never as passed by this run |
 | `head` | == `git rev-parse --short HEAD` | |
@@ -191,7 +193,7 @@ TOUCHED RECEIPT: outcome=<..> passed=<n> failed=<n> seconds=<n> at=<epoch> launc
   stems=<[...]> changed=<[...]> (MATCH|MISMATCH) lib=<bool> head=<sha> log=<path>
   test result line: "<verbatim from verify-touched.out>"
 DISCREPANCIES: NONE | <one line each, naming the command>
-OWED WRITES: NONE | <one line each, for the recorder>
+VERIFIER-NOTED WRITES: NONE | <one line each: a write you noticed is owed beyond the dispatch, for the recorder>
 ```
 
 The recorder reads THIS file and nothing else; it never reads the primary's description.

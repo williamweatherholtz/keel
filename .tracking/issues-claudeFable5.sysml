@@ -2040,4 +2040,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcVerifierReceiptIsCheckedAgainstTheLadder to issue603;
+
+    part issue604 : Issue {
+        :>> id = "ea3cf91b-8146-4f08-b860-6858eff36a96";
+        :>> title = "record decision wrote D0516 with a decision text enumerating three clauses; only gate guard, run afterwards, named it COMPOUND (D0303) - the write path does not run clause_count";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found in sprint 744's retro. D0516 was recorded through keel record decision --from with a decision text that enumerated (1), (2), (3), and the write accepted it; keel gate guard, run minutes later, named d0516 a COMPOUND Decision under D0303 (decision-scaffolding, 1 violation: three enumerated clauses, one Decision per clause). The rule exists and is enforced, but only after the fact and only by a guard the session must run - the write path does not call clause_count, so a compound Decision lands in the tree, is readable by every lens, and is committed by any session that skips the guard or reads only gate --fast. The fix was an edit to the proposed record's decision field (owner edit, D0108) that folded the relabel and the brief sentence into the one control as its doc-sync. The class: a rule the guard applies to a record the write API authors is a rule the write should refuse at authoring time; D0303's convention is the case here. Resolver: dcRecordDecisionRefusesACompoundText.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcRecordDecisionRefusesACompoundText to issue604;
 }

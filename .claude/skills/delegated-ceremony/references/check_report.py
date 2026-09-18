@@ -1,8 +1,9 @@
 """The delegated-ceremony skill's own check over a RECORDER's report (dcDelegatedCeremonyIsASkill).
 
-A recorder returns its report only after this passes. Seven refusals; the first three are sprint 647's
-failures, the next two are sprint 703's (issue532, dcRecorderReportRefusesNonRecordWrites), the last two
-are sprint 723's (issue568, dcRecorderReportAccountsForEveryOwedRecord):
+A recorder returns its report only after this passes. Eight refusals; the first three are sprint 647's
+failures, the next two are sprint 703's (issue532, dcRecorderReportRefusesNonRecordWrites), the next two
+are sprint 723's (issue568, dcRecorderReportAccountsForEveryOwedRecord), the last is sprint 735's (issue590,
+dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine, D0516):
 
   1. an undeclared marker - any `#Word` token in the report that no `metadata def Word` under .engine or
      .tracking declares (sprint 647 typed `#Addresses`; the marker-vocabulary guard turned the Stop hook
@@ -24,7 +25,13 @@ are sprint 723's (issue568, dcRecorderReportAccountsForEveryOwedRecord):
      none reads what is absent. A recorder dispatched with nothing to write does not exist);
   7. a shortfall against the dispatch - under `--owed N`, `WROTE:` lines plus `REFUSED:` lines number
      fewer than N. The brief's list of owed records was text the checker never saw - a reminder, which
-     D0047 says is not a control; the count is what the dispatch states and the report must meet.
+     D0047 says is not a control; the count is what the dispatch states and the report must meet;
+  8. a refusal that cites the verifier's writes line - a `REFUSED:` line whose text names the receipt's
+     `OWED WRITES` / `VERIFIER-NOTED WRITES` line as its reason (sprint 735's second recorder, dispatched
+     --owed 1, wrote nothing and reported `REFUSED: ... receipt line 19 states OWED WRITES: NONE; no writes
+     owed per verifier`; refusal 7 counted the REFUSED line and passed it). That receipt line lists writes the
+     VERIFIER noticed for the recorder, never what the recorder owes - the dispatch's --owed count is the only
+     owed count (D0492). A dispatched record is a WROTE line, or a REFUSED line naming what the write API lacks.
 
     python check_report.py REPORT [--root DIR] [--owed N]   # exit 0 = pass, 1 = refused (each refusal printed), 2 = usage
     python check_report.py --probe [--root DIR]             # the D0388 pairs from fixtures/ beside this file
@@ -43,6 +50,9 @@ fixtures/positive-sprint723-nothing-written.txt is sprint 723's first report as 
 WROTE, no REFUSED) and is REFUSED naming zero writes; fixtures/negative-sprint723-seven-owed.txt is the second
 recorder's report (seven WROTE lines) and PASSES under --owed 7; fixtures/positive-sprint723-six-of-seven.txt is
 that report with one gate line removed and is REFUSED under --owed 7 naming the shortfall (owed 7, accounted 6).
+fixtures/positive-sprint735-refused-citing-owed-writes.txt is sprint 735's second recorder's first report as
+returned (one REFUSED line citing receipt line 19's OWED WRITES: NONE) and is REFUSED under --owed 1 naming the
+citation; fixtures/negative-sprint735-one-owed.txt is its rewritten report (one WROTE line) and PASSES under --owed 1.
 """
 import os
 import re
@@ -55,6 +65,9 @@ METADATA_DEF = re.compile(r"^[ \t]*metadata[ \t]+def[ \t]+([A-Za-z][A-Za-z0-9]*)
 GATE_LAST_LINE = re.compile(r"^gate: (fast gate clean\b|FAST GATE FAILED\b)")
 WROTE_LINE = re.compile(r"^WROTE:\s*(.*)$")
 REFUSED_LINE = re.compile(r"^REFUSED:\s*\S")
+# The test-verify receipt's closing line, under either label (D0516 relabelled it): writes the VERIFIER noticed
+# for the recorder. Cited on a REFUSED line it is the sprint 735 misread - the recorder taking that line for its own count.
+CITES_VERIFIER_WRITES_LINE = re.compile(r"\b(OWED|VERIFIER-NOTED|NOTED)[ -]WRITES\b", re.I)
 # The binary as a brief names it: `keel`, `KEEL`, `<KEEL>`, `$KEEL`, or a path ending in keel[-suffix][.exe].
 KEEL_BINARY = re.compile(r"^(<KEEL>|\$KEEL|KEEL|(?:.*[\\/])?keel(?:-[\w-]+)?(?:\.exe)?)$", re.I)
 RECORD_KEY = re.compile(r"--(gate|task)\s+(\S+)")
@@ -112,6 +125,9 @@ def refusals(report_text, declared, owed=None):
                 found.append(f"line {n}: undeclared marker #{m.group(1)} - no metadata def declares it; a marker the vocabulary lacks is a REFUSED line, not a line to type")
         if REFUSED_LINE.match(stripped):
             refused += 1
+            cited = CITES_VERIFIER_WRITES_LINE.search(stripped)
+            if cited:
+                found.append(f"line {n}: REFUSED line cites the receipt's {cited.group(0).upper()} line as its reason - that line lists writes the VERIFIER noticed for the recorder, never what the recorder owes; the dispatch's --owed count is the only owed count (D0492). A dispatched record is a WROTE line, or a REFUSED line naming what the write API lacks")
         command = wrote_command(line)
         if command is None:
             continue
@@ -153,6 +169,8 @@ PAIRS = [
     ("positive-sprint723-nothing-written.txt", "zero WROTE: lines and no REFUSED: line", None),
     ("negative-sprint723-seven-owed.txt", None, 7),
     ("positive-sprint723-six-of-seven.txt", "owed 7, accounted 6", 7),
+    ("positive-sprint735-refused-citing-owed-writes.txt", "REFUSED line cites the receipt's OWED WRITES line", 1),
+    ("negative-sprint735-one-owed.txt", None, 1),
 ]
 
 
