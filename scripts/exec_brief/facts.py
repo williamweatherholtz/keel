@@ -25,7 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 
 REPO = os.getcwd()
 sys.path.insert(0, os.path.join(REPO, "scripts"))
-from module_home import module_home as _mh, crate_text as _crate_text, crate_root as _crate_root, AmbiguousModule as _AmbiguousModule  # noqa: E402  (issue559: no keel-cli/src anchors)
+from module_home import module_home as _mh, crate_text as _crate_text, crate_root as _crate_root, rust_sources as _rust_sources, AmbiguousModule as _AmbiguousModule  # noqa: E402  (issue559: no keel-cli/src anchors)
 # The binary is a COPY, never the build image: a running target/release/keel.exe blocks its own relink
 # (issue150), and this script ran it under a cargo build once (issue508). KEEL_BIN wins; then the
 # serve copy; the build image only when nothing else exists.
@@ -4135,7 +4135,12 @@ _d0502 = _dec_file("0502-")
 _f501 = _decision_facts(_d0501, "d0501")
 _f502 = _decision_facts(_d0502, "d0502")
 _d0502_text = _d0502 or ""            # _dec_file returns the TEXT of the record
-_main01 = _main_rs
+# issue559: the route, the baseline and the dispatcher are read from the ONE file that defines subagent_stop_route, wherever the
+# workspace holds it (keel-cli/src/main.rs at sprint 731, members/keel-hooks/src/lib.rs since sprint 740) - never a path anchor
+_route01_homes = [p for p in _rust_sources() if "fn subagent_stop_route(" in (read(p) or "")]
+if len(_route01_homes) > 1:
+    raise SystemExit("facts.py: fn subagent_stop_route is defined in more than one file: " + ", ".join(_route01_homes))
+_main01 = read(_route01_homes[0]) if _route01_homes else ""
 _cs01 = read(_mh("claude_surface") or "") or ""
 _census01 = read(_module_home("view/census") or "") or ""
 _events01 = read(os.path.join(REPO, ".engine", "contracts", "control-events.toml")) or ""
@@ -4303,7 +4308,7 @@ fact("subagentOwnStartAndVerifierStop", {
 } if _d0501 and _d0502 and _main01 else None,
      "the two held records: Decisions, the route and the baseline in source, the seven declaration homes, live hook fires, the ledger, issue578, sprint 731",
      _DEC_HOW + " Names by literal search in the field named; dependsOnD0501 = the `#DependsOn dependency from d0502 to d0501;` edge in D0502's file. source: "
-     "main.rs wherever module_home resolves it, searched for agent_baseline_path and its `agent-{safe}.fp`, the dispatcher's first-fire write guarded by "
+     "the one workspace .rs file defining `fn subagent_stop_route(` (rust_sources, issue559; two such files refuse the run), searched for agent_baseline_path and its `agent-{safe}.fp`, the dispatcher's first-fire write guarded by "
      "`event != subagent-stop` and `!bl.exists()`, subagent_baseline's own-then-session or_else, the four arms of SubagentStopRoute, the pure route fn, the "
      "verifier arm's type test, its note_verdict(refused, verifier:tree-written) and its literal `0` return, the route match sitting before `hook_stop` in the "
      "file, the recorder relabel, the `subagent-start => 0` dispatch arm, and the three test fn names; claude_surface.rs for the SubagentStart hook_entry, "
@@ -5447,6 +5452,102 @@ fact("sittingReviewIsFinishedByAnalysisNotConfirmation", {
      "the action among the backlog's declared actions (D0052: declaration order is priority); resolverReadyRank = its line in "
      "`keel show whats-next .` (1 = the top of the ready frontier), readyItems = that list's length; notAForkInConsequences = the "
      "literal `NOT A FORK:` in consequences, where D0510 carries it (_decision_facts reads only the decision field).")
+
+# ================================================================ 46. D0513 - the four modules beside main.rs move to the members that own them (held, brief 46)
+# The Decision is held (marker process-change, D0337): nothing is applied, so every source fact below is the OLD shape - the
+# four files in keel-cli/src, adherence.rs named by GUARD_SOURCE_FILES, history.rs under no lock, and verb_homes --check naming
+# the three main.rs items that reach them. Read from the tree, never typed.
+_d0513 = _dec_file("0513-")
+_f513 = _decision_facts(_d0513, "d0513") if _d0513 else None
+_cli13_dir = os.path.join(REPO, "keel-cli", "src")
+_cli13_files = sorted(f for f in os.listdir(_cli13_dir) if f.endswith(".rs")) if os.path.isdir(_cli13_dir) else []
+_cli13_lines = {f: len((read(os.path.join(_cli13_dir, f)) or "").splitlines()) for f in _cli13_files}
+_FOUR13 = ["adherence.rs", "history.rs", "cursor.rs", "enroll.rs"]
+_enf13 = read(os.path.join(REPO, "members", "keel-guards", "src", "enforcement.rs")) or ""
+_gsf13 = re.findall(r'"([^"]+)"', (re.search(r"const GUARD_SOURCE_FILES: &\[&str\] = &\[(.*?)\];", _enf13) or [None, ""])[1])
+_gsd13 = re.findall(r'"([^"]+)"', (re.search(r"const GUARD_SOURCE_DIRS: &\[&str\] = &\[(.*?)\];", _enf13) or [None, ""])[1])
+
+
+def _locked13(p):
+    """The two constants' rule, applied from outside: a path is locked when listed, or when it starts with a locked directory."""
+    return p in _gsf13 or any(p.startswith(d) for d in _gsd13)
+
+
+_lib13 = read(os.path.join(REPO, "members", "keel-guards", "src", "lib.rs")) or ""
+_lock13 = _tb04(_lib13, "enforcement_surface_locks_workflows_hooks_and_guard_source")
+_rc13v, _out13v = run_rc([sys.executable, os.path.join(REPO, "scripts", "verb_homes.py"), "--check"], timeout=300)
+_vh13_fails = re.findall(r"^FAIL (\w+) \(main\.rs:(\d+)\): least member is keel-cli - reaches ([\w,-]+)", _out13v or "", re.M)
+_vh13_last = ((_out13v or "").strip().splitlines() or [""])[-1]
+_vh13_m = re.search(r"verb_homes --check: (\d+) items, (\d+) that only keel-cli can hold", _vh13_last)
+_i601 = _issue_facts("601", "dcKeelCliIsThinDispatch")
+_ws13 = read(os.path.join(REPO, "Cargo.toml")) or ""
+_ws13_members = re.findall(r'^\s*"([^"]+)",', (re.search(r"members\s*=\s*\[(.*?)\]", _ws13, re.S) or [None, ""])[1], re.M)
+_FOUR13_DOD = "dcTheFourStayingModulesAreMembers"
+fact("fourModulesBesideMainMoveToTheirOwners", {
+    **_f513,
+    "dependsOnD0479": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0513\s+to\s+d0479\s*;", _d0513)),
+    "dependsOnD0209": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0513\s+to\s+d0209\s*;", _d0513)),
+    "namesFourModules": "main.rs, lib.rs and four modules" in (_f513["context"] or ""),
+    "namesThreeItems": "exactly the three main.rs items that reach them (audit_subverb, cmd_audit, cmd_enroll)" in (_f513["context"] or ""),
+    "namesOnTheSurface": "adherence.rs is on the enforcement surface" in (_f513["context"] or ""),
+    "namesNoMarkerBefore": "D0511 and D0512 carried no marker because no locked path moved" in (_f513["context"] or ""),
+    "namesGuardsCode": "so they are guards code and belong under the directory the enforcement surface already locks by prefix" in (_f513["decision"] or ""),
+    "namesEntryRetired": "The keel-cli/src/adherence.rs entry is retired from GUARD_SOURCE_FILES" in (_f513["decision"] or ""),
+    "namesNothingUnlocked": "nothing is unlocked by the retirement" in (_f513["decision"] or ""),
+    "namesHistoryEntersTheLock": "history.rs enters the lock by the directory it enters" in (_f513["decision"] or ""),
+    "namesProcessLayer": "the process cursor and actor enrollment are the process layer's and neither is on the enforcement surface" in (_f513["decision"] or ""),
+    "namesReExports": "re-exports the four at their old paths" in (_f513["decision"] or ""),
+    "namesHelpByteIdentical": "keel --help is byte-identical and the guard count from keel version is unchanged" in (_f513["decision"] or ""),
+    "namesDocLineAssertion": "asserts no slice starts below a doc line or attribute" in (_f513["decision"] or ""),
+    "namesCheckExitsZero": "scripts/verb_homes.py --check exits 0" in (_f513["decision"] or ""),
+    "namesInvariantAtEveryCommit": "The move keeps that invariant at every commit" in (_f513["rationale"] or ""),
+    "namesHistoryUnlockedToday": "history.rs is today unlocked although it re-derives the same verdict" in (_f513["rationale"] or ""),
+    "namesStrengthening": "a strengthening and not a relaxation of the lock" in (_f513["rationale"] or ""),
+    "namesWhyMarked": "The marker is process-change because GUARD_SOURCE_FILES changes" in (_f513["rationale"] or ""),
+    "namesHeldForHuman": "Held proposed for the human" in (_f513["consequences"] or ""),
+    "namesRejectedCourses": "Rejected: the modules stay in the binary" in (_f513["consequences"] or ""),
+    "source": {
+        "cliFiles": _cli13_files, "cliFileCount": len(_cli13_files), "cliLines": _cli13_lines,
+        "fourPresent": all(f in _cli13_files for f in _FOUR13), "fourLines": {f: _cli13_lines.get(f) for f in _FOUR13},
+        "fourTotal": sum(_cli13_lines.get(f) or 0 for f in _FOUR13),
+        "lockFiles": _gsf13, "lockFileCount": len(_gsf13), "adherenceOnTheList": "keel-cli/src/adherence.rs" in _gsf13,
+        "guardNamesOnTheList": "members/keel-schema/src/guard_names.rs" in _gsf13,
+        "lockDirs": _gsd13, "lockDirCount": len(_gsd13),
+        "lockedToday": {p: _locked13(p) for p in ("keel-cli/src/adherence.rs", "keel-cli/src/history.rs", "keel-cli/src/cursor.rs", "keel-cli/src/enroll.rs")},
+        "lockedAfter": {p: _locked13(p) for p in ("members/keel-guards/src/adherence.rs", "members/keel-guards/src/history.rs",
+                                                  "members/keel-process/src/cursor.rs", "members/keel-process/src/enroll.rs")},
+        "lockTestAssertsOldAdherence": 'assert!(is_enforcement_surface("keel-cli/src/adherence.rs"))' in _lock13,
+        "lockTestAssertsNewAdherence": 'assert!(is_enforcement_surface("members/keel-guards/src/adherence.rs"))' in _lock13,
+        "processMemberExists": os.path.isdir(os.path.join(REPO, "members", "keel-process", "src")),
+        "guardsMemberExists": os.path.isdir(os.path.join(REPO, "members", "keel-guards", "src")),
+        "workspaceMembers": _ws13_members, "workspaceMemberCount": len(_ws13_members),
+    },
+    "live": {
+        "verbHomes": {"exit": _rc13v, "items": int(_vh13_m.group(1)) if _vh13_m else None, "onlyBinary": int(_vh13_m.group(2)) if _vh13_m else None,
+                      "failing": [{"item": n, "line": int(l), "reaches": r.split(",")} for n, l, r in _vh13_fails],
+                      "failingNames": [n for n, _l, _r in _vh13_fails], "allReachKeelCli": all("keel-cli" in r.split(",") for _n, _l, r in _vh13_fails),
+                      "line": _vh13_last[:200] or None},
+    },
+    "issue601": _i601,
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in (_FOUR13_DOD, "dcKeelCliIsThinDispatch", "dcTouchedSetDescendsTheWorkspace")},
+    "resolverDodResults": _dod_results(_FOUR13_DOD),
+    "resolverReadyRank": (_ready_names.index(_FOUR13_DOD) + 1) if _FOUR13_DOD in _ready_names else None,
+    "readyItems": len(_ready_names),
+    "thinDispatchDependsOnIt": bool(re.search(r"dependency from dcKeelCliIsThinDispatch to " + _FOUR13_DOD + r";", _bl)),
+    "resolverDodNamesTheLock": "GUARD_SOURCE_FILES in members/keel-guards/src/enforcement.rs names keel-cli/src/adherence.rs" in _bl,
+    "resolverDodNamesTheMarker": "carries a process-change Decision held for the human (D0209 clause 2) before it lands" in _bl,
+    "backlogItems": len(_bl00_actions),
+} if _d0513 and _enf13 and _lib13 else None,
+     "the held record for the last four modules beside main.rs: Decision and edges, the four files and their sizes, the two lock constants as they read today and the lock they would give the new paths, verb_homes --check live, the finding it cites, the resolver's place and DoD",
+     _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0513 to dNNNN;` lines. source: keel-cli/src listed, "
+     "each .rs file's line count; members/keel-guards/src/enforcement.rs searched for GUARD_SOURCE_FILES' and GUARD_SOURCE_DIRS' quoted members; lockedToday / "
+     "lockedAfter apply the two constants' rule (listed, or starts with a locked directory) to the old and the proposed paths from outside the binary; the lock "
+     "test's asserted paths from members/keel-guards/src/lib.rs; the two member src directories' existence; the root Cargo.toml members list. live: `python "
+     "scripts/verb_homes.py --check` exit code, its `FAIL <item> (main.rs:<line>): least member is keel-cli - reaches <crates>` lines and the closing "
+     "`verb_homes --check: N items, N that only keel-cli can hold` line. issue601 as section 34 (resolver dcKeelCliIsThinDispatch). resolverPositions = "
+     "1-based place among the backlog's declared actions (D0052); resolverDodResults = the story's DoDRn outcomes; resolverReadyRank = its line in "
+     "`keel show whats-next .`; thinDispatchDependsOnIt = the backlog's dependency edge; the two resolverDodNames* = literal spans of the DoD text.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
