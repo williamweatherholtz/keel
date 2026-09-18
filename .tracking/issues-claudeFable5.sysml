@@ -2051,4 +2051,37 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcRecordDecisionRefusesACompoundText to issue604;
+
+    part issue605 : Issue {
+        :>> id = "85f76ac7-3b3f-4b1b-9c70-37736eb470c6";
+        :>> title = "Two packages may declare one part name: the model keeps the last read, every gate stays green, a typed edge binds to the wrong item and a qualified target does not parse (GH#85; 271 duplicate names in this tree)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#85 (st160, us115; untrusted source, plan only, D0264), verified in this tree on 2026-09-18. Two packages may declare the same part name; the model build keys items by the bare name (members/keel-model/src/model.rs:70) and inserts last-writer-wins (model.rs:244), so the second declaration silently replaces the first and every typed edge naming it - including one written inside the package that declares its own - binds to whichever file the walk read last. duplicate-identity scopes its name check to one package (members/keel-guards/src/identity.rs:309, violation text `in package` at :389), so the cross-package case passes the one guard whose name promises it; CLAUDE.md invariant 3 (`Items never collide on name`) is enforced by nothing. A qualified `Package::name` edge target does not parse (`expected Semicolon, got ColonColon`), so an author who notices cannot say which item they mean. MEASURED here: 271 declared names are duplicated across this tree's own .tracking and .engine (text scan of part/action/verification/item declarations, reference excluded) - 247 sprint gate names reused across sprint files (asCloseOutGate in sprint241, sprint251, sprint276; `keel show why asCloseOutGate` reaches sprint276 alone) and 24 others including `intake`, `migration` and `docSync` declared as both a Process and a Skill registry part, and pf51-pf53 in two propriety files. Downstream (plotwright) eleven names collided after a merge, two SysReq edges point at the wrong UserStory, and guard direction-cited's prescribed edge binds to the wrong Statement so the guard cannot be discharged. Severity High: the tree is green while `why`, `trace` and coverage assert edges to the wrong item. The course is D0517 (HELD, OPTION A recommended: local-then-unique-then-refuse resolution plus a qualified target). Resolver: dcBareNameResolvesLocallyOrUniquelyOrRefuses.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcBareNameResolvesLocallyOrUniquelyOrRefuses to issue605;
+
+    part issue606 : Issue {
+        :>> id = "734a2d4e-33b7-40a5-bf3f-ddc413668799";
+        :>> title = "decision-surfacing dsGround binds checkedBy to judgment-request-quality, which reads Decision fields and never the rendered page the step is about (GH#84)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#84 (st161, us117; untrusted source, plan only, D0264), verified in this tree on 2026-09-18. The decision-surfacing step dsGround (.engine/processes/decision-surfacing.sysml:42-50: the item inline, what accepting binds, the specific fork, the evidence, what I do with each answer) declares `checkedBy = 'judgment-request-quality'`; that guard reads a PROPOSED fork Decision's title, rationale, RESEARCH statement and per-OPTION cost in the decisions directory (guards.md:38) and never opens the rendered page; no guard names scripts/check_templates.py, and its --brief contract (check_brief, :264) holds word budgets, field presence and chain order only. So a D0321 binding resolves - step-check-resolves is green - while checking an artefact other than the one the step is about, and hardening counts the step as checked. Downstream (Penumbra), a six-tab page carried two tabs whose options differed only by a verdict verb, a cost reading literally `None.`, before/after rows whose both cells were record states, and a classification preamble before every tab; the skill text forbids three of the four and nothing read the page - the project's owner could not see the bifurcation and a five-critic panel found it. The class: a process step bound to a check of a different artefact is worse than an unenforced step, because the count of checked steps is trusted. Severity Medium: the failure is in what the human is asked to judge, not in the tree, and the page is machine-local so no tree gate can hold it - the build script is the only enforcement point. The course is D0518 (HELD, OPTION A recommended: four content shapes refused by check_templates --brief at build, dsGround retargeted to a declared rule with that mechanism; OPTION B: declare the step unenforced per D0321). Resolver: dcGroundStepBindsToACheckThatReadsThePage.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGroundStepBindsToACheckThatReadsThePage to issue606;
+
+    part issue607 : Issue {
+        :>> id = "00611c4e-9935-4d80-8baf-8fe825ff1e11";
+        :>> title = "github ingest dedups on the exact html_url: the repo rename doubled 23 issues into two Statements each, and the pull's idempotency is false across a rename";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found during the 2026-09-18 GitHub pull, my own finding (no Statement). The ingest's re-ingest refusal keys on the exact html_url string (github_ingest.rs:80 takes html_url; intake_write.rs:171 refuses when a Statement already carries that sourceUrl). The repository was renamed sysmlv2-ai-toolkit -> keel between the 2026-09-14 pull and the 2026-09-16 currency pull, GitHub serves each issue at both URLs, and the API returns the new html_url, so 23 issues that were already Statements under the old URL were ingested a second time under the new one: GH#33-38, 40, 41 and 60-74 each hold two Statements with the same verbatim text and different UUIDs (measured by grouping every sourceUrl in .tracking by issue number: 23 numbers under both repo names). The control that exists precisely so the same words are never stored twice (the module's own doc, github_ingest.rs:18-22) was defeated by a change in the address, not the words. Consequences: after today's triage 72 Statements have no derived story, of which 57 are GitHub-sourced and name only 36 distinct issues (15 are not from GitHub); a triage of the wrong twin leaves the other unparsed for ever; and today's pull with the default --limit 30 stopped one page short of re-ingesting GH#9, #31 and #32 under the new name too, by count and not by control. Severity Medium: no words are lost or altered, but the intake frontier is inflated and the idempotency the pull promises is false across a rename. Resolver: dcGithubIngestDedupsOnTheIssueIdentity (dedup on the issue's identity; retire the 23 later twins by #Supersede; a duplicateSources row in the intake lens asserted at 0).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGithubIngestDedupsOnTheIssueIdentity to issue607;
 }
