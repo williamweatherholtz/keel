@@ -5697,6 +5697,118 @@ fact("livingDocsCiteSourceThatResolves", {
      "file, charter d0471, retroFindings = `(n) ` markers opening a sentence or following a label's colon, plus literal spans; resolverPositions = 1-based place among the backlog's "
      "declared actions (D0052); resolverDodResults = the item's DoDRn outcomes and shas; resolverReadyRank = its line in `keel show whats-next .`.")
 
+# ================================================================ 48. D0515 - a sprint Story names the item it delivers, and sprint-closure reads it (held, brief 48)
+# The Decision is held (marker process-change, D0337) and nothing is applied: every source fact below is the OLD
+# shape - relationships.sysml without `metadata def Delivers`, the scaffold writing one charter edge and two fill
+# keys, sprint_closure reading tasks and never an item, and 706 delivery files carrying a charter edge and no
+# #Delivers edge. The two findings (issues 563 and 589) and their sprints are read from the tree as they stand.
+_d0515 = _dec_file("0515-")
+_f515 = _decision_facts(_d0515, "d0515")
+_rel15 = read(os.path.join(REPO, ".engine", "schema", "core", "relationships.sysml")) or ""
+_scaf15 = read(os.path.join(REPO, "members", "keel-write", "src", "scaffold.rs")) or ""
+_spr15 = read(os.path.join(REPO, "members", "keel-guards", "src", "sprints.rs")) or ""
+_closure15 = (re.search(r"pub fn sprint_closure\(root: &Path\) -> GuardReport \{(.*?)\n\}", _spr15, re.S) or [None, ""])[1]
+_deliv15_dir = os.path.join(REPO, ".tracking", "delivery")
+_deliv15 = {fn: (read(os.path.join(_deliv15_dir, fn)) or "") for fn in os.listdir(_deliv15_dir) if fn.endswith(".sysml")}
+_charter15 = [m for t in _deliv15.values() for m in re.findall(r"#CharteredBy dependency from (\w+) to (\w+);", t)]
+_charter15_targets = [tgt for _, tgt in _charter15]
+_bl15_actions = set(re.findall(r"^\s{8}action (\w+);", _bl, re.M))
+_sk15 = read(os.path.join(REPO, ".engine", "skills", "sprint-planning", "SKILL.md")) or ""
+_S720, _S735 = "sprint720_instrumentAnswersCarryTheirSourceHash.sysml", "sprint735_suiteIsAMember.sysml"
+def _finding15(fname, item, story):
+    _t = _deliv15.get(fname, "")
+    return {
+        "file": fname, "present": fname in _deliv15,
+        "storyDodResults": len(re.findall(r"part " + story + r"DoDR\d+ : TestResult", _t)),
+        "storyDodPass": bool(re.search(r"part " + story + r"DoDR\d+ : TestResult \{[^}]*outcome = VerdictKind::pass", _t)),
+        "fillNamesTheItem": item in (re.search(r"DELIVERED BACKLOG ITEMS: ([^.]*)", _t) or [None, ""])[1],
+        "storySlugSharesTheItem": story.lower().replace("story", "") in item.lower(),
+        "charterTarget": next((tgt for src, tgt in re.findall(r"#CharteredBy dependency from (\w+) to (\w+);", _t)), None),
+        "deliversEdges": len(re.findall(r"#Delivers dependency", _t)),
+        "itemDodResults": _dod_results(item),
+    }
+_rc15g, _out15g = run_rc([KEEL, "gate", "guard", "sprint-closure", "--no-receipt", "."], timeout=120)
+_sc15 = re.search(r"\[guard:sprint-closure\] (PASS|FAIL)\s+\S+\s+(\d+) scanned, (\d+) warning\(s\), (\d+) violation", _out15g or "")
+_rc15v, _out15v = run_rc([KEEL, "version"], timeout=60)
+_guards15_line = next((l for l in (_out15v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards15 = re.search(r"guards:\s*(\d+)\D+(\d+) hard-blocking\D+(\d+) warning-only", _guards15_line)
+_i563 = _issue_facts("563", "dcSprintNamesTheItemItDelivers")
+_i589 = _issue_facts("589", "dcSprintNamesTheItemItDelivers")
+_SPR15_DOD = "dcSprintNamesTheItemItDelivers"
+fact("sprintNamesTheItemItDelivers", {
+    **_f515,
+    "dependsOnD0068": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0515\s+to\s+d0068\s*;", _d0515)),
+    "dependsOnD0260": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0515\s+to\s+d0260\s*;", _d0515)),
+    "dependsOnD0209": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0515\s+to\s+d0209\s*;", _d0515)),
+    "namesTheCharterCount": "755 edges across 705 delivery files: 681 to Decisions, 32 to Needs and Requirements, 42 to backlog items, all of those on sprints 158 to 170 and none since" in (_f515["context"] or ""),
+    "namesIssue563": "issue563" in (_f515["context"] or ""),
+    "namesIssue589": "issue589" in (_f515["context"] or ""),
+    "namesOwedSeven": "check_report.py --owed 7 passed" in (_f515["context"] or ""),
+    "namesDeliversDef": "metadata def Delivers" in (_f515["decision"] or ""),
+    "namesFillKey": "from a delivers key in the fill file" in (_f515["decision"] or ""),
+    "namesTwoClauses": "every #Delivers target whose DoD Test has no TestResult is a violation naming the sprint and the item" in (_f515["decision"] or "")
+                       and "whose Story carries no #Delivers edge is a violation too" in (_f515["decision"] or ""),
+    "namesNoGuessedBackfill": "nothing backfills by guessing from a shared slug" in (_f515["decision"] or ""),
+    "namesTheProbePair": "sprint N delivering item X with no DoD result and sprint N+1 present is red naming X" in (_f515["decision"] or ""),
+    "namesCountStays76": "The guard count from keel version stays at 76" in (_f515["consequences"] or ""),
+    "namesTheSpikeResidual": "a research spike or ceremony-only sprint that delivers no backlog item is the case this clause does not yet fit" in (_f515["consequences"] or ""),
+    "today": {
+        "relationshipsHasDelivers": "metadata def Delivers" in _rel15,
+        "relationshipsHasCharteredBy": "metadata def CharteredBy" in _rel15,
+        "relationshipsMetadataDefs": len(re.findall(r"^\s*metadata def \w+;", _rel15, re.M)),
+        "scaffoldWritesCharter": "#CharteredBy dependency from {slug}Story to {charter};" in _scaf15,
+        "scaffoldWritesDelivers": "#Delivers" in _scaf15,
+        "scaffoldFillKeys": sorted(set(re.findall(r'field\(fill, "(\w+)"', _scaf15))),
+        "scaffoldDodPlaceholderNamesItems": "DELIVERED BACKLOG ITEMS: <items>" in _scaf15,
+        "closureFnPresent": bool(_closure15),
+        "closureReadsTasks": "sprint_tasks_and_results(&src)" in _closure15,
+        "closureReadsDelivers": "Delivers" in _closure15,
+        "closureExemptsNewest": "number(path) == newest" in _closure15,
+        "closureGuardName": (re.search(r'name: "([a-z-]+)"', _closure15) or [None, None])[1],
+        "skillNamesCharterEdge": "#CharteredBy" in _sk15,
+        "skillNamesDeliversEdge": "#Delivers" in _sk15,
+    },
+    "deliveryFiles": {
+        "files": len(_deliv15),
+        "withCharterEdge": sum(1 for t in _deliv15.values() if "#CharteredBy dependency" in t),
+        "charterEdges": len(_charter15),
+        "charterToDecision": sum(1 for t in _charter15_targets if re.fullmatch(r"d0\d{3}", t)),
+        "charterToBacklogItem": sum(1 for t in _charter15_targets if t in _bl15_actions),
+        "charterToBacklogItemSprints": sorted({int(re.match(r"sprint(\d+)", fn).group(1)) for fn, t in _deliv15.items() if re.match(r"sprint(\d+)", fn) and any(tgt in _bl15_actions for _, tgt in re.findall(r"#CharteredBy dependency from (\w+) to (\w+);", t))}),
+        "charterToOther": sum(1 for t in _charter15_targets if not re.fullmatch(r"d0\d{3}", t) and t not in _bl15_actions),
+        "withDeliversEdge": sum(1 for t in _deliv15.values() if "#Delivers dependency" in t),
+        "withDeliveredItemsLine": sum(1 for t in _deliv15.values() if "DELIVERED BACKLOG ITEMS:" in t),
+    },
+    "findings": {
+        "sprint720": _finding15(_S720, "dcInstrumentAnswersCarryTheirSourceHash", "storyInstrumentAnswersCarryTheirSourceHash"),
+        "sprint735": _finding15(_S735, "dcSuiteIsAMember", "storySuiteIsAMember"),
+    },
+    "live": {
+        "closureGuard": ({"verdict": _sc15.group(1), "scanned": int(_sc15.group(2)), "warnings": int(_sc15.group(3)), "violations": int(_sc15.group(4))} if _sc15 else None),
+        "guardsLine": ({"total": int(_guards15.group(1)), "hard": int(_guards15.group(2)), "warning": int(_guards15.group(3))} if _guards15 else None),
+    },
+    "issue563": _i563, "issue589": _i589,
+    "resolverPosition": ({"place": _bl00_actions.index(_SPR15_DOD) + 1, "def": _bl00_defs.get(_SPR15_DOD)} if _SPR15_DOD in _bl00_actions else None),
+    "resolverDodResults": _dod_results(_SPR15_DOD),
+    "resolverDodNamesFourSteps": all(s in _bl for s in ("DO: (1) CR, human sign-off", "(2) sprint-planning skill and record sprint --fill", "(3) sprint-closure:", "(4) backfill is NOT done by guessing")),
+    "resolverReadyRank": (_ready_names.index(_SPR15_DOD) + 1) if _SPR15_DOD in _ready_names else None,
+    "readyItems": len(_ready_names),
+    "backlogItems": len(_bl00_actions),
+}, "the held Decision, the surfaces as they stand before it, the two findings and the live guard",
+     _DEC_HOW + " Names by literal search in the Decision's fields (the 755/705/681/32/42 charter sentence, issue563, issue589 and `check_report.py --owed 7 passed` "
+     "in context; `metadata def Delivers`, `from a delivers key in the fill file`, the two violation clauses, `nothing backfills by guessing from a shared slug` and the "
+     "probe pair in decision; `stays at 76` and the spike residual in consequences); the three edges as `#DependsOn dependency from d0515 to X;` lines. today (the OLD "
+     "shape, the Decision being held): `metadata def Delivers` / `metadata def CharteredBy` and the count of `metadata def` lines in .engine/schema/core/relationships.sysml; "
+     "in members/keel-write/src/scaffold.rs the literal charter writeln, any `#Delivers`, the distinct `field(fill, \"k\")` keys and the DoD placeholder; in "
+     "members/keel-guards/src/sprints.rs the body of `pub fn sprint_closure` searched for `sprint_tasks_and_results(&src)`, `Delivers`, `number(path) == newest` and its "
+     "`name:` literal; `#CharteredBy` / `#Delivers` in .engine/skills/sprint-planning/SKILL.md. deliveryFiles: every .sysml under .tracking/delivery read once; charter "
+     "edges = `#CharteredBy dependency from A to B;` matches, a target is a Decision when it matches d0NNN, a backlog item when it is a declared `action` of backlog.sysml, "
+     "other otherwise, charterToBacklogItemSprints = the sorted sprint numbers of the files whose charter targets a backlog item. findings: the two sprint files' story DoDRn results and pass, whether the item's name sits in the fill's `DELIVERED BACKLOG ITEMS:` span, whether "
+     "the story name shares the item's slug, the charter target, `#Delivers dependency` count, and the item's DoDRn outcomes and shas from backlog.sysml. live: `" + KEEL +
+     " gate guard sprint-closure --no-receipt .` summary line and `" + KEEL + " version`'s `guards:` line. issues 563 and 589 as section 34; resolverPosition = 1-based "
+     "place among the backlog's declared actions (D0052); resolverDodNamesFourSteps = the four `DO:` step literals in backlog.sysml; resolverReadyRank = its line in "
+     "`keel show whats-next .`, readyItems = that list's length.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
