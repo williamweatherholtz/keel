@@ -12,7 +12,7 @@
 // found by a test. Three were found by a peer session running keel in a downstream project within a
 // single day; the rest by someone hitting them while doing something else. Four still have no test
 // at all. The cause is structural rather than negligent: `check_preconditions` refuses any tree
-// holding `keel-cli/Cargo.toml` as a self-build (members/keel-process/src/migrate.rs:804-807), so THE ENGINE CANNOT MIGRATE
+// holding `keel-cli/Cargo.toml` as a self-build (members/keel-process/src/migrate.rs:883-886), so THE ENGINE CANNOT MIGRATE
 // ITSELF. Every other keel discipline is dogfooded daily; this one is the single surface the
 // self-build cannot exercise, and it has exactly the defect density that predicts.
 //

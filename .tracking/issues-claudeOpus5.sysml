@@ -2316,4 +2316,15 @@ package IssuesClaudeOpus5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRecordSubVerbsAreControlActions to issue497;
+
+    part issue608 : Issue {
+        :>> id = "52719ba6-7ead-416b-8e74-0f61499257ed";
+        :>> title = "keel migrate reverts itself in every downstream project: the D0108 exemption is on a path a migration cannot write";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeOpus5";
+        :>> description = "`keel migrate` reverted itself in every downstream project. A resync rewrites `.engine/` in place, and those items name the upstream actors who authored them — five distinct createdBy values in a single scaffolded copy — so the ownership guard read the run as a non-owner editing another actor's fields and the post-migrate gate went red. No running actor could clear it, because no actor owns all five. The guard's designed escape hatch was unreachable: it suspends D0108 when a transform under `.engine/tools/migrations/` is co-committed, but `is_engine_dev_only` excludes every path containing a `tools` component from shipping, so a migration could not write the one directory that would have permitted it. Outside the self-build repo the exemption could never fire. A second instance of the same shape followed once ownership cleared: the resync moves `.engine/skills/`, `claude-surface-drift` then reported every deployed skill stale, and `keel sync-claude` — the command that fixes exactly that — cannot run until the migration it is blocking has landed. Found migrating a project scaffolded by the v0.4.1 release onto a build 47 commits ahead. Resolved by D0519: the run writes its own resync record and regenerates the surface, both inside the migration.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from d0519 to issue608;
 }

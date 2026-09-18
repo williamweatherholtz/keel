@@ -7,7 +7,7 @@ engine moved, the project did not choose it, and the project has to land somewhe
 ## Why this one is different from every other keel discipline
 
 The engine cannot migrate itself. `check_preconditions` refuses any tree holding `keel-cli/Cargo.toml`
-as a self-build (`members/keel-process/src/migrate.rs:804-807`), so this is the single surface the self-build never exercises.
+as a self-build (`members/keel-process/src/migrate.rs:883-886`), so this is the single surface the self-build never exercises.
 The defect density follows exactly: **seven defects in this path — issue301, issue310, issue314,
 issue323, issue324, issue326, issue327 — and not one was found by a test.** Three were found by one
 downstream session in a single day. Four still have no test.

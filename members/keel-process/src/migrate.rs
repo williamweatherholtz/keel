@@ -454,6 +454,81 @@ impl Working {
     }
 }
 
+/// Step 1b — the resync's own record, written into the change the resync makes.
+///
+/// TWO CONTROLS THAT COULD NOT BOTH BE SATISFIED DOWNSTREAM. D0067 requires a bulk transform that
+/// crosses ownership boundaries to carry a COMMITTED transform as its record, and the `ownership`
+/// guard suspends D0108 on exactly that evidence: a file under `.engine/tools/migrations/` in the
+/// same change. A project-migration (D0275) is such a transform by construction — `.engine/` carries
+/// items five different upstream actors created, so no running actor can ever own them all, and the
+/// resync rewrites their fields in place. But `is_engine_dev_only` excludes everything under
+/// `tools/` from shipping, so the one path that lifts D0108 was the one path a migration could not
+/// write. `keel migrate` therefore failed its own post-migrate gate in every project it exists to
+/// serve, and reverted; the ownership violations named the engine's upstream authors, who are not on
+/// any downstream roll and cannot be put there for five actors at once.
+///
+/// The record is GENERATED here rather than shipped from the engine tree, which is what keeps the
+/// exemption honest: it names the build the tree is moving to and the control totals of the step it
+/// describes, so the reviewer reading the commit sees what crossed the boundary and why. It is not a
+/// flag a caller can set, and it appears only when something actually crossed — a no-op resync
+/// writes nothing.
+fn step_resync_record(root: &Path, resync: &StepPlan) -> StepPlan {
+    let mut plan = StepPlan::empty(
+        "resync-record",
+        "Record the engine resync as the co-committed transform its own gate reads (D0067/D0108)",
+    );
+    if resync.files.is_empty() {
+        return plan; // nothing crossed an ownership boundary, so there is nothing to account for
+    }
+    let date = keel_write::scaffold::today();
+    let build = env!("KEEL_BUILD_COMMIT");
+    let version = env!("CARGO_PKG_VERSION");
+    let dst = root.join(".engine").join("tools").join("migrations").join(format!("{date}-engine-resync-{build}.md"));
+    if dst.exists() {
+        return plan; // this build already recorded a resync today — re-running is not a second migration
+    }
+    let engine_dir = root.join(".engine");
+    let listed = resync
+        .files
+        .iter()
+        .map(|f| {
+            let shown = f.path.strip_prefix(&engine_dir).unwrap_or(&f.path);
+            format!("- .engine/{}", shown.display().to_string().replace('\\', "/"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let body = format!(
+        "# Engine resync -> keel {version} (build {build})\n\
+         \n\
+         Written by `keel migrate` on {date}. This file IS the transform record for the resync\n\
+         committed beside it, in the sense D0067 means: a bulk change that crosses ownership\n\
+         boundaries has to carry, in its own commit, a readable account of what it touched. The\n\
+         `ownership` guard reads this directory to suspend D0108 for that commit.\n\
+         \n\
+         .engine/ is a copy of the engine tree, and the items in it name the upstream actors who\n\
+         authored them. A resync rewrites those items in place; no actor running the migration owns\n\
+         them all. That is the boundary this record accounts for.\n\
+         \n\
+         ## Control totals\n\
+         \n\
+         - files written: {}\n\
+         - edits: {}\n\
+         \n\
+         ## Files\n\
+         \n\
+         {listed}\n",
+        resync.files.len(),
+        resync.edits(),
+    );
+    plan.files.push(FileEdit {
+        path: dst,
+        new_content: body,
+        edits: 1,
+        detail: vec![format!("add tools/migrations/{date}-engine-resync-{build}.md ({} file(s) accounted for)", resync.files.len())],
+    });
+    plan
+}
+
 /// Step 1 — resync `.engine/` from the engine embedded in this binary.
 ///
 /// For everything the engine OWNS this is not a transform at all: the binary carries the current
@@ -693,7 +768,11 @@ fn step_removed_types(root: &Path, w: &Working) -> StepPlan {
 pub fn plan(root: &Path, engine: &Dir) -> MigrationPlan {
     // Ordered, and the order matters: each step reads what the previous one staged.
     let mut w = Working::new();
-    let mut steps = vec![step_engine_resync(root, engine)];
+    let resync = step_engine_resync(root, engine);
+    // The record accounts for the resync, so it is computed from that step and lands in the same
+    // change — the gate that reads it runs over the whole applied plan, never over one step.
+    let record = step_resync_record(root, &resync);
+    let mut steps = vec![resync, record];
     steps.push(step_process_as_action(root, &mut w));
     steps.push(step_processstep_order(root, &mut w));
     steps.push(step_release_as_occurrence(root, &mut w));
@@ -815,7 +894,11 @@ pub fn check_preconditions(root: &Path, dry_run: bool) -> Result<Vec<String>, Re
         // the issue324 test got `?? .tracking/obligations/` and no filename, so a per-file decision
         // was impossible. Listing files individually is also strictly better for the refusal path: it
         // names the actual blocking files instead of a directory the reader then has to go inspect.
-        .args(["status", "--porcelain", "-uall", "--", ".tracking", ".engine"])
+        // `.claude` is in scope because the migration REGENERATES the surface (it is deployed from
+        // the `.engine/skills/` the resync moves) and rolls it back with everything else. A
+        // directory this run rewrites and restores has to be clean going in, or the restore would
+        // discard an edit the run never made.
+        .args(["status", "--porcelain", "-uall", "--", ".tracking", ".engine", ".claude"])
         .output();
     let Ok(out) = out else { return Err(Refusal::NotAGitRepo) };
     if !out.status.success() {
@@ -865,7 +948,8 @@ fn head_sha(root: &Path) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Restore `.engine/` and `.tracking/` to `sha`, discarding anything the interrupted run wrote.
+/// Restore `.engine/`, `.tracking/` and `.claude/` to `sha`, discarding anything the interrupted
+/// run wrote.
 ///
 /// Safe precisely BECAUSE migrate refuses a dirty tree: everything under those directories was
 /// committed before the run, so resetting them to the pre-migration commit cannot destroy work.
@@ -884,11 +968,11 @@ fn restore(root: &Path, sha: &str) -> Result<(), String> {
             Err(format!("git {args:?}: {}", String::from_utf8_lossy(&out.stderr).trim()))
         }
     };
-    run(&["checkout", sha, "--", ".engine", ".tracking"])?;
-    run(&["clean", "-fdq", "--", ".engine", ".tracking"])?;
+    run(&["checkout", sha, "--", ".engine", ".tracking", ".claude"])?;
+    run(&["clean", "-fdq", "--", ".engine", ".tracking", ".claude"])?;
     // `checkout <sha> -- <paths>` also STAGES the restored content; unstage so the tree looks
     // untouched rather than merely having the right bytes.
-    run(&["reset", "-q", "--", ".engine", ".tracking"])
+    run(&["reset", "-q", "--", ".engine", ".tracking", ".claude"])
 }
 
 /// Roll back a detected failure, and say plainly whether the rollback itself worked.
@@ -901,13 +985,13 @@ fn rollback_after_failure(root: &Path, sha: Option<&String>, written: usize) -> 
     match restore(root, sha) {
         Ok(()) => {
             let _ = std::fs::remove_file(marker_path(root));
-            eprintln!("  ROLLED BACK: {written} written file(s) discarded; .engine/ and .tracking/ restored to {sha}.");
+            eprintln!("  ROLLED BACK: {written} written file(s) discarded; .engine/, .tracking/ and .claude/ restored to {sha}.");
             eprintln!("  The tree is as it was before this run. Nothing is half-migrated.");
             1
         }
         Err(e) => {
             eprintln!("  ROLLBACK FAILED ({e}) — this tree IS partially migrated after {written} file(s).");
-            eprintln!("  Restore by hand: git checkout {sha} -- .engine .tracking && git clean -fd -- .engine .tracking");
+            eprintln!("  Restore by hand: git checkout {sha} -- .engine .tracking .claude && git clean -fd -- .engine .tracking .claude");
             1
         }
     }
@@ -926,7 +1010,7 @@ fn recover_interrupted(root: &Path) -> Option<String> {
             "recovered: a previous migration did not finish. .engine/ and .tracking/ restored to {sha} before planning."
         ),
         Err(e) => format!(
-            "WARNING: a previous migration did not finish and could not be restored ({e}). Restore by hand: git checkout {sha} -- .engine .tracking"
+            "WARNING: a previous migration did not finish and could not be restored ({e}). Restore by hand: git checkout {sha} -- .engine .tracking .claude"
         ),
     };
     let _ = std::fs::remove_file(&marker);
@@ -987,6 +1071,24 @@ fn report_written(p: &MigrationPlan, root: &Path) {
     for path in &paths {
         println!("    {path}");
     }
+}
+
+/// Regenerate the `.claude/` surface as part of the migration.
+///
+/// The surface is DEPLOYED from `.engine/skills/`, which the resync just moved, so it belongs to the
+/// migration rather than to a chore afterwards. Leaving it out made the run fail its own gate:
+/// `claude-surface-drift` compared a surface generated from the old vintage against the engine of
+/// the new one, reported every skill stale, and the migration reverted — while `keel sync-claude`,
+/// the command that would have fixed it, cannot run until the migration it is blocking has landed.
+/// The same shape as the resync record: a post-condition the run's own gate demands, which only the
+/// run can satisfy. A failure here is the migration's failure and rolls back with it — `Some(code)`
+/// is that rollback's exit code, `None` means the surface is current.
+fn resync_surface(root: &Path, pre_sha: Option<&String>, written: usize) -> Option<i32> {
+    let Err(e) = keel_write::claude_surface::sync_claude(root, false) else { return None };
+    eprintln!("keel migrate: wrote {written} file(s), but the .claude/ surface could not be regenerated: {e}");
+    eprintln!("  The surface is deployed from the .engine/skills/ this run moved, so a tree with one vintage's");
+    eprintln!("  engine and the other's surface is exactly the half-migrated state that must not survive.");
+    Some(rollback_after_failure(root, pre_sha, written))
 }
 
 fn apply_files(p: &MigrationPlan) -> Result<usize, (usize, PathBuf, std::io::Error)> {
@@ -1137,6 +1239,8 @@ pub fn cmd_with(root: &Path, engine: &Dir, dry_run: bool, verify: bool) -> i32 {
             return rollback_after_failure(root, pre_sha.as_ref(), n);
         }
     };
+
+    if let Some(code) = resync_surface(root, pre_sha.as_ref(), written) { return code }
 
     // Reconcile against the plan by RE-PLANNING. Every step is content-detected, so a correct run
     // leaves nothing matching; a non-empty re-plan means a transform did not do what it reported.
@@ -1338,9 +1442,45 @@ pub fn parse_attempts(text: &str) -> Vec<UpdateAttempt> {
 mod tests {
     use super::{
         drop_processstep_order, is_engine_dev_only, remap_engine_path, retype_instances, step_process_as_action,
-        step_processstep_order, step_release_as_occurrence, step_removed_types, strip_order_assignment, types_as, without_string_literals,
-        Path, Working,
+        step_processstep_order, step_release_as_occurrence, step_removed_types, step_resync_record, strip_order_assignment, types_as,
+        without_string_literals, FileEdit, Path, StepPlan, Working,
     };
+
+    /// D0388 probe pair for the resync record, chosen before the real tree was read.
+    ///
+    /// KNOWN-POSITIVE: a resync that wrote files crossed an ownership boundary, so the record has to
+    /// exist — it is the evidence the `ownership` guard reads to suspend D0108 (D0067), and without it
+    /// `keel migrate` reverts itself in every downstream project.
+    #[test]
+    fn a_resync_that_wrote_files_records_the_transform_its_own_gate_reads() {
+        let mut resync = StepPlan::empty("engine-resync", "t");
+        resync.files.push(FileEdit {
+            path: Path::new("/p/.engine/cli/commands.sysml").to_path_buf(),
+            new_content: String::new(),
+            edits: 3,
+            detail: vec![],
+        });
+        let plan = step_resync_record(Path::new("/p"), &resync);
+        let [file] = &plan.files[..] else { panic!("expected exactly one record, got {}", plan.files.len()) };
+        let parent = file.path.parent().expect("the record has a parent");
+        assert!(
+            parent.ends_with(Path::new(".engine/tools/migrations")),
+            "the record must land on the path the ownership guard reads, not beside it: {}",
+            file.path.display()
+        );
+        assert!(file.new_content.contains("- .engine/cli/commands.sysml"), "it accounts for the file that crossed: {}", file.new_content);
+        assert!(file.new_content.contains("- edits: 3"), "and carries the step's control total: {}", file.new_content);
+    }
+
+    /// KNOWN-NEGATIVE: a project already current resyncs nothing, so nothing crossed an ownership
+    /// boundary and there is nothing to account for. A record written anyway would be a standing
+    /// D0108 exemption in the tree — the claimable shape the guard exists to refuse.
+    #[test]
+    fn a_noop_resync_records_nothing() {
+        let plan = step_resync_record(Path::new("/p"), &StepPlan::empty("engine-resync", "t"));
+        assert!(plan.files.is_empty(), "a no-op resync must not leave an exemption behind: {:?}", plan.files.len());
+        assert!(plan.is_noop(), "and the step itself is a no-op");
+    }
 
     #[test]
     fn type_match_respects_identifier_boundaries() {
