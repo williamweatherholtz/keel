@@ -16,6 +16,7 @@ pub(crate) const FAMILY: Family = Family {
         ("question-coverage", question_coverage), // D0161: declared knowledge facts are well-formed; coverage itself stays a view
         ("cli-surface-declared", cli_surface_declared),
         ("cli-reference", cli_reference), // hard (D0471/issue528) - a living doc names only verbs this binary dispatches
+        ("source-reference", source_reference), // hard (D0514/issue591) - a living doc's `file.rs:N` citation resolves and holds its identifier
     ],
 };
 
@@ -189,9 +190,298 @@ pub fn cli_reference(root: &Path) -> GuardReport {
     GuardReport { name: "cli-reference", scanned, warnings: Vec::new(), violations }
 }
 
+/// Guard 76: every `<file>.rs:N` / `<file>.rs:N-M` citation on the LIVING doc surface resolves to a
+/// source file under a workspace member, and the identifier it sits beside is inside the cited range
+/// (issue591 / D0514).
+///
+/// Sprint 736 moved `migrate.rs` to `members/keel-process` while the project-migration skill said
+/// `migrate.rs:664-666` for `check_preconditions` - a function that sat at 805-807 before the move and
+/// stayed there after it, the prose untouched. `tool-reference` holds `.engine/tools/<file>` names to
+/// disk and `cli-reference` holds `keel <verb>` to the dispatch; a line citation was held to nothing,
+/// and every D0479 extraction moves files that skills cite.
+///
+/// WHAT IS A CITATION. A token ending `.rs` followed by `:N` or `:N-M`: a bare basename
+/// (`migrate.rs:804-807`) or a path (`members/keel-process/src/migrate.rs:804-807`). A `.py:N` line or
+/// a path under `target/` is outside the population - not read, not counted.
+///
+/// HOW IT RESOLVES. Through the manifest-driven module home `scripts/module_home.py` reads: the corpus
+/// is every `.rs` under every `[workspace] member`'s `src/`. A path resolves when the corpus holds it; a
+/// bare basename resolves when exactly one corpus file bears it - two is a violation asking for the
+/// path, none is a violation naming the file of that name if one exists elsewhere.
+///
+/// WHAT IS HELD. The range is within the file. When a backticked identifier sits on the line - the
+/// nearest one to the citation - or, failing that, the last one on the wrapped line above it, that
+/// identifier appears within the cited lines; a miss names the line it is defined on today. A citation
+/// with no identifier in reach is counted and held to the file and the range alone - the stated
+/// residual: a bare `x.rs:12` can drift within its file unseen, and naming what it cites is what
+/// makes it checkable.
+///
+/// SCOPE IS THE LIVING SURFACE ONLY, as tool-reference's; Decisions and `.tracking` are history and may
+/// truthfully cite a line that has since moved.
+///
+/// A ROOT WITH NO `Cargo.toml` HAS NO CORPUS. The engine docs a scaffolded project receives cite keel's
+/// own source, which that project does not hold: `keel init` then `gate guard all` reddened every one
+/// of the 23 scaffold-and-gate tests on this guard's first touched run. Such a root scans nothing and
+/// passes - the claim is made where the source is, the self-build, and a project cannot hold it.
+#[must_use]
+pub fn source_reference(root: &Path) -> GuardReport {
+    if !root.join("Cargo.toml").is_file() {
+        return GuardReport { name: "source-reference", scanned: 0, warnings: Vec::new(), violations: Vec::new() };
+    }
+    let corpus = member_rust_sources(root);
+    let mut scanned = 0usize;
+    let mut violations = Vec::new();
+    for path in &living_doc_files(root) {
+        let Ok(text) = keel_model::corpus::read_to_string(path) else { continue };
+        let rel = relpath(root, path);
+        let lines: Vec<&str> = text.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            for c in source_citations(line) {
+                scanned += 1;
+                let above = i.checked_sub(1).and_then(|j| lines.get(j).copied());
+                let ident = cited_identifier(line, (c.start, c.end), above);
+                if let Some(why) = source_citation_defect(root, &corpus, &c, ident.as_deref()) {
+                    violations.push(format!("{rel}:{}: cites `{}`, {why} (issue591)", i + 1, c.token()));
+                }
+            }
+        }
+    }
+    GuardReport { name: "source-reference", scanned, warnings: Vec::new(), violations }
+}
+
+/// One `<file>.rs:N[-M]` citation on a doc line, with its byte span.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceCitation {
+    /// The file as written: `migrate.rs` or `members/keel-process/src/migrate.rs`.
+    pub file: String,
+    pub from: usize,
+    pub to: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl SourceCitation {
+    fn token(&self) -> String {
+        if self.from == self.to {
+            format!("{}:{}", self.file, self.from)
+        } else {
+            format!("{}:{}-{}", self.file, self.from, self.to)
+        }
+    }
+}
+
+/// Every citation on one line, in order. A `.py:N` or any other extension is not one; a path with a
+/// `target/` component is a build product, outside the population.
+#[must_use]
+pub fn source_citations(line: &str) -> Vec<SourceCitation> {
+    let path_char = |c: char| c.is_ascii_alphanumeric() || "._/-".contains(c);
+    let mut out = Vec::new();
+    let mut from = 0usize;
+    while let Some(i) = line[from..].find(".rs:").map(|i| from + i) {
+        from = i + 4;
+        let start = line[..i].char_indices().rev().take_while(|(_, c)| path_char(*c)).last().map_or(i, |(k, _)| k);
+        let file = line[start..i + 3].trim_start_matches("./");
+        let base = file.rsplit('/').next().unwrap_or_default();
+        if base.len() <= 3 || !base.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_') {
+            continue;
+        }
+        let digits = |s: &str| s.bytes().take_while(u8::is_ascii_digit).count();
+        let rest = &line[i + 4..];
+        let n1 = digits(rest);
+        if n1 == 0 {
+            continue;
+        }
+        let Ok(first) = rest[..n1].parse::<usize>() else { continue };
+        let mut end = i + 4 + n1;
+        let mut last = first;
+        if let Some(r) = rest[n1..].strip_prefix('-') {
+            let n2 = digits(r);
+            if n2 > 0 {
+                if let Ok(v) = r[..n2].parse::<usize>() {
+                    last = v;
+                    end += 1 + n2;
+                }
+            }
+        }
+        // `x.rs:12abc` is not a line number; `x.rs:12.` and `x.rs:12)` are
+        if line[end..].starts_with(|c: char| c.is_alphanumeric() || c == '_') {
+            continue;
+        }
+        if file.starts_with("target/") || file.contains("/target/") {
+            continue;
+        }
+        out.push(SourceCitation { file: file.to_string(), from: first, to: last, start, end });
+        from = end;
+    }
+    out
+}
+
+/// A backtick span's content when it is shaped like a Rust path or identifier (`check_preconditions`,
+/// `Refusal::SelfBuild`, `keel_fs::scratch()`), with a call's `()` and a macro's `!` stripped.
+fn identifier_shaped(span: &str) -> Option<&str> {
+    let s = span.trim().trim_end_matches("()").trim_end_matches('!');
+    let ok = !s.is_empty()
+        && s.split("::").all(|seg| {
+            seg.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') && seg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+    ok.then_some(s)
+}
+
+/// The identifier a citation sits beside: the nearest identifier-shaped backtick span on the line
+/// outside the citation's own span, else the last one on the wrapped line above (a paragraph wraps
+/// where it wraps; the identifier and its citation are one sentence).
+#[must_use]
+pub fn cited_identifier(line: &str, at: (usize, usize), above: Option<&str>) -> Option<String> {
+    let spans_of = |l: &str| -> Vec<(usize, usize, String)> {
+        backtick_spans(l).into_iter().filter_map(|(a, b)| identifier_shaped(&l[a + 1..b]).map(|s| (a, b, s.to_string()))).collect()
+    };
+    let (start, end) = at;
+    let same: Option<String> = spans_of(line)
+        .into_iter()
+        .filter(|(a, b, _)| *b < start || end <= *a)
+        .min_by_key(|(a, b, _)| if *b < start { start - *b } else { *a - end })
+        .map(|(_, _, s)| s);
+    same.or_else(|| above.filter(|l| !l.trim().is_empty()).and_then(|l| spans_of(l).pop().map(|(_, _, s)| s)))
+}
+
+/// Every `.rs` under every `[workspace] member`'s `src/`, repo-relative with `/` separators, manifest
+/// order then path order - the corpus `scripts/module_home.py` resolves a module in (D0486: the one
+/// list). A member written as `dir/*` expands to the subdirectories that hold a `Cargo.toml`.
+#[must_use]
+pub fn member_rust_sources(root: &Path) -> Vec<String> {
+    fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+        entries.sort();
+        for p in entries {
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    let manifest = keel_model::corpus::read_to_string(root.join("Cargo.toml")).unwrap_or_default();
+    let mut dirs = Vec::new();
+    for m in keel_model::corpus::workspace_members(&manifest) {
+        if let Some(parent) = m.strip_suffix("/*") {
+            if let Ok(rd) = std::fs::read_dir(root.join(parent)) {
+                let mut subs: Vec<_> = rd.flatten().map(|e| e.path()).filter(|p| p.join("Cargo.toml").is_file()).collect();
+                subs.sort();
+                dirs.extend(subs);
+            }
+        } else {
+            dirs.push(root.join(&m));
+        }
+    }
+    let mut files = Vec::new();
+    for d in dirs {
+        walk(&d.join("src"), &mut files);
+    }
+    files.iter().filter_map(|p| p.strip_prefix(root).ok()).map(|p| p.to_string_lossy().replace('\\', "/")).collect()
+}
+
+/// Where a cited file is in the corpus: one path, several bearing a bare basename, or none (with the
+/// files elsewhere in the corpus that bear the same basename, so the message can say where it went).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Resolution {
+    Path(String),
+    Ambiguous(Vec<String>),
+    Missing(Vec<String>),
+}
+
+/// Resolve a citation's file through the corpus: a path must be in it; a bare basename must be borne
+/// by exactly one entry.
+#[must_use]
+pub fn resolve_citation(corpus: &[String], file: &str) -> Resolution {
+    let base = file.rsplit('/').next().unwrap_or(file);
+    let bearing: Vec<String> = corpus.iter().filter(|p| p.rsplit('/').next() == Some(base)).cloned().collect();
+    if file.contains('/') {
+        if corpus.iter().any(|p| p == file) {
+            Resolution::Path(file.to_string())
+        } else {
+            Resolution::Missing(bearing)
+        }
+    } else {
+        match bearing.as_slice() {
+            [one] => Resolution::Path(one.clone()),
+            [] => Resolution::Missing(Vec::new()),
+            _ => Resolution::Ambiguous(bearing),
+        }
+    }
+}
+
+/// `id` as a whole word in `line`: no identifier character on either side.
+fn has_word(line: &str, id: &str) -> bool {
+    let ident = |c: char| c.is_alphanumeric() || c == '_';
+    let mut from = 0usize;
+    while let Some(i) = line[from..].find(id).map(|i| from + i) {
+        let before = line[..i].chars().next_back().is_some_and(ident);
+        let after = line[i + id.len()..].starts_with(ident);
+        if !before && !after {
+            return true;
+        }
+        from = i + id.len();
+    }
+    false
+}
+
+/// The 1-based line `id` is defined on in `text` - `fn id`, `struct id`, `const id`, ... - else the
+/// first line naming it as a word; `None` when the file never names it.
+#[must_use]
+pub fn definition_line(text: &str, id: &str) -> Option<usize> {
+    const KEYWORDS: [&str; 10] = ["fn", "struct", "enum", "const", "static", "mod", "trait", "type", "union", "macro_rules!"];
+    let naming: Vec<(usize, &str)> = text.lines().enumerate().filter(|(_, l)| has_word(l, id)).map(|(i, l)| (i + 1, l)).collect();
+    naming
+        .iter()
+        .find(|(_, l)| KEYWORDS.iter().any(|k| l.contains(&format!("{k} {id}"))))
+        .or_else(|| naming.first())
+        .map(|(n, _)| *n)
+}
+
+/// Why a citation is a defect, or `None` when it resolves, its range is within the file and the
+/// identifier beside it (when one is in reach) sits inside that range. The text names the line the
+/// identifier is on today, so the follower can repoint without opening the file.
+#[must_use]
+pub fn source_citation_defect(root: &Path, corpus: &[String], c: &SourceCitation, ident: Option<&str>) -> Option<String> {
+    let path = match resolve_citation(corpus, &c.file) {
+        Resolution::Path(p) => p,
+        Resolution::Ambiguous(many) => {
+            return Some(format!("a bare name {} source files bear - cite the path: {}", many.len(), many.iter().map(|p| format!("`{p}`")).collect::<Vec<_>>().join(", ")));
+        }
+        Resolution::Missing(elsewhere) => {
+            let today = match elsewhere.as_slice() {
+                [] => String::new(),
+                [one] => format!(" - today the file is `{one}`"),
+                many => format!(" - files of that name today: {}", many.iter().map(|p| format!("`{p}`")).collect::<Vec<_>>().join(", ")),
+            };
+            return Some(format!("which resolves to no source file under a workspace member's src/{today}"));
+        }
+    };
+    let Ok(text) = keel_model::corpus::read_to_string(root.join(&path)) else {
+        return Some(format!("and `{path}` cannot be read"));
+    };
+    let total = text.lines().count();
+    if c.from == 0 || c.to < c.from {
+        return Some(format!("whose range {}-{} is not a range of lines", c.from, c.to));
+    }
+    if c.to > total {
+        return Some(format!("whose range runs past the end of `{path}` ({total} lines)"));
+    }
+    let id = ident?;
+    let last = id.rsplit("::").next().unwrap_or(id);
+    if text.lines().skip(c.from - 1).take(c.to - c.from + 1).any(|l| has_word(l, last)) {
+        return None;
+    }
+    Some(definition_line(&text, last).map_or_else(
+        || format!("beside `{id}`, which `{path}` does not name at all"),
+        |n| format!("beside `{id}`, which is not within lines {}-{} of `{path}` - today it is at line {n}", c.from, c.to),
+    ))
+}
+
 /// The `.md` / `.sysml` / `.toml` files of the living doc surface: `.engine/{processes,skills,docs,
-/// contracts,workflows,rules}` and `CLAUDE.md`. Shared by tool-reference and cli-reference so the two
-/// guards mean the same thing by "living".
+/// contracts,workflows,rules}` and `CLAUDE.md`. Shared by tool-reference, cli-reference and
+/// source-reference so the three guards mean the same thing by "living".
 pub(crate) fn living_doc_files(root: &Path) -> Vec<std::path::PathBuf> {
     fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
         let Ok(rd) = std::fs::read_dir(dir) else { return };
@@ -642,6 +932,126 @@ mod cli_reference_tests {
         assert!(d.contains("today it is `keel show knowledge`"), "{d}");
         let d = cli_reference_defect(&refs("keel workspace")).expect("never a verb");
         assert!(d.ends_with("usage dump"), "{d}");
+    }
+}
+
+#[cfg(test)]
+mod source_reference_tests {
+    use super::{cited_identifier, resolve_citation, source_citations, source_reference, Resolution};
+
+    /// A workspace of two members: `keel-a` holds `migrate.rs` with `check_preconditions` defined on
+    /// line 5, both hold a `lib.rs`. `.engine/skills/s.md` is the living surface; `.tracking` is history.
+    fn workspace(name: &str) -> std::path::PathBuf {
+        let root = keel_fs::scratch(name);
+        let _ = std::fs::remove_dir_all(&root);
+        for m in ["keel-a", "keel-b"] {
+            std::fs::create_dir_all(root.join("members").join(m).join("src")).expect("mkdir");
+            std::fs::write(root.join("members").join(m).join("src").join("lib.rs"), "pub mod x;\n").expect("write");
+        }
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = [\n    \"members/keel-a\",\n    \"members/keel-b\",\n]\n").expect("write");
+        std::fs::write(
+            root.join("members/keel-a/src/migrate.rs"),
+            "//! doc\n\n/// refuses a self-build\n#[must_use]\npub fn check_preconditions(root: &Path) -> Result<(), Refusal> {\n    if root.join(\"keel-cli\").is_dir() {\n        return Err(Refusal::SelfBuild);\n    }\n    Ok(())\n}\n",
+        )
+        .expect("write");
+        std::fs::create_dir_all(root.join(".engine").join("skills")).expect("mkdir");
+        std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
+        root
+    }
+
+    /// D0388 pair, chosen before the real tree was read. KNOWN-POSITIVE: the issue591 shape - the
+    /// identifier on the line above, the citation a stale range in a bare basename - is red naming the
+    /// doc line and the line the function is on today. KNOWN-NEGATIVE: the same citation repointed by
+    /// path to the lines that hold the identifier is green; `target/` and `.py` are outside the population.
+    #[test]
+    fn a_stale_range_is_red_naming_todays_line_and_the_repointed_path_is_green() {
+        let root = workspace("keel-srcref-pair");
+        std::fs::write(
+            root.join(".engine/skills/s.md"),
+            "`check_preconditions` refuses any tree holding `keel-cli/Cargo.toml`\nas a self-build (`migrate.rs:1-2`), so this is the surface.\n",
+        )
+        .expect("write");
+        std::fs::write(root.join(".tracking/h.sysml"), "// history: `check_preconditions` at migrate.rs:1-2 once\n").expect("write");
+        let red = source_reference(&root);
+        assert_eq!(red.scanned, 1, "{:?}", red.violations);
+        assert_eq!(red.violations.len(), 1, "{:?}", red.violations);
+        assert!(red.violations[0].starts_with(".engine/skills/s.md:2: cites `migrate.rs:1-2`, beside `check_preconditions`"), "{}", red.violations[0]);
+        assert!(red.violations[0].contains("not within lines 1-2 of `members/keel-a/src/migrate.rs` - today it is at line 5"), "{}", red.violations[0]);
+
+        std::fs::write(
+            root.join(".engine/skills/s.md"),
+            "`check_preconditions` refuses any tree holding `keel-cli/Cargo.toml`\nas a self-build (`members/keel-a/src/migrate.rs:5-8`).\nA build product `target/debug/build/out.rs:3` and a script `module_home.py:40` are not source.\n",
+        )
+        .expect("write");
+        let green = source_reference(&root);
+        assert_eq!(green.scanned, 1, "{:?}", green.violations);
+        assert!(green.violations.is_empty(), "{:?}", green.violations);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The resolution classes: a moved file's old path names where it is today, a bare name two crates
+    /// bear asks for the path, an unknown name is missing, and a range past the file's end is red even
+    /// with no identifier in reach.
+    #[test]
+    fn a_moved_path_names_todays_file_a_shared_basename_asks_for_the_path_and_a_range_is_held_to_the_file() {
+        let root = workspace("keel-srcref-classes");
+        std::fs::write(
+            root.join(".engine/skills/s.md"),
+            "see keel-cli/src/migrate.rs:5 for `check_preconditions`\nand lib.rs:1 for the root; ghost.rs:9 is nowhere\nand migrate.rs:40-41 is past the end\n",
+        )
+        .expect("write");
+        let r = source_reference(&root);
+        assert_eq!(r.scanned, 4, "{:?}", r.violations);
+        assert_eq!(r.violations.len(), 4, "{:#?}", r.violations);
+        assert!(r.violations[0].contains("`keel-cli/src/migrate.rs:5`, which resolves to no source file") && r.violations[0].contains("today the file is `members/keel-a/src/migrate.rs`"), "{}", r.violations[0]);
+        assert!(r.violations[1].contains("`lib.rs:1`, a bare name 2 source files bear") && r.violations[1].contains("`members/keel-a/src/lib.rs`, `members/keel-b/src/lib.rs`"), "{}", r.violations[1]);
+        assert!(r.violations[2].contains("`ghost.rs:9`, which resolves to no source file") && !r.violations[2].contains("today"), "{}", r.violations[2]);
+        assert!(r.violations[3].contains("`migrate.rs:40-41`, whose range runs past the end of `members/keel-a/src/migrate.rs` (10 lines)"), "{}", r.violations[3]);
+        assert_eq!(resolve_citation(&["a/src/x.rs".to_string()], "x.rs"), Resolution::Path("a/src/x.rs".to_string()));
+        assert_eq!(resolve_citation(&["a/src/x.rs".to_string()], "b/src/x.rs"), Resolution::Missing(vec!["a/src/x.rs".to_string()]));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The token shapes and the identifier's reach: a range or a line, a path or a name, a citation in
+    /// a backtick span, and the nearest identifier on the line beating the one on the line above.
+    #[test]
+    fn citations_are_read_in_their_shapes_and_the_identifier_is_the_nearest_in_reach() {
+        let cites = |l: &str| source_citations(l).iter().map(|c| (c.file.clone(), c.from, c.to)).collect::<Vec<_>>();
+        assert_eq!(cites("at `migrate.rs:664-666` and members/keel-process/src/migrate.rs:805, ./x.rs:3."), vec![("migrate.rs".to_string(), 664, 666), ("members/keel-process/src/migrate.rs".to_string(), 805, 805), ("x.rs".to_string(), 3, 3)]);
+        assert!(cites("target/release/build/x.rs:3, facts.py:12, guards.rs: the module, x.rs:12abc, .rs:4").is_empty());
+        let line = "`Refusal::SelfBuild` is returned by `check_preconditions` (`migrate.rs:805-807`) before `keel_git::gitx::git()` runs";
+        let c = &source_citations(line)[0];
+        assert_eq!(cited_identifier(line, (c.start, c.end), Some("`other_fn` above")).as_deref(), Some("check_preconditions"));
+        let wrapped = "as a self-build (migrate.rs:664-666), so this is the surface";
+        let c = &source_citations(wrapped)[0];
+        assert_eq!(cited_identifier(wrapped, (c.start, c.end), Some("`check_preconditions` refuses any tree holding `keel-cli/Cargo.toml`")).as_deref(), Some("check_preconditions"));
+        assert_eq!(cited_identifier(wrapped, (c.start, c.end), Some("")), None);
+        assert_eq!(cited_identifier(wrapped, (c.start, c.end), None), None);
+    }
+
+    /// The live tree: every citation on the living surface resolves and holds its identifier - the
+    /// two project-migration lines among them (issue591's known-positive, repointed in sprint 743).
+    #[test]
+    fn the_living_surface_cites_source_that_resolves() {
+        let r = source_reference(&crate::test_repo_root());
+        assert!(r.scanned >= 2, "the project-migration skill and process cite migrate.rs: {}", r.scanned);
+        assert!(r.violations.is_empty(), "{:#?}", r.violations);
+    }
+
+    /// A scaffolded project: the engine docs it received cite keel's source, and there is no
+    /// `Cargo.toml` at its root to resolve them against. Nothing is scanned and the guard is green;
+    /// the same doc under a root that HAS a manifest is scanned and red. This is the shape that
+    /// reddened 23 scaffold-and-gate tests on the guard's first touched run.
+    #[test]
+    fn a_root_without_a_workspace_manifest_scans_nothing() {
+        let root = workspace("keel-srcref-noworkspace");
+        std::fs::write(root.join(".engine/skills/s.md"), "`check_preconditions` refuses a self-build (`members/keel-process/src/migrate.rs:804-807`).\n").expect("write");
+        let with = source_reference(&root);
+        assert_eq!((with.scanned, with.violations.len()), (1, 1), "{:?}", with.violations);
+        std::fs::remove_file(root.join("Cargo.toml")).expect("rm");
+        let without = source_reference(&root);
+        assert_eq!((without.scanned, without.violations.len()), (0, 0), "{:?}", without.violations);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

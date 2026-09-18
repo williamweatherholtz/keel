@@ -2029,4 +2029,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRecorderReportAccountsForEveryTreeWrite to issue602;
+
+    part issue603 : Issue {
+        :>> id = "ea84479d-cb65-44fd-8e7e-12e4e1a698b6";
+        :>> title = "Verifier receipt called a live, then red, ladder KILLED - nothing reads the receipt against the ladder it describes";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 743's verifier wrote its receipt with LADDER -> KILLED during touched; exit=2 and DISCREPANCIES: keel verify ladder outcome shows running with pid 29824 but process is dead at receipt read. At that moment tasklist listed pid 29824, the touched run's pid 38432 and cargo-nextest; keel verify --wait . printed in flight: touched, pid 29824 alive; the ladder then ended with the touched rung red (880 passed, 23 failed, exit 101) and the verifier's own background keel verify --wait returned that 101, which its final report restated as confirming the kill. The receipt was written from the running stub before the ladder ended and never rewritten from the ended ladder, so the primary received a receipt that was wrong about the ladder's state and about its verdict - the sprint 726 shape (issue575), whose control was a sentence in the test-verify skill saying to wait. A sentence is not a control (D0047): nothing reads the verifier's receipt against the ladder receipt it describes, the way check_report.py reads the recorder's report. The 23 red tests were real - the new source-reference guard reddened every init-scaffolded project, whose engine docs cite keel's source without holding it - and were found by the primary reading the touched receipt directly, not by the verifier.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcVerifierReceiptIsCheckedAgainstTheLadder to issue603;
 }
