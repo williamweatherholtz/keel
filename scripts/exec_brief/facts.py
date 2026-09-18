@@ -4824,7 +4824,7 @@ _verify06 = read(os.path.join(_su06_dir, "verify.rs")) or ""
 _census06 = _tb04(_verify06, "every_receipt_writer_with_an_outcome_renders_a_running_form")
 _tch06 = read(os.path.join(_su06_dir, "touched.rs")) or ""
 _scan06 = _tb04(_tch06, "no_member_test_anchors_on_a_cwd_relative_path")
-_dp06 = re.search(r"pub const DELIVERABLE_PATHS: \[&str; (\d+)\] = \[([^\]]*)\]", _suite06)
+_dp06 = re.search(r"pub const (?:UNOWNED_)?DELIVERABLE_PATHS: \[&str; (\d+)\] = \[([^\]]*)\]", _suite06)  # sprint 742 renamed the constant
 _dp06_paths = re.findall(r'"([^"]+)"', _dp06.group(2)) if _dp06 else []
 _gsf06_paths = _gsf05_paths   # the lock's file list as section 41 read it from enforcement.rs
 # the landed commit's shape over the fixed range (renames followed: D0479's "moved, not rewritten"), and the locked files' own diffs inside it
@@ -4911,6 +4911,8 @@ fact("suiteDependsOnNoViewOrGuard", {
         "scanAssertsOwnSrcInPopulation": 'ends_with("keel-suite/src/touched.rs")' in _scan06,
         "deliverablePaths": _dp06_paths, "deliverablePathsNameMembers": any(p.startswith("members") for p in _dp06_paths),
         "suiteRunsCliManifestOnly": 'join("keel-cli").join("Cargo.toml")' in _suite06 and "--workspace" not in _suite06,
+        # issue588's resolver (sprint 742): the run is `cargo test --workspace` from the root manifest
+        "suiteRunsWorkspace": '.arg("--workspace")' in _suite06 and 'join("Cargo.toml")' in _suite06,
     },
     "landed": {
         "range": [_LAND735_FROM, _LAND735_TO],
@@ -5548,6 +5550,152 @@ fact("fourModulesBesideMainMoveToTheirOwners", {
      "`verb_homes --check: N items, N that only keel-cli can hold` line. issue601 as section 34 (resolver dcKeelCliIsThinDispatch). resolverPositions = "
      "1-based place among the backlog's declared actions (D0052); resolverDodResults = the story's DoDRn outcomes; resolverReadyRank = its line in "
      "`keel show whats-next .`; thinDispatchDependsOnIt = the backlog's dependency edge; the two resolverDodNames* = literal spans of the DoD text.")
+
+# ================================================================ 47. D0514 - a living doc's source citation resolves and holds its identifier (held, brief 47)
+# The Decision is held (marker process-change, D0337) but the guard it is the clause of LANDED under D0471's
+# acceptance (D0465): the source facts below are the NEW shape - the seventy-sixth guard in GUARD_NAMES, the two
+# repointed doc lines, the catalogue rows - read from the tree; the pre-sprint shape is read from git at the
+# landing range's base. Nothing here is typed from memory.
+_d0514 = _dec_file("0514-")
+_f514 = _decision_facts(_d0514, "d0514")
+_LAND743_FROM, _LAND743_TO = "66f74bd0", "87063e87"   # the sprint's landing range, fixed (issue586)
+_gn14 = read(os.path.join(REPO, "members", "keel-schema", "src", "guard_names.rs")) or ""
+_gn14_count = (re.search(r"GUARD_NAMES: \[&str; (\d+)\]", _gn14) or [None, None])[1]
+_gn14_names = re.findall(r'"([a-z0-9-]+)"', (re.search(r"GUARD_NAMES: \[&str; \d+\] =\s*\[([^\]]*)\]", _gn14, re.S) or [None, ""])[1])
+_sf14 = read(os.path.join(REPO, "members", "keel-guards", "src", "surface.rs")) or ""
+_TESTS14 = ["a_stale_range_is_red_naming_todays_line_and_the_repointed_path_is_green",
+            "a_moved_path_names_todays_file_a_shared_basename_asks_for_the_path_and_a_range_is_held_to_the_file",
+            "citations_are_read_in_their_shapes_and_the_identifier_is_the_nearest_in_reach",
+            "the_living_surface_cites_source_that_resolves",
+            "a_root_without_a_workspace_manifest_scans_nothing"]
+_gm14 = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_gm14_row = next((l for l in _gm14.splitlines() if l.startswith("| `source-reference` |")), "")
+_gc14 = read(os.path.join(REPO, ".engine", "rules", "guard-constraints.sysml")) or ""
+_cm14 = read(os.path.join(REPO, ".tracking", "architecture", "control-map.sysml")) or ""
+_DOCS14 = {".engine/skills/project-migration/SKILL.md": 10, ".engine/processes/project-migration.sysml": 15}
+_doc14_today = {p: ((read(os.path.join(REPO, p)) or "").splitlines() + [""] * n)[n - 1] for p, n in _DOCS14.items()}
+_doc14_before = {}
+for _p14, _n14 in _DOCS14.items():
+    _ok14, _out14 = run(["git", "show", _LAND743_FROM + ":" + _p14])
+    _doc14_before[_p14] = ((_out14 or "").splitlines() + [""] * _n14)[_n14 - 1] if _ok14 else None
+_mig14 = (read(os.path.join(REPO, "members", "keel-process", "src", "migrate.rs")) or "").splitlines()
+_mig14_804 = _mig14[803] if len(_mig14) >= 804 else None
+# live: the guard over the working tree, the count from keel version, and a scaffolded project - the shape that
+# reddened 23 touched tests on the first ladder (a root with no Cargo.toml has no corpus and scans nothing)
+_rc14g, _out14g = run_rc([KEEL, "gate", "guard", "source-reference", "--no-receipt", "."], timeout=120)
+_sr14 = re.search(r"\[guard:source-reference\] (PASS|FAIL)\s+\S+\s+(\d+) scanned, (\d+) warning\(s\), (\d+) violation", _out14g or "")
+_rc14v, _out14v = run_rc([KEEL, "version"], timeout=60)
+_guards14_line = next((l for l in (_out14v or "").splitlines() if l.strip().startswith("guards:")), "")
+_guards14 = re.search(r"guards:\s*(\d+)\D+(\d+) hard-blocking\D+(\d+) warning-only", _guards14_line)
+_scaf14 = os.path.join(tempfile.gettempdir(), "keel-brief47-scaffold-%d" % os.getpid())
+shutil.rmtree(_scaf14, ignore_errors=True)
+_rc14i, _out14i = run_rc([KEEL, "init", _scaf14], timeout=300)
+_rc14s, _out14s = run_rc([KEEL, "gate", "guard", "source-reference", "--no-receipt", _scaf14], timeout=120) if _rc14i == 0 else (None, "")
+_sr14s = re.search(r"\[guard:source-reference\] (PASS|FAIL)\s+\S+\s+(\d+) scanned, (\d+) warning\(s\), (\d+) violation", _out14s or "")
+_scaf14_manifest = os.path.isfile(os.path.join(_scaf14, "Cargo.toml"))
+shutil.rmtree(_scaf14, ignore_errors=True)
+_tr14 = _receipt94("touched-receipt.toml")
+_vr14 = _receipt94("verify-receipt.toml")
+_ok14d, _out14d = run(["git", "diff", "--name-status", "-M", _LAND743_FROM, _LAND743_TO])
+_names14 = [l.split("\t")[-1] for l in (_out14d or "").splitlines() if l.strip()] if _ok14d else []
+_codes14 = "".join(l[0] for l in (_out14d or "").splitlines() if l.strip()) if _ok14d else ""
+_ok14s2, _out14s2 = run(["git", "diff", "--shortstat", _LAND743_FROM, _LAND743_TO])
+_short14 = re.search(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?", _out14s2 or "")
+_s743 = _sprint_facts("sprint743_sourceCitationsOnTheLivingDocsResolve.sysml", "d0471")
+_retro14 = (re.search(r'sourceCitationsOnTheLivingDocsResolveRetroGate[^\n]*procedureText = "([^"]*)"', _s743.get("text") or "") or [None, ""])[1]
+_i591 = _issue_facts("591", "dcSourceCitationsOnTheLivingDocsResolve")
+_i603 = _issue_facts("603", "dcVerifierReceiptIsCheckedAgainstTheLadder")
+_SRC14_DOD = "dcSourceCitationsOnTheLivingDocsResolve"
+fact("livingDocsCiteSourceThatResolves", {
+    **_f514,
+    "dependsOnD0471": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0514\s+to\s+d0471\s*;", _d0514)),
+    "dependsOnD0209": bool(re.search(r"#DependsOn\s+dependency\s+from\s+d0514\s+to\s+d0209\s*;", _d0514)),
+    "supersedesAnything": bool(re.search(r"#Supersede(?:Clause)?\s+dependency\s+from\s+d0514", _d0514)),
+    "namesTheMove": "check_preconditions moved from line 664 to line 804" in (_f514["context"] or ""),
+    "namesNobodyChecks": "a .rs:N citation is checked by nobody" in (_f514["context"] or ""),
+    "namesD0465Path": "whose accepted marker authorises the skill, process and guard-source edits under D0465" in (_f514["context"] or ""),
+    "namesSeventySixth": "joins the enforced set as the seventy-sixth" in (_f514["decision"] or ""),
+    "namesTheScope": ".engine/processes, skills, docs, contracts, workflows, rules and CLAUDE.md; .engine/decisions and .tracking are history" in (_f514["decision"] or ""),
+    "namesTheCorpus": "every .rs file under a [workspace] member's src/, read from the root Cargo.toml at run time" in (_f514["decision"] or ""),
+    "namesBasenameRule": "a bare basename resolves only when exactly one corpus file bears it" in (_f514["decision"] or ""),
+    "namesIdentifierReach": "else the last one on the non-blank line above, because the real citations wrap" in (_f514["decision"] or ""),
+    "namesTheResidual": "A citation with no identifier in reach is counted and held to file and range only" in (_f514["decision"] or ""),
+    "namesNoManifestScansNothing": "A root with no Cargo.toml has no corpus and scans nothing" in (_f514["decision"] or ""),
+    "namesTwentyThreeTests": "reddened all 23 scaffold-and-gate tests before this sentence existed" in (_f514["decision"] or ""),
+    "namesKnownPositive": "both stale citations red, naming line 804; both green once repointed to members/keel-process/src/migrate.rs:804-807" in (_f514["decision"] or ""),
+    "namesSameAuthority": "carries the same authority as the doc's verbs and script paths" in (_f514["rationale"] or ""),
+    "namesBoundToTree": "bound to the tree, not to a remembered layout" in (_f514["rationale"] or ""),
+    "namesFileExistsAlone": "which the file-exists check alone would not" in (_f514["rationale"] or ""),
+    "namesWhy804": "line 804 is the one that names check_preconditions" in (_f514["rationale"] or ""),
+    "namesRepointNotSearch": "so the fix is a repoint and not a search" in (_f514["consequences"] or ""),
+    "namesTheCost": "which is the cost this Decision accepts: the docs are meant to follow the code" in (_f514["consequences"] or ""),
+    "namesCountRises": "rises from 75 to 76" in (_f514["consequences"] or ""),
+    "source": {
+        "guardNamesCount": int(_gn14_count) if _gn14_count else None,
+        "guardNamesListed": len(_gn14_names), "sourceReferenceIsLast": bool(_gn14_names) and _gn14_names[-1] == "source-reference",
+        "familyArm": '("source-reference", source_reference)' in _sf14,
+        "guardFnPresent": "pub fn source_reference(root: &Path) -> GuardReport" in _sf14,
+        "noManifestEarlyReturn": 'if !root.join("Cargo.toml").is_file()' in _sf14,
+        "helpers": {h: ("pub fn " + h + "(") in _sf14 for h in ("source_citations", "cited_identifier", "member_rust_sources", "resolve_citation", "source_citation_defect")},
+        "testsPresent": {t: ("fn " + t + "(") in _sf14 for t in _TESTS14}, "testCount": len(_TESTS14),
+        "catalogueRow": bool(_gm14_row), "catalogueRowSaysHard": _gm14_row.startswith("| `source-reference` | HARD (D0514 / issue591)"),
+        "catalogueRowNamesNoManifest": "A root with no `Cargo.toml` has no corpus and scans nothing" in _gm14_row,
+        "constraintRow": bool(re.search(r"constraint def sourceReference;\s*// guard 76", _gc14)),
+        "controlMapRow": 'title = "guard: source-reference"' in _cm14,
+        "docLinesToday": _doc14_today,
+        "docLinesRepointed": {p: "members/keel-process/src/migrate.rs:804-807" in (_doc14_today.get(p) or "") for p in _DOCS14},
+        "docLinesBefore": _doc14_before,
+        "docLinesWereStale": {p: "migrate.rs:664-666" in (_doc14_before.get(p) or "") for p in _DOCS14},
+        "migrateLine804": _mig14_804, "migrateLine804NamesTheFn": bool(_mig14_804) and _mig14_804.startswith("pub fn check_preconditions"),
+        "migrateLines": len(_mig14),
+    },
+    "live": {
+        "workingTree": {"exit0": _rc14g == 0, "verdict": _sr14.group(1) if _sr14 else None, "scanned": int(_sr14.group(2)) if _sr14 else None,
+                        "violations": int(_sr14.group(4)) if _sr14 else None},
+        "guardsLine": _guards14_line or None,
+        "guards": {"total": int(_guards14.group(1)), "hard": int(_guards14.group(2)), "warning": int(_guards14.group(3))} if _guards14 else None,
+        "scaffold": {"initExit0": _rc14i == 0, "hasManifest": _scaf14_manifest, "exit0": _rc14s == 0,
+                     "verdict": _sr14s.group(1) if _sr14s else None, "scanned": int(_sr14s.group(2)) if _sr14s else None,
+                     "violations": int(_sr14s.group(4)) if _sr14s else None},
+        "touchedReceipt": _tr14, "ladderReceipt": _vr14,
+    },
+    "landed": {
+        "range": [_LAND743_FROM, _LAND743_TO],
+        "modified": _codes14.count("M"), "added": _codes14.count("A"), "deleted": _codes14.count("D"), "renames": _codes14.count("R"),
+        "filesChanged": int(_short14.group(1)) if _short14 else None,
+        "insertions": int(_short14.group(2)) if _short14 and _short14.group(2) else None,
+        "deletions": int(_short14.group(3)) if _short14 and _short14.group(3) else None,
+        "newDecisionInRange": any(n.startswith(".engine/decisions/0514-") for n in _names14),
+        "sprintInRange": any(n.endswith("sprint743_sourceCitationsOnTheLivingDocsResolve.sysml") for n in _names14),
+        "guardSourceInRange": "members/keel-guards/src/surface.rs" in _names14,
+        "guardNamesInRange": "members/keel-schema/src/guard_names.rs" in _names14,
+        "bothDocsInRange": all(p in _names14 for p in _DOCS14),
+    } if _ok14d and _ok14s2 else None,
+    "issue591": _i591, "issue603": _i603,
+    "sprint743": {k: v for k, v in _s743.items() if k != "text"} | ({
+        "retroFindings": len(re.findall(r"(?:^|[.:] )\((\d)\) ", _retro14)),
+        "retroNamesTwentyThree": "reddened 23 scaffold-and-gate tests" in _retro14,
+        "retroNamesIssue603": "issue603" in _retro14,
+        "implementNamesTheRedLadder": "The first ladder's touched rung was red - 880 passed, 23 failed" in (_s743.get("text") or ""),
+    } if _s743.get("exists") else {}),
+    "resolverPositions": {a: ({"place": _bl00_actions.index(a) + 1, "def": _bl00_defs.get(a)} if a in _bl00_actions else None)
+                          for a in (_SRC14_DOD, "dcSprintNamesTheItemItDelivers", "dcVerifierReceiptIsCheckedAgainstTheLadder", "dcRecorderReportAccountsForEveryTreeWrite")},
+    "resolverDodResults": _dod_results(_SRC14_DOD),
+    "resolverReadyRank": (_ready_names.index(_SRC14_DOD) + 1) if _SRC14_DOD in _ready_names else None,
+    "readyItems": len(_ready_names),
+    "backlogItems": len(_bl00_actions),
+} if _d0514 and _gn14 and _sf14 else None,
+     "the held clause of a guard that has landed: Decision and edges, the seventy-sixth guard in the array and the catalogue rows, the two doc lines before and today against migrate.rs line 804, the guard live over this tree and over a scaffolded project, the touched and ladder receipts, the landing range, the two findings and the sprint",
+     _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0514 to dNNNN;` lines. source: members/keel-schema/src/guard_names.rs "
+     "`GUARD_NAMES: [&str; N]` and its quoted members (sourceReferenceIsLast = the array's final member); members/keel-guards/src/surface.rs searched for the FAMILY arm, the fn "
+     "signature, the `Cargo.toml` early return, five helper signatures and five test fns; the guards.md row beginning `| \\`source-reference\\` |`, the guard-constraints "
+     "`constraint def sourceReference; // guard 76` line, the control-map title; docLinesToday = line 10 of the project-migration skill and line 15 of the process file as the "
+     "tree holds them, docLinesBefore = the same lines from `git show " + _LAND743_FROM + ":<path>`; migrateLine804 = members/keel-process/src/migrate.rs line 804 verbatim. live: `" + KEEL +
+     " gate guard source-reference --no-receipt .` summary line; `" + KEEL + " version`'s `guards:` line; scaffold = `" + KEEL + " init <tempdir>` then the same guard over that root "
+     "(hasManifest = whether the scaffold has a Cargo.toml), the directory removed after; touchedReceipt / ladderReceipt as section 32 reads .keel/metrics/*.toml. landed = `git diff "
+     "--name-status -M " + _LAND743_FROM + " " + _LAND743_TO + "` first letters counted and `--shortstat` over the range. issues 591 and 603 as section 34; sprint743 from its delivery "
+     "file, charter d0471, retroFindings = `(n) ` markers opening a sentence or following a label's colon, plus literal spans; resolverPositions = 1-based place among the backlog's "
+     "declared actions (D0052); resolverDodResults = the item's DoDRn outcomes and shas; resolverReadyRank = its line in `keel show whats-next .`.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
