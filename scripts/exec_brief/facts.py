@@ -519,12 +519,13 @@ for d in proposed:
     pending_members.append({
         "slug": d["slug"],
         "name": _nm.group(1) if _nm else d["file"],
-        "fork": bool(_dec and _dec.group(1).lstrip().startswith("OPTION")),
+        "fork": len({m.group(1) for m in re.finditer(r"OPTION ([A-Z])", _txt)}) >= 2,
         "inTree": d["slug"] in in_tree_slugs,
     })
 PEND_HOW = (DEC_HOW + "every PROPOSED, non-retired Decision (the same set decisionsProposed counts), one row each: "
-            "name = the file name between the number and .sysml; fork = the `decision` field begins with the "
-            "literal OPTION (D0322's marker); inTree = the slug is in pendingInTreeList. File order.")
+            "name = the file name between the number and .sysml; fork = the file carries two or more distinct "
+            "`OPTION X` tokens, the rule acceptance.rs judgment_request_quality applies (D0322's marker; a `RESEARCH:` "
+            "preamble before the first OPTION is a fork all the same); inTree = the slug is in pendingInTreeList. File order.")
 fact("pendingMembers", pending_members or None, "one row per pending Decision", PEND_HOW)
 fact("pendingForks", sum(1 for p in pending_members if p["fork"]),
      "pending Decisions whose text opens a weighed fork", PEND_HOW)
@@ -5902,6 +5903,180 @@ fact("recorderRefusalCannotCiteTheVerifiersWritesLine", {
      "labels: per surface the counts of `VERIFIER-NOTED WRITES` and `OWED WRITES`, and whether every `OWED WRITES` sits within 160-400 characters of `old label`, "
      "`sprint 735` or `issue590`. issues 590 and 604 as section 34; sprint744 = the delivery file's charter edge, story DoDRn pass, and two retro phrases; "
      "resolverPosition / resolverDodResults / resolverReadyRank / backlogItems as section 48.")
+
+# ================================================================ 50. D0517 - a bare name resolves locally, uniquely, or refuses (GH#85, st160)
+# The two 2026-09-18 intake records are the first forks on the page since D0322: each opens `RESEARCH:` and weighs OPTION A
+# against OPTION B. Every number the tab states is read here: the duplicate-name census is the scan the Decision's context
+# describes (part/action/verification/item declarations under .tracking and .engine, `reference` directories excluded),
+# so the record's MEASURED sentence is checked against the sensor, never the other way round.
+_d0517 = _dec_file("0517-")
+_f517 = _decision_facts(_d0517, "d0517")
+_DECL17 = re.compile(r"^\s*(?:#\w+\s+)*(?:part|action|verification|item)\s+(\w+)\s*:", re.M)
+_where17 = {}
+for _top17 in (".tracking", ".engine"):
+    for _root17, _, _files17 in os.walk(os.path.join(REPO, _top17)):
+        if "reference" in _root17.replace("\\", "/").split("/"):
+            continue
+        for _fn17 in _files17:
+            if _fn17.endswith(".sysml"):
+                _p17 = os.path.join(_root17, _fn17)
+                for _m17 in _DECL17.finditer(read(_p17) or ""):
+                    _where17.setdefault(_m17.group(1), []).append(os.path.relpath(_p17, REPO).replace("\\", "/"))
+_dups17 = {n: fs for n, fs in _where17.items() if len(fs) > 1}
+_sprint17 = {n for n, fs in _dups17.items() if all(re.search(r"/delivery/sprint\d+", f) for f in fs)}
+_others17 = sorted(n for n in _dups17 if n not in _sprint17)
+_ok17, _why17 = run([KEEL, "show", "why", "asCloseOutGate", "."], timeout=120)
+_whyj17 = as_json(_why17) if _ok17 else None
+_why_titles17 = [r.get("title") or "" for r in ((_whyj17 or {}).get("reached") or []) if r.get("element") == "asCloseOutGate"]
+_model17 = read(os.path.join(REPO, "members", "keel-model", "src", "model.rs")) or ""
+_ident17 = read(os.path.join(REPO, "members", "keel-guards", "src", "identity.rs")) or ""
+_in17 = read(os.path.join(REPO, ".tracking", "intake", "intake-2026-09-18.sysml")) or ""
+_st160 = re.search(r"part st160 : Statement\s*\{(.*?)\n\s*\}", _in17, re.S)
+_st160b = _st160.group(1) if _st160 else ""
+def _story17(name):
+    _s = re.search(r"part " + name + r" : UserStory\s*\{(.*?)\n\s*\}", _in17, re.S)
+    _b = _s.group(1) if _s else ""
+    return {"present": bool(_s), "implication": (re.search(r"implication\s*=\s*ImplicationKind::(\w+)", _b) or [None, None])[1],
+            "derivedFrom": (re.search(r"#DerivedFrom dependency from " + name + r" to (\w+);", _in17) or [None, None])[1],
+            "implicates": sorted(re.findall(r"#Implicates dependency from " + name + r" to (\w+);", _in17))}
+_i605 = _issue_facts("605", "dcBareNameResolvesLocallyOrUniquelyOrRefuses")
+_i607 = _issue_facts("607", "dcGithubIngestDedupsOnTheIssueIdentity")
+_RES17 = "dcBareNameResolvesLocallyOrUniquelyOrRefuses"
+fact("bareNameResolvesLocallyOrUniquelyOrRefuses", {
+    **_f517,
+    "fork": (_f517["decision"] or "").startswith("RESEARCH:") and "OPTION A (recommended)" in (_f517["decision"] or "") and "OPTION B:" in (_f517["decision"] or ""),
+    "namesGh85": "GH#85 (st160; untrusted source, D0264" in (_f517["context"] or ""),
+    "namesModelRs70": "members/keel-model/src/model.rs:70" in (_f517["context"] or ""),
+    "namesIdentityRs309": "members/keel-guards/src/identity.rs:309" in (_f517["context"] or ""),
+    "namesTheCensus": f"{len(_dups17)} names are declared more than once - {len(_sprint17)} are gate names declared only in sprint delivery files" in (_f517["context"] or ""),
+    "namesTheOthers": f"and {len(_others17)} are declared outside or across those" in (_f517["context"] or ""),
+    "namesTheThreeSprints": "asCloseOutGate is declared in sprint241, sprint251 and sprint276" in (_f517["context"] or ""),
+    "namesQualifiedTarget": "A qualified `Package::name` target parses" in (_f517["decision"] or ""),
+    "namesTheRefusal": "the build REFUSES the reference naming every candidate with its file and line" in (_f517["decision"] or ""),
+    "namesTheWarningRow": "a WARNING row names each cross-package duplicate" in (_f517["decision"] or ""),
+    "namesOptionBMigration": f"a migration renaming {len(_dups17)} declarations" in (_f517["decision"] or ""),
+    "namesFixFourNeither": "is adopted under neither" in (_f517["decision"] or ""),
+    "namesHeld": "HELD proposed under D0337" in (_f517["consequences"] or ""),
+    "census": {"duplicated": len(_dups17), "sprintOnly": len(_sprint17), "others": len(_others17), "othersList": _others17,
+               "declaredNames": len(_where17), "asCloseOutGateFiles": sorted(set(_where17.get("asCloseOutGate", [])))},
+    "source": {
+        "itemsKeyedByName": next((i + 1 for i, l in enumerate(_model17.splitlines()) if "pub items: HashMap<String, ItemInfo>" in l), None),
+        "insertLine": next((i + 1 for i, l in enumerate(_model17.splitlines()) if i + 1 >= 240 and "items.insert(name, info);" in l), None),
+        "identityWithinOnePackageLine": next((i + 1 for i, l in enumerate(_ident17.splitlines()) if "within one package" in l), None),
+        "identityInPackageLine": next((i + 1 for i, l in enumerate(_ident17.splitlines()) if "duplicate declared name" in l and "in package" in l), None),
+    },
+    "namesModelRs244": "model.rs:244" in (_f517["context"] or ""),
+    "namesIdentityRs389": "at :389 reads `in package`" in (_f517["context"] or ""),
+    "live": {"whyExit0": _ok17, "whyReached": len(_why_titles17), "whyTitle": _why_titles17[0][:60] if _why_titles17 else None,
+             "whyAnswersSprint276Alone": len(_why_titles17) == 1 and "Sprint 276" in _why_titles17[0]},
+    "intake": {"st160": {"present": bool(_st160), "sourceUrlIsGh85": "/issues/85" in _st160b, "untrusted": "SourceTrust::untrusted" in _st160b,
+                         "saidBy": (re.search(r'saidBy\s*=\s*"([^"]+)"', _st160b) or [None, None])[1]},
+               "us115": _story17("us115"), "us116": _story17("us116")},
+    "issue605": _i605, "issue607": _i607,
+    "charterEdge": f"#CharteredBy dependency from {_RES17} to d0517;" in _bl,
+    "resolverPosition": ({"place": _bl00_actions.index(_RES17) + 1, "def": _bl00_defs.get(_RES17)} if _RES17 in _bl00_actions else None),
+    "resolverDodResults": _dod_results(_RES17),
+    "resolverReadyRank": (_ready_names.index(_RES17) + 1) if _RES17 in _ready_names else None,
+    "dedupResolverReadyRank": (_ready_names.index("dcGithubIngestDedupsOnTheIssueIdentity") + 1) if "dcGithubIngestDedupsOnTheIssueIdentity" in _ready_names else None,
+    "backlogItems": len(_bl00_actions), "readyItems": len(_ready_names),
+}, "the held fork, the duplicate-name census it quotes, the two source lines, `why` live, the intake records and the findings",
+     _DEC_HOW + " fork = the decision field opens `RESEARCH:` and carries `OPTION A (recommended)` and `OPTION B:`. Names by literal search in the fields. "
+     "census: every .sysml under .tracking and .engine whose path has no `reference` directory, each line matching `(#Marker )* part|action|verification|item NAME :`; "
+     "duplicated = names with two or more declarations; sprintOnly = those whose every declaring file is .tracking/delivery/sprintNNN_*; others = the rest, listed. "
+     "source: model.rs line carrying `pub items: HashMap<String, ItemInfo>`; the first `items.insert(` at or after line 240; identity.rs line carrying `in package`. "
+     "live: `" + KEEL + " show why asCloseOutGate .` - the reached rows whose element is asCloseOutGate, their titles. intake: .tracking/intake/intake-2026-09-18.sysml - "
+     "st160's sourceUrl, sourceTrust and saidBy; each story's implication, `#DerivedFrom` source and `#Implicates` targets. issues 605 and 607 as section 34; the "
+     "`#CharteredBy ... to d0517;` line in backlog.sysml; resolverPosition / resolverDodResults / resolverReadyRank / backlogItems as section 48; readyItems = whats-next rows.")
+
+# ================================================================ 51. D0518 - dsGround is checked by a check that reads the page (GH#84, st161)
+_d0518 = _dec_file("0518-")
+_f518 = _decision_facts(_d0518, "d0518")
+_ds18 = read(os.path.join(REPO, ".engine", "processes", "decision-surfacing.sysml")) or ""
+_ds18_lines = _ds18.splitlines()
+_ground18 = next((i + 1 for i, l in enumerate(_ds18_lines) if 'checkedBy = "judgment-request-quality"' in l), None)
+_ground18_step = None
+if _ground18:
+    for _j18 in range(_ground18 - 1, max(-1, _ground18 - 12), -1):
+        _mm18 = re.search(r"^\s*(?:#\w+\s+)*(?:part|action|item)\s+(\w+)\s*:", _ds18_lines[_j18])
+        if _mm18:
+            _ground18_step = _mm18.group(1)
+            break
+_gmd18 = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_jrq18 = next((l for l in _gmd18.splitlines() if "judgment-request-quality" in l), "")
+_ct18 = read(os.path.join(REPO, "scripts", "check_templates.py")) or ""
+_ct18_lines = _ct18.splitlines()
+_cb18_line = next((i + 1 for i, l in enumerate(_ct18_lines) if l.startswith("def check_brief(")), None)
+_cb18_s = _ct18.find("\ndef check_brief(")
+_cb18_e = _ct18.find("\ndef ", _cb18_s + 1) if _cb18_s >= 0 else -1
+_cb18_body = _ct18[_cb18_s:_cb18_e] if _cb18_s >= 0 and _cb18_e > 0 else (_ct18[_cb18_s:] if _cb18_s >= 0 else "")
+_rules18 = read(os.path.join(REPO, ".engine", "rules", "rules.sysml")) or ""
+if not _rules18:
+    for _root18, _, _files18 in os.walk(os.path.join(REPO, ".engine", "rules")):
+        for _fn18 in _files18:
+            if _fn18.endswith(".sysml"):
+                _rules18 += read(os.path.join(_root18, _fn18)) or ""
+_ok18, _grd18 = run([KEEL, "gate", "guard", "step-check-resolves", "--no-receipt", "."], timeout=300)
+_gl18 = (_grd18 or "").strip().splitlines()[-1] if (_grd18 or "").strip() else ""
+_gm18 = re.search(r"\[guard:step-check-resolves\] (PASS|FAIL) \W+ (\d+) scanned, (\d+) warning\(s\), (\d+) violation\(s\)", _gl18)
+_ok18h, _hard18 = run([KEEL, "show", "hardening", "."], timeout=300)
+_hardj18 = as_json(_hard18) if _ok18h else None
+_hard_rows18 = (_hardj18 or {}).get("stepTrigger") or (_hardj18 or {}).get("steps") or []
+_ground_hard18 = next((r for r in _hard_rows18 if isinstance(r, dict) and "dsGround" in json.dumps(r)), None)
+_builds18 = sorted(f for f in os.listdir(os.path.join(REPO, "scripts", "exec_brief")) if f.startswith("build_") and f.endswith(".py"))
+_st161 = re.search(r"part st161 : Statement\s*\{(.*?)\n\s*\}", _in17, re.S)
+_st161b = _st161.group(1) if _st161 else ""
+_i606 = _issue_facts("606", "dcGroundStepBindsToACheckThatReadsThePage")
+_RES18 = "dcGroundStepBindsToACheckThatReadsThePage"
+_gg18 = "".join(read(os.path.join(REPO, "members", "keel-guards", "src", f)) or "" for f in os.listdir(os.path.join(REPO, "members", "keel-guards", "src")) if f.endswith(".rs"))
+fact("groundStepBindsToACheckThatReadsThePage", {
+    **_f518,
+    "fork": (_f518["decision"] or "").startswith("RESEARCH:") and "OPTION A (recommended)" in (_f518["decision"] or "") and "OPTION B:" in (_f518["decision"] or ""),
+    "namesGh84": "GH#84 (st161; untrusted source, D0264" in (_f518["context"] or ""),
+    "namesTheBinding": f".engine/processes/decision-surfacing.sysml:{_ground18} binds dsGround" in (_f518["context"] or ""),
+    "namesGuardsMd": ".engine/docs/guards.md:" in (_f518["context"] or ""),
+    "namesCheckBriefLine": f"check_brief (check_templates.py:{_cb18_line})" in (_f518["context"] or ""),
+    "namesTheFourShapes": all(s in (_f518["decision"] or "") for s in ("none, n/a or a dash", "begins with a verdict verb", "record-state vocabulary", "data-d='premise'")),
+    "namesTheRule": "brief-page-quality" in (_f518["decision"] or ""),
+    "namesTheBuildScriptRefuses": "refuses to write the page on any of them" in (_f518["decision"] or ""),
+    "namesOptionBDeclaration": "dsGround drops checkedBy and carries the D0321 contract declaration" in (_f518["decision"] or ""),
+    "namesTheResidual": "the check runs where the page is built, not at the tree's gate" in (_f518["rationale"] or ""),
+    "namesHeld": "HELD proposed under D0337" in (_f518["consequences"] or ""),
+    "today": {
+        "groundLine": _ground18, "groundStep": _ground18_step,
+        "guardsMdSaysDecisionFields": bool(_jrq18) and "OPTION" in _jrq18 and ("rationale" in _jrq18 or "RESEARCH" in _jrq18),
+        "guardsMdMentionsPage": bool(_jrq18) and ("page" in _jrq18.lower() or "html" in _jrq18.lower()),
+        "guardSourceNamesCheckTemplates": "check_templates" in _gg18,
+        "checkBriefLine": _cb18_line,
+        "checkBriefRefusesCostNone": bool(re.search(r"none|n/a", _cb18_body, re.I)) and "cost" in _cb18_body,
+        "checkBriefRefusesVerdictVerb": "verdict" in _cb18_body.lower() and "verb" in _cb18_body.lower(),
+        "checkBriefRequiresPremise": "premise" in _cb18_body.lower(),
+        "checkBriefRefusesRecordStateRows": "record-state" in _cb18_body.lower() or "record state" in _cb18_body.lower(),
+        "rulesHasBriefPageQuality": "brief-page-quality" in _rules18,
+        "buildScripts": len(_builds18),
+        "buildScriptsImportingCheckTemplates": sum(1 for f in _builds18 if "from check_templates import" in (read(os.path.join(REPO, "scripts", "exec_brief", f)) or "")),
+        "buildScriptsCallingFitCheck": sum(1 for f in _builds18 if "assert_fits(" in (read(os.path.join(REPO, "scripts", "exec_brief", f)) or "")),
+    },
+    "live": {"stepCheckResolves": {"verdict": _gm18.group(1) if _gm18 else None, "scanned": int(_gm18.group(2)) if _gm18 else None,
+                                   "violations": int(_gm18.group(4)) if _gm18 else None, "line": _gl18[:200], "exit0": _ok18},
+             "hardeningRows": len(_hard_rows18), "hardeningNamesGround": _ground_hard18 is not None,
+             "hardeningGroundRow": {k: v for k, v in (_ground_hard18 or {}).items() if isinstance(v, (str, int, bool)) or v is None}},
+    "intake": {"st161": {"present": bool(_st161), "sourceUrlIsGh84": "/issues/84" in _st161b, "untrusted": "SourceTrust::untrusted" in _st161b,
+                         "saidBy": (re.search(r'saidBy\s*=\s*"([^"]+)"', _st161b) or [None, None])[1]},
+               "us117": _story17("us117")},
+    "issue606": _i606,
+    "charterEdge": f"#CharteredBy dependency from {_RES18} to d0518;" in _bl,
+    "resolverPosition": ({"place": _bl00_actions.index(_RES18) + 1, "def": _bl00_defs.get(_RES18)} if _RES18 in _bl00_actions else None),
+    "resolverDodResults": _dod_results(_RES18),
+    "resolverReadyRank": (_ready_names.index(_RES18) + 1) if _RES18 in _ready_names else None,
+    "backlogItems": len(_bl00_actions),
+}, "the held fork, the binding as it stands, what check_brief holds today, step-check-resolves and hardening live, the intake records and the finding",
+     _DEC_HOW + " fork as section 50. Names by literal search in the fields (the binding line number and the check_brief line number are read from the files "
+     "and the record must quote them). today: decision-surfacing.sysml - the line carrying `checkedBy = \"judgment-request-quality\"` and the nearest declaration "
+     "above it; guards.md - the line naming the guard, whether it speaks of OPTION/rationale/RESEARCH and whether of a page; every .rs under members/keel-guards/src "
+     "searched for `check_templates`; check_templates.py - `def check_brief(` line and its body searched for cost/none, verdict+verb, premise, record-state; "
+     ".engine/rules - `brief-page-quality`; scripts/exec_brief/build_*.py counted, those importing check_templates and those calling assert_fits. live: "
+     "`" + KEEL + " gate guard step-check-resolves --no-receipt .` last line; `" + KEEL + " show hardening .` rows and the one naming dsGround. intake: st161 and "
+     "us117 as section 50. issue606 as section 34; the charter line; resolver facts as section 48.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
