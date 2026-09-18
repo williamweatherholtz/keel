@@ -2848,7 +2848,7 @@ def _issue_facts(num, resolver_expected):
         "title": (re.search(r'title\s*=\s*"([^"]+)"', _b) or [None, None])[1],
         "resolver": _res,
         "resolverAsExpected": _res == resolver_expected,
-        "resolverDodNamesIssue": bool(re.search(resolver_expected + r"DoD[^\n]*Resolves issue" + num + r"[ .:]", _bl)),
+        "resolverDodNamesIssue": bool(re.search(resolver_expected + r"DoD[^\n]*Resolves issue" + num + r"[ .:;]", _bl)),
     }
 
 
