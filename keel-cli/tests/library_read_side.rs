@@ -168,7 +168,7 @@ fn a_projects_gate_is_byte_identical_with_and_without_the_library() {
     std::fs::create_dir_all(proj.join(".tracking")).expect("mkdir");
     std::fs::create_dir_all(proj.join(".engine").join("contracts")).expect("mkdir");
     std::fs::write(proj.join(".tracking").join("seed.sysml"), "package Seed {\n}\n").expect("seed");
-    let schema_src = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("ws").join(".engine").join("schema");
+    let schema_src = keel_fs::test_support::repo_path(".engine/schema");
     copy_tree(&schema_src, &proj.join(".engine").join("schema"));
 
     // The differential compares the WHOLE outcome — exit status and every byte of output — and

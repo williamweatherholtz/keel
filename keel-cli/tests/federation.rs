@@ -34,8 +34,9 @@ fn keel_bin() -> PathBuf {
     p.join(if cfg!(windows) { "keel.exe" } else { "keel" })
 }
 
-fn repo() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root")
+/// This file's own source, recorded as the one path this binary reads of the repository (D0481).
+fn own_source() -> PathBuf {
+    keel_fs::test_support::repo_path("keel-cli/tests/federation.rs")
 }
 
 struct Run {
@@ -543,7 +544,7 @@ const CLAIMS: &[&str] = &["f1_", "f2_", "f3_", "f3b_", "f4_", "f5_", "f6_", "f7_
 
 #[test]
 fn every_declared_claim_has_a_case_in_this_file() {
-    let src = std::fs::read_to_string(repo().join("keel-cli/tests/federation.rs")).expect("own source");
+    let src = std::fs::read_to_string(own_source()).expect("own source");
     let missing: Vec<&&str> = CLAIMS.iter().filter(|c| !src.contains(&format!("fn {c}"))).collect();
     assert!(
         missing.is_empty(),

@@ -31,13 +31,13 @@ fn run(root: &Path, args: &[&str]) -> String {
 
 /// A project carrying THIS repository's real `activation.toml` — the file the defect was found on.
 fn project_with_real_activation(tag: &str) -> (PathBuf, String) {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root");
-    let real = repo.join(".engine").join("contracts").join("activation.toml");
+    let engine = keel_fs::test_support::repo_path(".engine");
+    let real = engine.join("contracts").join("activation.toml");
     let original = std::fs::read_to_string(&real).expect("this repo's activation.toml");
     let root = std::env::temp_dir().join(format!("keel-activation-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     // Copy the whole engine so process/viewpoint names resolve as they do here.
-    copy_dir(&repo.join(".engine"), &root.join(".engine"));
+    copy_dir(&engine, &root.join(".engine"));
     std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
     std::fs::write(root.join(".tracking").join("seed.sysml"), "package Seed {\n}\n").expect("seed");
     (root, original)

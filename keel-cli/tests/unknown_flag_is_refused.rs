@@ -8,7 +8,7 @@
 //! The same shape recurred while building `github ingest`, where a trailing `--at` value was read as
 //! the root — which is why this is a shared refusal rather than a fix in one command.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 fn keel_bin() -> PathBuf {
@@ -20,8 +20,8 @@ fn keel_bin() -> PathBuf {
     p.join(if cfg!(windows) { "keel.exe" } else { "keel" })
 }
 
-fn repo() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root")
+fn repo() -> PathBuf {
+    keel_fs::test_support::repo_root()
 }
 
 fn run(args: &[&str]) -> (i32, String) {
@@ -94,7 +94,7 @@ fn count_before(text: &str, label: &str) -> Option<u64> {
 /// than by remembering this paragraph.
 #[test]
 fn no_test_asserts_a_count_by_substring() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let dir = keel_fs::test_support::repo_path("keel-cli/tests");
     let mut offenders: Vec<String> = Vec::new();
     let entries = std::fs::read_dir(&dir).expect("the tests directory is readable");
     for e in entries.flatten() {

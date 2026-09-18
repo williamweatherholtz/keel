@@ -88,7 +88,7 @@ fn the_summary_counts_attention_and_unknown_separately() {
 
 #[test]
 fn this_repository_reports_its_real_state() {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root");
+    let repo = keel_fs::test_support::repo_root();
     let out = Command::new(keel_bin()).args(["show", "status", "."]).current_dir(repo).output().expect("keel");
     let text = String::from_utf8_lossy(&out.stdout);
     for section in ["engine", "library", "model", "work", "ci"] {

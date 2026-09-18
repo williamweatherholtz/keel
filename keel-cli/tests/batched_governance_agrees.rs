@@ -10,11 +10,10 @@
 //! trusting the speed-up. A fast lens that quietly answers differently is worse than a slow correct
 //! one, and would be far harder to notice.
 
-use std::path::Path;
 use std::process::Command;
 
-fn repo() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root")
+fn repo() -> std::path::PathBuf {
+    keel_fs::test_support::repo_root()
 }
 
 /// Real stories from this corpus, deliberately spanning vintages: an early Rust sprint (June), a
@@ -23,9 +22,10 @@ const SAMPLE: [&str; 3] = ["storyRustS0Workspace", "storyRustS1Lexer", "needSetR
 
 #[test]
 fn the_batched_path_gives_the_same_answer_as_the_per_item_path() {
+    let repo = repo();
     for item in SAMPLE {
-        let slow = keel_cli::govern::governing_version(repo(), item);
-        let fast = keel_cli::govern::governing_version_via_index(repo(), item);
+        let slow = keel_cli::govern::governing_version(&repo, item);
+        let fast = keel_cli::govern::governing_version_via_index(&repo, item);
         assert_eq!(
             fast, slow,
             "batched governance must be BYTE-IDENTICAL to the per-item resolver for `{item}` — the \

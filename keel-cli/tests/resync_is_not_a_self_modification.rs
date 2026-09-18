@@ -34,7 +34,7 @@ fn keel_bin() -> PathBuf {
 
 /// The text the binary under test embeds - the crate's own `.engine/` at build time.
 fn embedded_skill() -> String {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root").join(SKILL);
+    let src = keel_fs::test_support::repo_path(SKILL);
     std::fs::read_to_string(&src).expect("the engine ships actor-enrollment/SKILL.md")
 }
 

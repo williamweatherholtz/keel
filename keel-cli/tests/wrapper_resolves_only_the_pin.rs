@@ -12,8 +12,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn ws_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("workspace root").to_path_buf()
+/// The committed wrapper script - the one path of this repository the test reads (D0481).
+fn wrapper_script() -> PathBuf {
+    keel_fs::test_support::repo_path("keelw")
 }
 
 /// The wrapper's platform-asset name for the machine running the test — mirrors release.yml.
@@ -69,7 +70,7 @@ fn fixture(tag: &str, version: &str, binary_body: &[u8], sha_entry: Option<&str>
         format!("# keel-wrapper — per-version, per-platform release checksums (D0251 clause B).\n[\"{version}\"]\n\"{}\" = \"{sha}\"\n", asset_name()),
     )
     .expect("wrapper toml");
-    std::fs::copy(ws_root().join("keelw"), proj.join("keelw")).expect("wrapper script is committed");
+    std::fs::copy(wrapper_script(), proj.join("keelw")).expect("wrapper script is committed");
     // The fake origin: <origin>/v<version>/<asset>.
     let origin = base.join("origin").join(format!("v{version}"));
     std::fs::create_dir_all(&origin).expect("mkdir origin");

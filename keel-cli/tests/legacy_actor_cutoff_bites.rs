@@ -81,8 +81,8 @@ fn the_cutoff_boundary_is_inclusive_on_the_violation_side() {
 
 #[test]
 fn this_repository_has_no_post_cutoff_legacy_actor() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root");
-    let r = report(root);
+    let root = keel_fs::test_support::repo_root();
+    let r = report(&root);
     assert!(
         r.violations.is_empty(),
         "the ratchet starts clean — every legacy reference in this corpus predates the convention: {:?}",

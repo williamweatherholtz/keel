@@ -97,7 +97,7 @@ fn removing_a_hook_event_removes_its_action_without_any_model_edit() {
 
 #[test]
 fn this_repository_decorates_the_roles_with_its_authored_residue() {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root").to_path_buf();
+    let repo = keel_fs::test_support::repo_root();
     let (ok, text) = run(&repo, &["show", "control-structure", "."]);
     assert!(ok, "{text}");
     let v = parse(&text);

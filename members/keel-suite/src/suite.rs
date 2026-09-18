@@ -222,6 +222,9 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
         println!("  {}: the base, stems, set and cost - an empty set is recorded too (D0421).", crate::touched::RECEIPT);
         println!("  A binary of the set observed green at the current content (the code, and the tree too when the");
         println!("  test reads this repository) is SKIPPED; --no-receipt or KEEL_NO_RECEIPT=1 runs every one (D0474).");
+        println!("  A workspace member's unit tests are in the set (row lib:<member>) when a changed source is that");
+        println!("  member's or one it depends on, keyed on that scope's code; a test that reads the repository only");
+        println!("  through keel_fs::test_support is keyed on the paths it recorded reading (reads, reads_key) (D0481).");
         println!("  The set runs under cargo-nextest, binaries in parallel, and the receipt carries every test's");
         println!("  duration ([[timing]], slowest first); the harness = false cucumber binaries run under cargo test");
         println!("  in a second invocation. Without nextest the whole set runs that way and `runner` says so (D0475).");

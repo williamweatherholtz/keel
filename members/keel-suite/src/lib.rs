@@ -17,3 +17,4 @@ pub mod hook_binary;
 pub mod suite;
 pub mod touched;
 pub mod verify;
+pub mod wsgraph;

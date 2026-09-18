@@ -20,9 +20,76 @@
 //!
 //! `.keel/` is outside both keys: `metrics/` is written by the runs themselves, `bin/` holds binaries
 //! no test opens, and the guard receipt (`receipt.rs`) walks the rest for its own key.
+//!
+//! TWO NARROWER KEYS (D0481, sprint 741), each a digest over the same listing. [`scoped_code`] is the
+//! code key restricted to what one member's unit tests are built from - its directory and its
+//! dependencies' (`wsgraph::scope`) plus the code no member owns - so a member's `lib` row is skipped
+//! on the code it is built from, not the whole workspace's. [`reads_key`] is the bytes under the paths
+//! a self-reading binary RECORDED reading (`keel_fs::test_support`), so the ceremony's write under
+//! `.tracking/` no longer reruns a test that reads `keel-cli/src/main.rs` and `.githooks/`. A recorded
+//! `.` is the whole tree, and its key IS the tree key - head included, because a root reader can read
+//! git state; a narrower set carries no head, because a commit that changes none of its bytes changes
+//! nothing it can see.
 
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+
+/// One listing of the tree, read once and digested several ways: HEAD's id and every path outside
+/// `.keel/` ([`paths`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Listing {
+    pub head: String,
+    pub paths: Vec<String>,
+}
+
+impl Listing {
+    /// The listing of `root`; `None` when git cannot name the tree.
+    #[must_use]
+    pub fn read(root: &Path) -> Option<Self> {
+        Some(Self { head: head(root)?, paths: paths(root)? })
+    }
+
+    /// The digest of `head` (when `with_head`) and of every listed path `keep` admits, in listing order.
+    fn digest(&self, root: &Path, with_head: bool, keep: impl Fn(&str) -> bool) -> String {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        if with_head {
+            h.write(self.head.as_bytes());
+        }
+        for rel in self.paths.iter().filter(|p| keep(p)) {
+            hash_file(root, rel, &mut h);
+        }
+        format!("{:016x}", h.finish())
+    }
+
+    /// Both D0474 keys over this listing.
+    #[must_use]
+    pub fn keys(&self, root: &Path) -> ContentKeys {
+        ContentKeys { code: self.digest(root, false, is_code), tree: self.digest(root, true, |_| true) }
+    }
+}
+
+/// The code key narrowed to the paths `keep` admits - the caller's "built from" predicate over
+/// `is_code` paths (D0481: a member's scope directories plus the code no member owns).
+#[must_use]
+pub fn scoped_code(root: &Path, listing: &Listing, keep: impl Fn(&str) -> bool) -> String {
+    listing.digest(root, false, |p| is_code(p) && keep(p))
+}
+
+/// The key of a recorded read set: `/`-normalised repo-relative entries, each a file or a directory.
+/// Any entry equal to `.` (or empty, or climbing out) makes the key the TREE key - head and all; else
+/// the digest of every listed path equal to or under an entry, without head. `None` for an empty set:
+/// a binary that recorded nothing has no key of its own and falls back to the tree key.
+#[must_use]
+pub fn reads_key(root: &Path, listing: &Listing, reads: &[String]) -> Option<String> {
+    if reads.is_empty() {
+        return None;
+    }
+    let entries: Vec<String> = reads.iter().map(|r| r.replace('\\', "/").trim_matches('/').to_owned()).collect();
+    if entries.iter().any(|e| e.is_empty() || e == "." || e.split('/').any(|s| s == "..")) {
+        return Some(listing.digest(root, true, |_| true));
+    }
+    Some(listing.digest(root, false, |p| entries.iter().any(|e| p == e || p.starts_with(&format!("{e}/")))))
+}
 
 /// The two digests of one tree, as hex.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,20 +170,7 @@ fn head(root: &Path) -> Option<String> {
 /// listed is never skipped against.
 #[must_use]
 pub fn compute(root: &Path) -> Option<ContentKeys> {
-    keel_perf::perf::phase("contentkey:compute", || {
-        let head = head(root)?;
-        let list = paths(root)?;
-        let mut code = std::collections::hash_map::DefaultHasher::new();
-        let mut tree = std::collections::hash_map::DefaultHasher::new();
-        tree.write(head.as_bytes());
-        for rel in &list {
-            hash_file(root, rel, &mut tree);
-            if is_code(rel) {
-                hash_file(root, rel, &mut code);
-            }
-        }
-        Some(ContentKeys { code: format!("{:016x}", code.finish()), tree: format!("{:016x}", tree.finish()) })
-    })
+    keel_perf::perf::phase("contentkey:compute", || Some(Listing::read(root)?.keys(root)))
 }
 
 #[cfg(test)]
@@ -189,6 +243,60 @@ mod tests {
         let k3 = compute(&d).expect("keys");
         assert_ne!(k3.code, k2.code, "a source edit moves the code key");
         assert_ne!(k3.tree, k2.tree, "and the tree key");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// D0481 pair (the definition of done's second known-positive), chosen before the code was written: a recorded
+    /// read set `[keel-cli/src/main.rs, .githooks]` keeps its key across an edit to a path OUTSIDE the
+    /// set (`.tracking/`, a sibling source file, a commit) and loses it on an edit INSIDE it (a byte
+    /// under `.githooks/`). Known-negative: a set holding `.` is the tree key itself, an empty set has
+    /// no key, and the member-scoped code key ignores a member outside the scope.
+    #[test]
+    fn a_read_set_keeps_its_key_across_an_edit_outside_it_and_loses_it_on_one_inside() {
+        let d = std::env::temp_dir().join(format!("keel-readskey-{}", keel_model::ident::gen_uuid()));
+        for sub in ["keel-cli/src", ".githooks", ".tracking", "members/leaf/src", "members/other/src"] {
+            std::fs::create_dir_all(d.join(sub)).expect("mk");
+        }
+        std::fs::write(d.join("keel-cli/src/main.rs"), "fn main() {}\n").expect("w");
+        std::fs::write(d.join("keel-cli/src/lib.rs"), "pub fn a() {}\n").expect("w");
+        std::fs::write(d.join(".githooks/post-commit"), "#!/bin/sh\n").expect("w");
+        std::fs::write(d.join(".tracking/backlog.sysml"), "package B {}\n").expect("w");
+        std::fs::write(d.join("members/leaf/src/lib.rs"), "pub fn l() {}\n").expect("w");
+        std::fs::write(d.join("members/other/src/lib.rs"), "pub fn o() {}\n").expect("w");
+        std::fs::write(d.join("Cargo.toml"), "[workspace]\n").expect("w");
+        git(&d, &["init", "-q"]);
+        git(&d, &["add", "-A"]);
+        git(&d, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "root"]);
+        let reads = vec!["keel-cli/src/main.rs".to_owned(), ".githooks/".to_owned()];
+        // The leaf's scope: its own directory plus the code no member owns (keel-cli and `other` are members here).
+        let leaf_scope = |p: &str| p.starts_with("members/leaf/") || (is_code(p) && !p.starts_with("members/") && !p.starts_with("keel-cli/"));
+        let l0 = Listing::read(&d).expect("listing");
+        let k0 = l0.keys(&d);
+        let r0 = reads_key(&d, &l0, &reads).expect("key");
+        let s0 = scoped_code(&d, &l0, leaf_scope);
+        assert_eq!(reads_key(&d, &l0, &[".".to_owned()]).as_deref(), Some(k0.tree.as_str()), "a root reader is keyed on the tree");
+        assert_eq!(reads_key(&d, &l0, &["a/../b".to_owned()]).as_deref(), Some(k0.tree.as_str()), "an escaping entry is the tree");
+        assert_eq!(reads_key(&d, &l0, &[]), None, "no recorded set, no key of its own");
+
+        // Outside the set: a ceremony write, a sibling source edit, a commit - the read-set key holds.
+        std::fs::write(d.join(".tracking/sprint.sysml"), "package S {}\n").expect("w");
+        std::fs::write(d.join("keel-cli/src/lib.rs"), "pub fn a() -> u8 { 1 }\n").expect("w");
+        std::fs::write(d.join("members/other/src/lib.rs"), "pub fn o() -> u8 { 2 }\n").expect("w");
+        git(&d, &["add", "-A"]);
+        git(&d, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "outside"]);
+        let l1 = Listing::read(&d).expect("listing");
+        let k1 = l1.keys(&d);
+        assert_ne!(k1.tree, k0.tree, "the tree key moved (the D0474 fallback would rerun)");
+        assert_ne!(k1.code, k0.code, "the whole-workspace code key moved");
+        assert_eq!(reads_key(&d, &l1, &reads).expect("key"), r0, "the read-set key did not: nothing it reads changed");
+        assert_eq!(scoped_code(&d, &l1, leaf_scope), s0, "the leaf's scoped code key did not: `other` is outside its scope");
+
+        // Inside the set: one byte under .githooks/ - the read-set key moves.
+        std::fs::write(d.join(".githooks/post-commit"), "#!/bin/sh\nexit 0\n").expect("w");
+        let l2 = Listing::read(&d).expect("listing");
+        assert_ne!(reads_key(&d, &l2, &reads).expect("key"), r0, "a byte under a recorded directory moves the key");
+        std::fs::write(d.join("members/leaf/src/lib.rs"), "pub fn l() -> u8 { 3 }\n").expect("w");
+        assert_ne!(scoped_code(&d, &Listing::read(&d).expect("listing"), leaf_scope), s0, "a leaf edit moves the leaf's scoped key");
         let _ = std::fs::remove_dir_all(&d);
     }
 }

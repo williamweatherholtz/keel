@@ -2017,4 +2017,16 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcKeelCliIsThinDispatch to issue601;
+
+    part issue602 : Issue {
+        :>> id = "c09aae7a-240e-44e0-8fc0-1bb980cf2f56";
+        :>> title = "Recorder report filed a landed write as REFUSED and check_report.py passed it - nothing reads the report against the tree";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 741's recorder was dispatched with eight owed records; the eighth named --task dcTouchedSetDescendsTheWorkspaceDoD, the Test's name where the write API takes the action's. The write API refused that attempt; the recorder retried with --task dcTouchedSetDescendsTheWorkspace, the result dcTouchedSetDescendsTheWorkspaceDoDR1 landed at .tracking/backlog.sysml with a RAN receipt, and the report carried it as REFUSED: task not found - one REFUSED line, seven WROTE lines, eight accounted for. check_report.py --owed 8 passed it. The tree held eight new TestResult parts; the report said seven were written. Found by the primary reading git diff .tracking/backlog.sysml after the report, not by any control: check_report.py reads the report alone and has no count of what the tree gained, so a report that misfiles a landed write as a refusal passes every check it has (D0473 catches a second write of one gate, D0492 catches too few lines; neither reads the tree). Same class as issue568 (wrote nothing, reported NONE) with the sign reversed. Resolver: check_report.py --root counts the TestResult parts added under .tracking since HEAD and refuses a report with fewer WROTE lines than that, naming the surplus part.";
+        :>> discoveredInField = false;
+        :>> relatedTask = "dcTouchedSetDescendsTheWorkspace";
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRecorderReportAccountsForEveryTreeWrite to issue602;
 }

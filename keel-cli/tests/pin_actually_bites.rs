@@ -38,7 +38,7 @@ fn project(tag: &str, declared: Option<&str>) -> PathBuf {
     std::fs::write(root.join(".tracking").join("seed.sysml"), "package Seed {\n}\n").expect("seed");
     // `keel gate validate` registers the schema from the PROJECT's disk, so the fixture carries the real
     // one — copied from this workspace, the same schema `keel init` would lay down.
-    let schema_src = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("ws").join(".engine").join("schema");
+    let schema_src = keel_fs::test_support::repo_path(".engine/schema");
     copy_tree(&schema_src, &root.join(".engine").join("schema"));
     if let Some(v) = declared {
         std::fs::write(

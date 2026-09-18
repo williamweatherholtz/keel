@@ -16,8 +16,8 @@ use std::process::Command;
 
 use keel_cli::control_proof::{census_of_bodies, census_over, test_bodies, ProofState};
 
-fn repo() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root")
+fn repo() -> PathBuf {
+    keel_fs::test_support::repo_root()
 }
 
 fn keel_bin() -> PathBuf {
@@ -58,7 +58,7 @@ fn a_guard_with_no_test_appears_in_the_undetermined_list_and_a_proven_real_guard
     // Assembled at run time: written as one literal, THIS body would name it, and the census's first
     // run of this very test reported it UNPROVEN - the heuristic reading the instrument that reads it.
     let nobody = format!("a-guard-{}-has-tested", "nobody");
-    let c = census_over(repo(), &[nobody.as_str(), "identity-well-formed"]);
+    let c = census_over(&repo(), &[nobody.as_str(), "identity-well-formed"]);
     assert!(c.corpus_present);
     let state = |g: &str| c.guards.iter().find(|x| x.guard == g).expect("guard row").clone();
     assert_eq!(state(&nobody).state, ProofState::Undetermined);
@@ -126,8 +126,8 @@ fn count_after(text: &str, label: &str) -> usize {
 #[test]
 fn the_binary_agrees_with_the_census_script_on_this_tree_and_shows_three_states() {
     let repo = repo();
-    let c = census_over(repo, &keel_cli::guards::GUARD_NAMES);
-    let script = census_script(repo).expect("python3 or python runs .engine/tools/guard_proof_census.py - the reference the binary is held against");
+    let c = census_over(&repo, &keel_cli::guards::GUARD_NAMES);
+    let script = census_script(&repo).expect("python3 or python runs .engine/tools/guard_proof_census.py - the reference the binary is held against");
     let head = script.lines().next().unwrap_or_default();
     let guards: usize = head.split("guards:").nth(1).and_then(|r| r.split_whitespace().next()).and_then(|n| n.parse().ok()).expect("guards count");
     let scanned: usize = head.rsplit(':').next().and_then(|n| n.trim().parse().ok()).expect("scanned count");
@@ -147,7 +147,7 @@ fn the_binary_agrees_with_the_census_script_on_this_tree_and_shows_three_states(
         }
     }
     // The surface: three states apart, the lists present, the share as words rather than a percentage.
-    let out: String = run(repo, &["show", "controls", "."]).split_whitespace().collect();
+    let out: String = run(&repo, &["show", "controls", "."]).split_whitespace().collect();
     let section = out.split("\"controlProof\":").nth(1).expect("controlProof section in keel show controls");
     for key in ["\"proven\":", "\"unproven\":", "\"undetermined\":", "\"unprovenList\":", "\"undeterminedList\":", "\"controlArming\""] {
         assert!(out.contains(key), "missing {key}: {out}");

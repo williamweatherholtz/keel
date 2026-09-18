@@ -49,8 +49,11 @@ impl Finding {
     }
 }
 
-fn repo() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("keel-cli sits in the repo").to_path_buf()
+/// The two trees this test reads of the repository, each recorded (D0481): keel-cli's sources and its tests.
+const SURFACES: [&str; 2] = ["keel-cli/src", "keel-cli/tests"];
+
+fn surface_dirs() -> [(&'static str, PathBuf); 2] {
+    SURFACES.map(|rel| (rel, keel_fs::test_support::repo_path(rel)))
 }
 
 fn is_ident_char(c: u8) -> bool {
@@ -391,10 +394,10 @@ fn rs_files_under(dir: &Path, recurse: bool, out: &mut Vec<PathBuf>) {
 
 /// Every test surface in keel-cli: (display path, text, region start), this file excluded.
 fn surface() -> Vec<(String, String, usize)> {
-    let root = repo();
+    let dirs = surface_dirs();
     let mut files = Vec::new();
-    rs_files_under(&root.join("keel-cli/src"), true, &mut files);
-    rs_files_under(&root.join("keel-cli/tests"), false, &mut files);
+    rs_files_under(&dirs[0].1, true, &mut files);
+    rs_files_under(&dirs[1].1, false, &mut files);
     files.sort();
     let mut out = Vec::new();
     for p in files {
@@ -402,7 +405,11 @@ fn surface() -> Vec<(String, String, usize)> {
             continue;
         }
         let text = std::fs::read_to_string(&p).expect("a source file is readable");
-        let display = p.strip_prefix(&root).unwrap_or(&p).to_string_lossy().replace('\\', "/");
+        let display = dirs
+            .iter()
+            .find_map(|(rel, dir)| p.strip_prefix(dir).ok().map(|r| format!("{rel}/{}", r.to_string_lossy())))
+            .unwrap_or_else(|| p.to_string_lossy().to_string())
+            .replace('\\', "/");
         let region = if display.starts_with("keel-cli/src/") {
             match text.find("#[cfg(test)]") {
                 Some(r) => r,

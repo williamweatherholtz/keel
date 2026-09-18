@@ -3,11 +3,10 @@
 //! fixture halves (code-read only -> hypothetical, observed -> evidenced) are unit tests beside the
 //! view, because they need no tree.
 
-use std::path::Path;
 use std::process::Command;
 
-fn repo() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root")
+fn repo() -> std::path::PathBuf {
+    keel_fs::test_support::repo_root()
 }
 
 #[test]

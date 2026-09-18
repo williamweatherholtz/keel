@@ -34,8 +34,9 @@ fn keel_bin() -> PathBuf {
     p.join(if cfg!(windows) { "keel.exe" } else { "keel" })
 }
 
-fn repo() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root")
+/// One path of this repository, recorded as read (D0481).
+fn repo(rel: &str) -> PathBuf {
+    keel_fs::test_support::repo_path(rel)
 }
 
 fn run(root: &Path, args: &[&str]) -> String {
@@ -59,7 +60,7 @@ fn copy_dir(from: &Path, to: &Path) {
 fn sandbox(tag: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("keel-noop-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    copy_dir(&repo().join(".engine"), &root.join(".engine"));
+    copy_dir(&repo(".engine"), &root.join(".engine"));
     std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
     std::fs::write(root.join(".tracking").join("seed.sysml"), "package Seed {\n}\n").expect("seed");
     root
@@ -183,8 +184,8 @@ const SCAFFOLD_ONLY: &[&str] = &["adoption-profile.toml", "keel-wrapper.toml"];
 fn no_new_engine_surface_writer_is_unrepresented() {
     // Whole-file writes to a committed surface are the class. Machine-local state (`.keel/`) and
     // scaffolding of files that did not exist are NOT: there is nothing of a human's to preserve.
-    let src = std::fs::read_to_string(repo().join("keel-cli/src/main.rs")).expect("main.rs")
-        + &std::fs::read_to_string(repo().join("members/keel-write/src/claude_surface.rs")).expect("claude_surface.rs");
+    let src = std::fs::read_to_string(repo("keel-cli/src/main.rs")).expect("main.rs")
+        + &std::fs::read_to_string(repo("members/keel-write/src/claude_surface.rs")).expect("claude_surface.rs");
     let mut unrepresented = Vec::new();
     for line in src.lines() {
         let t = line.trim();

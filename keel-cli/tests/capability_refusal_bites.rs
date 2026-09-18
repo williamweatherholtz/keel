@@ -35,7 +35,7 @@ fn run(dir: &Path, args: &[&str]) -> (bool, String) {
 
 /// Every command name `main.rs` actually dispatches, parsed from the one top-level `match`.
 fn dispatched_commands() -> Vec<String> {
-    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("main.rs"))
+    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
         .expect("main.rs is readable from the crate it belongs to");
     let start = src.find("fn main() {").expect("main() exists");
     let block = &src[start..start + src[start..].find("\n    };").expect("the dispatch match closes")];
@@ -92,7 +92,7 @@ fn the_command_inventory_matches_the_dispatch() {
 /// held equal to the thing it describes.
 #[test]
 fn the_lens_inventory_matches_the_router() {
-    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("main.rs"))
+    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
         .expect("main.rs is readable");
     let start = src.find("fn cmd_show(args: &[String]) -> i32 {").expect("the router exists");
     let block = &src[start..start + src[start..].find("\n}\n").expect("the router closes")];
@@ -137,7 +137,7 @@ fn the_lens_inventory_matches_the_router() {
 /// so the drift the 679 retro named cannot recur silently here.
 #[test]
 fn the_record_sub_verbs_match_the_fact() {
-    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("main.rs"))
+    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
         .expect("main.rs is readable");
     let mut routed: Vec<String> = Vec::new();
     for head in ["fn record_authoring_subverb(args: &[String]) -> Option<i32> {", "fn cmd_record(args: &[String]) -> i32 {"] {
@@ -174,7 +174,7 @@ fn the_record_sub_verbs_match_the_fact() {
 /// declare, so a routed word missing from `--help` or a documented word that prints the usage fails here.
 #[test]
 fn the_gate_audit_and_github_sub_verbs_match_their_facts() {
-    let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("main.rs"))
+    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
         .expect("main.rs is readable");
     for (router, head, floor) in [
         ("gate", "fn gate_subverb(args: &[String]) -> Option<i32> {", 7),

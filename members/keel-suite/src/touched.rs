@@ -12,9 +12,10 @@
 //! workspace member's `members/<crate>/src/` (D0479, sprint 714) contributes its MODULE STEM
 //! (`sync.rs` -> `sync`, `view/mod.rs` -> `view`, `members/keel-git/src/gitx.rs` -> `gitx`);
 //! `main.rs` and `lib.rs` name no module and are reported as unattributed rather than matched against
-//! every test that says `main`. The members' own unit tests run with the lib (`member_libs`), until
-//! D0481 computes the set over the workspace graph.
-//! An integration test is touched when its text carries a stem as a whole word (`keel_cli::sync::`,
+//! every test that says `main`. The members' own unit tests are CANDIDATES over the workspace graph
+//! (D0481, sprint 741; `wsgraph`): the member that owns a changed source path, closed over its
+//! dependents, each as its own row `lib:<member>`; a changed source no member owns reaches every
+//! member; keel-cli among the candidates is the `lib` row. An integration test is touched when its text carries a stem as a whole word (`keel_cli::sync::`,
 //! `keel sync`, `sync.rs` all count; `synced` does not), or when the test file itself changed.
 //! A changed path under `.engine/` contributes the stem `init` (`embedded_stem`): that tree is
 //! embedded in the binary and `keel init` ships it, so every test that scaffolds a project reads
@@ -30,7 +31,13 @@
 //! binaries, and `tree`, every path outside `.keel/` plus HEAD. A binary whose text names
 //! `CARGO_MANIFEST_DIR` is SELF-READING - it reads this repository's own tree (eighteen of them on
 //! 2026-09-14; the lib's unit tests always are) - and is keyed on both; every other binary is keyed on
-//! `code` alone. A binary with a green observation at the current key is SKIPPED; the rest run, and
+//! `code` alone. D0481 (sprint 741) narrows both: a member row's `code` is the bytes of that member's
+//! scope (itself plus what it depends on), so an edit to a leaf leaves the unrelated members' greens
+//! standing; and a self-reading binary that reaches the tree only through `keel_fs::test_support`
+//! (a RECORDER) has the paths it read written to `<readset>/<binary>.reads` while it runs, and is
+//! keyed on the bytes under exactly those paths (`reads_key`) - green across an edit outside them,
+//! stale on one inside. A recorder with no recorded set, or one that recorded `.`, keeps the tree
+//! key. A binary with a green observation at the current key is SKIPPED; the rest run, and
 //! the run's greens join the table. The invariant is that every binary in the set was observed green
 //! against the content its outcome depends on - not that this run produced the observation. Skipping
 //! is a memo of a run, never a substitute for one: a red drops the entry, `--no-receipt` or
@@ -75,6 +82,34 @@ pub const LIB: &str = "lib";
 /// The env var a test reads to reach this repository's own tree; a test whose text names it is
 /// self-reading (D0474).
 const SELF_READING_MARK: &str = "CARGO_MANIFEST_DIR";
+
+/// The read-set helpers (D0481): a test whose text names them reaches this repository through
+/// `keel_fs::test_support`, which RECORDS what it reached - so the binary is self-reading, and when it
+/// reaches the tree no other way it is a RECORDER, keyed on its recorded set.
+const RECORDING_MARK: &str = "test_support::";
+
+/// The idioms that reach the tree PAST the recording helpers: a binary carrying any of these beside
+/// `test_support::` records a partial set, and a partial set is a false narrowing - it stays on the tree
+/// key. `current_dir()` is the process's own cwd (a child's `.current_dir(dir)` is not a read of ours).
+const UNRECORDED_REACH: [&str; 3] = [SELF_READING_MARK, "current_dir()", "\"..\""];
+
+/// The prefix of a workspace member's unit-test row in the set and the receipt: `lib:keel-fs` (D0481).
+pub const MEMBER_LIB_PREFIX: &str = "lib:";
+
+/// The package whose lib row is plain `lib` and whose integration tests the set is drawn from.
+pub const CLI_PACKAGE: &str = "keel-cli";
+
+/// `lib:<member>` - the row name of a member's unit tests.
+#[must_use]
+pub fn member_row(member: &str) -> String {
+    format!("{MEMBER_LIB_PREFIX}{member}")
+}
+
+/// The member a `lib:<member>` row names, or `None` for any other row.
+#[must_use]
+pub fn row_member(row: &str) -> Option<&str> {
+    row.strip_prefix(MEMBER_LIB_PREFIX)
+}
 
 /// The path of a Rust source file relative to its crate's `src/`, for the crates whose modules the
 /// set is keyed on: `keel-cli/src/` and every `members/<crate>/src/` (D0479). `None` elsewhere.
@@ -177,18 +212,34 @@ pub fn touched_tests(tests: &[(String, String)], stems: &[String], changed_tests
     out
 }
 
-/// The self-reading tests, pure (D0474).
+/// The self-reading tests, pure (D0474, D0481).
 ///
-/// Every test whose text names `CARGO_MANIFEST_DIR` - the one way the eighteen that read this
-/// repository's own tree reach it - plus `lib`, whose unit tests read live facts by construction
-/// (`adherence.rs`, `cli_surface_declared_tests` among them). Sorted. A second idiom, when one
-/// appears, is added HERE, not to a reminder.
+/// Every test whose text names `CARGO_MANIFEST_DIR` or the recording helpers (`test_support::`) -
+/// the two ways a test reaches this repository's own tree - plus `lib`, whose unit tests read live
+/// facts by construction (`adherence.rs`, `cli_surface_declared_tests` among them). Sorted. A third
+/// idiom, when one appears, is added HERE, not to a reminder.
 #[must_use]
 pub fn self_reading_tests(tests: &[(String, String)]) -> Vec<String> {
-    let mut out: Vec<String> = tests.iter().filter(|(_, text)| text.contains(SELF_READING_MARK)).map(|(name, _)| name.clone()).collect();
+    let mut out: Vec<String> = tests.iter().filter(|(_, text)| text.contains(SELF_READING_MARK) || text.contains(RECORDING_MARK)).map(|(name, _)| name.clone()).collect();
     out.push(LIB.to_string());
     out.sort();
     out.dedup();
+    out
+}
+
+/// The RECORDERS among the tests, pure (D0481): a test that reaches the tree through `test_support::`
+/// and through nothing in `UNRECORDED_REACH` - so the set its run records is the whole of what it
+/// read, and the binary may be keyed on it. A test that mixes the idioms records a partial set and is
+/// left on the tree key; `lib` and the member rows are never keyed on a recording (their sources carry
+/// `CARGO_MANIFEST_DIR` by construction - the helper's own walk lives in one of them). Sorted.
+#[must_use]
+pub fn recorder_tests(tests: &[(String, String)]) -> Vec<String> {
+    let mut out: Vec<String> = tests
+        .iter()
+        .filter(|(_, text)| text.contains(RECORDING_MARK) && !UNRECORDED_REACH.iter().any(|m| text.contains(m)))
+        .map(|(name, _)| name.clone())
+        .collect();
+    out.sort();
     out
 }
 
@@ -227,26 +278,79 @@ pub fn failing_binaries(cargo_output: &str) -> Vec<String> {
     out
 }
 
-/// One green observation (D0474): `binary` passed at content `code` (and `tree`, which matters only
-/// when the binary is self-reading), `at` seconds since the epoch.
+/// One green observation (D0474, D0481): `binary` passed at content `code` (a member row's is the code
+/// its member is built from; every other row's the whole workspace's) and `tree`, `at` seconds since
+/// the epoch. `reads` is the set the binary RECORDED reading during that run and `reads_key` the
+/// digest of the bytes under it; both empty for a binary that recorded nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Observed {
     pub binary: String,
     pub code: String,
     pub tree: String,
     pub at: u64,
+    pub reads: Vec<String>,
+    pub reads_key: String,
 }
 
-/// The skip computation, pure (D0474): which binaries of `set` have a green observation at `keys`.
+impl Observed {
+    /// An observation with no recorded read set - the D0474 shape.
+    #[must_use]
+    pub fn at_keys(binary: &str, code: &str, tree: &str, at: u64) -> Self {
+        Self { binary: binary.to_string(), code: code.to_string(), tree: tree.to_string(), at, reads: Vec::new(), reads_key: String::new() }
+    }
+}
+
+/// The keys of one tree for the whole set (D0481): D0474's pair, plus each candidate member's code key
+/// - the digest of the code the member is built from (`wsgraph::scope` plus the code no member owns).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetKeys {
+    pub keys: crate::contentkey::ContentKeys,
+    /// Member name -> scoped code key, for every member in the set.
+    pub member_code: std::collections::BTreeMap<String, String>,
+}
+
+impl SetKeys {
+    /// The code key a row is judged at: its member's scoped key for a `lib:<member>` row that has
+    /// one, the whole workspace's for every other row.
+    #[must_use]
+    pub fn code_of(&self, row: &str) -> &str {
+        row_member(row).and_then(|m| self.member_code.get(m)).map_or(self.keys.code.as_str(), String::as_str)
+    }
+
+    /// Both digests for `repo` over one listing, the members' scopes from the workspace graph.
+    #[must_use]
+    pub fn read(repo: &Path, listing: &crate::contentkey::Listing, graph: &crate::wsgraph::Graph, members: &[String]) -> Self {
+        let keys = listing.keys(repo);
+        let member_code = members
+            .iter()
+            .map(|m| {
+                let scope = crate::wsgraph::scope(graph, m);
+                let key = crate::contentkey::scoped_code(repo, listing, |p| scope.iter().any(|d| p == d || p.starts_with(&format!("{d}/"))) || crate::wsgraph::owner(graph, p).is_none());
+                (m.clone(), key)
+            })
+            .collect();
+        Self { keys, member_code }
+    }
+}
+
+/// The skip computation, pure (D0474, D0481): which binaries of `set` have a green observation at `keys`.
 ///
-/// A binary is skipped when an observation names it at an equal `code` key and - if it is in
-/// `self_reading` - an equal `tree` key. Both vectors come back sorted; together they are `set`.
+/// A binary is skipped when an observation names it at an equal code key (`SetKeys::code_of`) and,
+/// if it is in `self_reading`, EITHER an equal `tree` key OR - when it is a recorder with a recorded
+/// set - the bytes under that set digest to its `reads_key` now (`reads_now`). Both vectors come back
+/// sorted; together they are `set`.
 #[must_use]
-pub fn split(set: &[String], self_reading: &[String], observed: &[Observed], keys: &crate::contentkey::ContentKeys) -> (Vec<String>, Vec<String>) {
+pub fn split(set: &[String], self_reading: &[String], recorders: &[String], observed: &[Observed], keys: &SetKeys, reads_now: impl Fn(&[String]) -> Option<String>) -> (Vec<String>, Vec<String>) {
     let mut run = Vec::new();
     let mut skipped = Vec::new();
     for b in set {
-        let green = observed.iter().any(|o| o.binary == *b && o.code == keys.code && (!self_reading.contains(b) || o.tree == keys.tree));
+        let green = observed.iter().any(|o| {
+            o.binary == *b
+                && o.code == keys.code_of(b)
+                && (!self_reading.contains(b)
+                    || o.tree == keys.keys.tree
+                    || (recorders.contains(b) && !o.reads.is_empty() && reads_now(&o.reads).as_deref() == Some(o.reads_key.as_str())))
+        });
         if green {
             skipped.push(b.clone());
         } else {
@@ -258,20 +362,24 @@ pub fn split(set: &[String], self_reading: &[String], observed: &[Observed], key
     (run, skipped)
 }
 
+/// What one run's recorders read (D0481): binary -> (the recorded set, its key at the run's tree).
+pub type Reads = std::collections::BTreeMap<String, (Vec<String>, String)>;
+
 /// The observation table after a run, pure.
 ///
 /// Every binary that RAN loses its old entry; those that passed gain one at `keys` (when `keys` is
-/// `Some` - the tree held still through the run); a binary that was not run keeps whatever it had. A
-/// run cargo did not finish (`cargo_ok` false with no attributed failure - a build error, a killed
-/// process) is nobody's green.
+/// `Some` - the tree held still through the run), carrying the read set the run recorded for them; a
+/// binary that was not run keeps whatever it had. A run cargo did not finish (`cargo_ok` false with no
+/// attributed failure - a build error, a killed process) is nobody's green.
 #[must_use]
-pub fn merge_observed(prior: &[Observed], ran: &[String], failing: &[String], cargo_ok: bool, keys: Option<&crate::contentkey::ContentKeys>, at: u64) -> Vec<Observed> {
+pub fn merge_observed(prior: &[Observed], ran: &[String], failing: &[String], cargo_ok: bool, keys: Option<&SetKeys>, reads: &Reads, at: u64) -> Vec<Observed> {
     let mut out: Vec<Observed> = prior.iter().filter(|o| !ran.contains(&o.binary)).cloned().collect();
     let attributed = cargo_ok || !failing.is_empty();
     if let Some(k) = keys {
         if attributed {
             for b in ran.iter().filter(|b| !failing.contains(b)) {
-                out.push(Observed { binary: b.clone(), code: k.code.clone(), tree: k.tree.clone(), at });
+                let (reads, reads_key) = reads.get(b).cloned().unwrap_or_default();
+                out.push(Observed { binary: b.clone(), code: k.code_of(b).to_string(), tree: k.keys.tree.clone(), at, reads, reads_key });
             }
         }
     }
@@ -295,11 +403,15 @@ pub fn parse_observed(text: &str) -> Vec<Observed> {
     let s = |row: &toml::Value, k: &str| row.get(k).and_then(|x| x.as_str()).map(str::to_string);
     rows.iter()
         .filter_map(|row| {
+            // D0481: a row from before the read set rode it has none, and falls back to the tree key.
+            let reads: Vec<String> = row.get("reads").and_then(|r| r.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
             Some(Observed {
                 binary: s(row, "binary")?,
                 code: s(row, "code")?,
                 tree: s(row, "tree")?,
                 at: row.get("at").and_then(toml::Value::as_integer).and_then(|i| u64::try_from(i).ok()).unwrap_or(0),
+                reads,
+                reads_key: s(row, "reads_key").unwrap_or_default(),
             })
         })
         .collect()
@@ -312,17 +424,25 @@ pub struct Touched {
     pub stems: Vec<String>,
     pub unattributed: Vec<String>,
     pub tests: Vec<String>,
-    /// The lib's own unit tests (`cargo test --lib`) are in the set whenever ANY `keel-cli/src` or
-    /// `members/*/src` path changed - and `lib` then runs every workspace member's lib tests too
-    /// (`member_libs`), because a moved module's `#[cfg(test)]` block moved with it (sprint 714):
-    /// a module's `#[cfg(test)]` block names it by construction, and a unit test elsewhere
+    /// keel-cli's own unit tests (`cargo test --lib`) are in the set whenever ANY `keel-cli/src` or
+    /// `members/*/src` path changed, or the workspace graph reaches keel-cli from a changed member
+    /// (D0481): a module's `#[cfg(test)]` block names it by construction, and a unit test elsewhere
     /// can read the changed module's live facts - `cli_surface_declared_tests` read the suite
     /// synopsis and hardcoded which Decisions it may cite, and CI went red on cab7cac when the
-    /// synopsis gained a citation the set never ran (issue438). ~15 s on this host.
+    /// synopsis gained a citation the set never ran (issue438).
     pub lib: bool,
-    /// The self-reading binaries among ALL integration tests plus `lib` (D0474) - keyed on the tree
-    /// as well as the code.
+    /// The workspace members other than keel-cli whose unit tests are in the set (D0481, sprint 741):
+    /// the owners of the changed paths closed over their dependents (`wsgraph::candidates`), each a
+    /// `lib:<member>` row. Before D0481 `lib` ran every member's lib tests (sprint 714); a leaf edit
+    /// now reaches the leaf and what is built on it, and a keel-cli edit reaches no member at all.
+    /// Empty where there is no workspace graph.
+    pub members: Vec<String>,
+    /// The self-reading binaries among ALL integration tests plus `lib` and every member row (D0474) -
+    /// keyed on the tree as well as the code.
     pub self_reading: Vec<String>,
+    /// The recorders among the self-reading integration tests (D0481, `recorder_tests`): keyed on the
+    /// read set their last run recorded, when it recorded one.
+    pub recorders: Vec<String>,
     /// Every path the working tree changed since the base (tracked edits and untracked crate files),
     /// repo-relative - what the eol refusal names first (issue478).
     pub changed: Vec<String>,
@@ -336,19 +456,22 @@ pub struct Touched {
 }
 
 impl Touched {
-    /// Nothing to run: no integration test names a changed module AND no source path changed.
+    /// Nothing to run: no integration test names a changed module, no source path changed, and the
+    /// workspace graph reaches no member.
     #[must_use]
     pub const fn nothing_to_run(&self) -> bool {
-        self.tests.is_empty() && !self.lib
+        self.tests.is_empty() && !self.lib && self.members.is_empty()
     }
 
-    /// The whole set as binary names: the integration tests plus `lib` when it is in.
+    /// The whole set as row names: the integration tests, `lib` when it is in, and `lib:<member>`
+    /// per candidate member (D0481).
     #[must_use]
     pub fn binaries(&self) -> Vec<String> {
         let mut v = self.tests.clone();
         if self.lib {
             v.push(LIB.to_string());
         }
+        v.extend(self.members.iter().map(|m| member_row(m)));
         v.sort();
         v
     }
@@ -435,15 +558,25 @@ pub fn compute(repo: &Path) -> Result<Touched, String> {
             }
         }
     }
-    let self_reading = self_reading_tests(&tests);
+    let mut self_reading = self_reading_tests(&tests);
+    let recorders = recorder_tests(&tests);
     let tests = touched_tests(&tests, &stems, &changed_tests);
+    // D0481: the members a change reaches, over the workspace graph. An integration test file changes
+    // reach only that test's binary, so they seed nothing; every other changed path seeds its owner.
+    let graph = crate::wsgraph::read_graph(repo).unwrap_or_default();
+    let sources: Vec<String> = changed.iter().filter(|p| test_name(p).is_none()).cloned().collect();
+    let candidates = crate::wsgraph::candidates(&graph, &sources);
+    let members: Vec<String> = candidates.iter().filter(|m| *m != CLI_PACKAGE).cloned().collect();
+    self_reading.extend(members.iter().map(|m| member_row(m)));
+    self_reading.sort();
     // The lib is in the set when any source changed - and the embedded tree IS source: its bytes are
-    // in the binary and the lib's own tests read `ENGINE_DIR` (issue524).
-    let lib = !stems.is_empty() || !unattributed.is_empty();
+    // in the binary and the lib's own tests read `ENGINE_DIR` (issue524) - or when the graph reaches
+    // keel-cli from a changed member (D0481).
+    let lib = !stems.is_empty() || !unattributed.is_empty() || candidates.iter().any(|m| m == CLI_PACKAGE);
     // issue478: the endings are read with the set, before any decision to run - the receipt this
     // computation writes must be able to say `eol-mismatch` in place of a verdict cargo never reached.
     let census = keel_git::eol::census(repo)?;
-    Ok(Touched { base, stems, unattributed, tests, lib, self_reading, changed, eol: census.mismatches, eol_scanned: census.scanned, eol_millis: census.millis })
+    Ok(Touched { base, stems, unattributed, tests, lib, members, self_reading, recorders, changed, eol: census.mismatches, eol_scanned: census.scanned, eol_millis: census.millis })
 }
 
 /// Is the land refusal ARMED - has the human accepted D0421? The D0338 pattern: the decision file
@@ -558,7 +691,7 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
     use std::fmt::Write as _;
     let list = |v: &[String]| v.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(", ");
     let mut s = format!(
-        "# touched receipt (D0421): the integration tests that NAME a module changed since the base, and what\n# running exactly those cost. An empty set is a receipt too. Beside the suite's receipt, never in it.\n# `eol_scanned` / `eol_ms`: the working tree's line endings against .gitattributes, read with the set\n# (issue478); `outcome = \"eol-mismatch\"` names the paths that broke it and means cargo never started.\n# `code_key` / `tree_key` (D0474): the content the run was judged at; `skipped` the binaries observed\n# green at that content by an earlier run; `[[observed]]` one green observation per binary, kept until\n# the binary runs again. A self-reading binary (`self_reading`) is skipped only when both keys hold.\nhead = \"{}\"\nat = {}\nbase = \"{}\"\nstems = [{}]\nunattributed = [{}]\ntests = [{}]\nlib = {}\nself_reading = [{}]\neol_scanned = {}\neol_ms = {}\n",
+        "# touched receipt (D0421): the integration tests that NAME a module changed since the base, and what\n# running exactly those cost. An empty set is a receipt too. Beside the suite's receipt, never in it.\n# `eol_scanned` / `eol_ms`: the working tree's line endings against .gitattributes, read with the set\n# (issue478); `outcome = \"eol-mismatch\"` names the paths that broke it and means cargo never started.\n# `code_key` / `tree_key` (D0474): the content the run was judged at; `skipped` the binaries observed\n# green at that content by an earlier run; `[[observed]]` one green observation per binary, kept until\n# the binary runs again. A self-reading binary (`self_reading`) is skipped only when both keys hold -\n# or (D0481) when it is a recorder (`recorders`) whose row carries the `reads` its last run recorded\n# and the bytes under them still digest to `reads_key`. `members`: the workspace members the change\n# reaches over the Cargo graph, one `lib:<member>` row each, keyed on the code that member is built from.\nhead = \"{}\"\nat = {}\nbase = \"{}\"\nstems = [{}]\nunattributed = [{}]\ntests = [{}]\nlib = {}\nmembers = [{}]\nself_reading = [{}]\nrecorders = [{}]\neol_scanned = {}\neol_ms = {}\n",
         head,
         at,
         t.base,
@@ -566,7 +699,9 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
         list(&t.unattributed),
         list(&t.tests),
         t.lib,
+        list(&t.members),
         list(&t.self_reading),
+        list(&t.recorders),
         t.eol_scanned,
         t.eol_millis
     );
@@ -615,6 +750,9 @@ fn render_receipt(t: &Touched, head: &str, at: u64, phase: Phase<'_>, memo: &Mem
     }
     for o in &memo.observed {
         let _ = write!(s, "\n[[observed]]\nbinary = \"{}\"\ncode = \"{}\"\ntree = \"{}\"\nat = {}\n", o.binary, o.code, o.tree, o.at);
+        if !o.reads.is_empty() {
+            let _ = write!(s, "reads = [{}]\nreads_key = \"{}\"\n", list(&o.reads), o.reads_key);
+        }
     }
     // D0475: one row per test nextest ran, slowest first - the answer to "which test is the critical
     // path" (issue536) is the first row, and the whole population is here for the next question.
@@ -730,18 +868,19 @@ pub struct TestTiming {
 /// The per-test rows of a nextest run (pure, over the captured output).
 ///
 /// A row is `PASS [   0.075s] (  1/797) keel-cli activation::tests::x` - the verdict, the duration,
-/// a `(n/N)` counter, the binary id, the test. The lib's id is the package name alone (`keel-cli`);
-/// an integration binary's is `keel-cli::<name>`. Only lines carrying the counter are rows: a
-/// `SLOW [>120.000s] (───────)` notice has none, and the failures nextest re-lists after `Summary`
-/// have none either, so a red is counted once. `LEAK` is a pass that left a child alive; a retry
-/// verdict (`TRY 2 PASS`) is judged by its last word.
+/// a `(n/N)` counter, the binary id, the test. A lib's id is its package name alone: `cli_package`'s
+/// row is `lib`, any other package's is `lib:<package>` (D0481, the member rows); an integration
+/// binary's id is `<package>::<name>` and its row is the name. Only lines carrying the counter are
+/// rows: a `SLOW [>120.000s] (───────)` notice has none, and the failures nextest re-lists after
+/// `Summary` have none either, so a red is counted once. `LEAK` is a pass that left a child alive; a
+/// retry verdict (`TRY 2 PASS`) is judged by its last word.
 #[must_use]
-pub fn parse_nextest(output: &str) -> Vec<TestTiming> {
-    output.lines().filter_map(parse_nextest_row).collect()
+pub fn parse_nextest(output: &str, cli_package: &str) -> Vec<TestTiming> {
+    output.lines().filter_map(|l| parse_nextest_row(l, cli_package)).collect()
 }
 
 /// One row of [`parse_nextest`], or `None` for any other line.
-fn parse_nextest_row(line: &str) -> Option<TestTiming> {
+fn parse_nextest_row(line: &str, cli_package: &str) -> Option<TestTiming> {
     let (status, rest) = line.split_once('[')?;
     let (duration, rest) = rest.split_once(']')?;
     let (_, rest) = rest.split_once('(')?;
@@ -751,7 +890,7 @@ fn parse_nextest_row(line: &str) -> Option<TestTiming> {
     }
     let mut words = rest.split_whitespace();
     let (id, test) = (words.next()?, words.next()?);
-    let binary = id.split_once("::").map_or(LIB, |(_, name)| name).to_string();
+    let binary = id.split_once("::").map_or_else(|| if id == cli_package { LIB.to_string() } else { member_row(id) }, |(_, name)| name.to_string());
     let status = status.trim();
     let passed = status.split_whitespace().last() == Some("PASS") || status == "LEAK";
     Some(TestTiming { binary, test: test.to_string(), millis: millis_of(duration.trim().trim_end_matches('s')), passed })
@@ -770,28 +909,11 @@ fn millis_of(seconds: &str) -> u64 {
 /// keel-view reads it too); re-exported so `crate::touched::workspace_members` keeps resolving.
 pub use keel_model::corpus::workspace_members;
 
-/// The package names of every workspace member other than keel-cli (sprint 714).
-///
-/// These are the libs that run with `lib`. Read from the root manifest and each member's own; a
-/// member whose manifest cannot be read is named by its directory's last component.
+/// The `name` a manifest text declares, pure: the first `name = "..."` line (the `[package]` table
+/// leads every manifest here). `None` when there is none.
 #[must_use]
-pub fn member_libs(repo: &Path) -> Vec<String> {
-    let Ok(ws) = std::fs::read_to_string(repo.join("Cargo.toml")) else { return Vec::new() };
-    let mut out = Vec::new();
-    for member in workspace_members(&ws) {
-        let manifest = std::fs::read_to_string(repo.join(&member).join("Cargo.toml")).unwrap_or_default();
-        let name = manifest
-            .lines()
-            .map(str::trim)
-            .find_map(|l| l.strip_prefix("name = ").map(|v| v.trim_matches('"').to_string()))
-            .unwrap_or_else(|| member.rsplit('/').next().unwrap_or(&member).to_string());
-        if name != "keel-cli" {
-            out.push(name);
-        }
-    }
-    out.sort();
-    out.dedup();
-    out
+pub fn package_name(manifest: &str) -> Option<String> {
+    manifest.lines().map(str::trim).find_map(|l| l.strip_prefix("name = ").map(|v| v.trim_matches('"').to_string()))
 }
 
 // The manifest reader descended to the read model beside `workspace_members` (sprint 733); re-exported so
@@ -844,16 +966,30 @@ fn scrub_perf(cmd: &mut std::process::Command) {
     cmd.env_remove("KEEL_PERF");
 }
 
-/// Start cargo in `repo` with the profiling variable scrubbed, and capture both streams in order.
-fn capture(mut cmd: std::process::Command, repo: &Path) -> Result<Captured, String> {
+/// Start cargo in `repo` with the profiling variable scrubbed and the read-set directory named
+/// (D0481: every test process the run spawns records what it reads under `readset`), and capture
+/// both streams in order.
+fn capture(mut cmd: std::process::Command, repo: &Path, readset: &Path) -> Result<Captured, String> {
     scrub_perf(&mut cmd);
+    cmd.env(keel_fs::test_support::READSET_DIR_VAR, readset_env(readset)?);
     let out = cmd.current_dir(repo).output().map_err(|e| format!("cargo could not be run: {e}"))?;
     Ok(Captured { ok: out.status.success(), text: format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)) })
 }
 
-/// `--test <name>` per integration binary, `--lib` when the lib is in - the selection both runners share.
+/// The read-set directory as the test processes must see it: ABSOLUTE. The path travels by
+/// environment into processes nextest starts in the PACKAGE directory, so a relative one resolves
+/// under `keel-cli/`, the recorders write nothing (the helper is silent by design), and every recorder
+/// row lands keyed on the whole tree - green, and the silence the recording was built to remove.
+/// Sprint 741's first land did exactly that from a `.` root: eighteen recorders, zero `reads_key`.
+fn readset_env(readset: &Path) -> Result<PathBuf, String> {
+    std::path::absolute(readset).map_err(|e| format!("cannot absolutize {}: {e}", readset.display()))
+}
+
+/// `--test <name>` per integration binary, `--lib` when the lib is in - the selection both runners
+/// share over keel-cli's manifest. A member row (`lib:<member>`) is not a target here: it runs from
+/// the root manifest (`run_member_libs`).
 fn select_targets(cmd: &mut std::process::Command, set: &[String]) {
-    for name in set.iter().filter(|n| *n != LIB) {
+    for name in set.iter().filter(|n| *n != LIB && row_member(n).is_none()) {
         cmd.arg("--test").arg(name);
     }
     if set.iter().any(|n| n == LIB) {
@@ -861,19 +997,23 @@ fn select_targets(cmd: &mut std::process::Command, set: &[String]) {
     }
 }
 
-/// What one cargo invocation over the member libs reported (sprint 714).
+/// What one cargo invocation over the member libs reported (sprint 714); `failing` names the rows
+/// (`lib:<member>`) whose member went red or never ran.
 struct MemberLibs {
     ok: bool,
     passed: u64,
     failed: u64,
+    failing: Vec<String>,
     timings: Vec<TestTiming>,
     text: String,
 }
 
-/// One invocation from the ROOT manifest with `-p` per member, `--lib` only. Its rows fold into
-/// `lib` (a lib row's id is the package name, which `parse_nextest_row` reads as `lib`), and a red
-/// is `lib`'s red; under the cargo-test fallback the counts come from the summary lines instead.
-fn run_member_libs(repo: &Path, runner: &Runner, members: &[String]) -> Result<MemberLibs, String> {
+/// One invocation from the ROOT manifest with `-p` per member row, `--lib` only. Under nextest each
+/// member's rows carry its own name (`lib:<member>`, D0481) and a red is that member's; under the
+/// cargo-test fallback the counts come from the summary lines and a red is every member's, since
+/// the summary attributes nothing. A build or list failure is every row's.
+fn run_member_libs(repo: &Path, runner: &Runner, member_rows: &[String], readset: &Path) -> Result<MemberLibs, String> {
+    let members: Vec<&str> = member_rows.iter().filter_map(|r| row_member(r)).collect();
     let mut cmd = std::process::Command::new("cargo");
     let root_manifest = repo.join("Cargo.toml");
     match runner {
@@ -889,19 +1029,52 @@ fn run_member_libs(repo: &Path, runner: &Runner, members: &[String]) -> Result<M
     for m in members {
         cmd.arg("-p").arg(m);
     }
-    let c = capture(cmd, repo)?;
-    let (passed, failed, timings) = match runner {
+    let c = capture(cmd, repo, readset)?;
+    let (passed, failed, timings, mut failing) = match runner {
         Runner::Nextest(_) => {
-            let rows = parse_nextest(&c.text);
+            // No package's row is plain `lib` here: keel-cli is not among the members.
+            let rows = parse_nextest(&c.text, "");
             let count = |want: bool| u64::try_from(rows.iter().filter(|r| r.passed == want).count()).unwrap_or(u64::MAX);
-            (count(true), count(false), rows)
+            let red: Vec<String> = rows.iter().filter(|r| !r.passed).map(|r| r.binary.clone()).collect();
+            (count(true), count(false), rows, red)
         }
         Runner::CargoTest => {
             let (p, f) = crate::suite::count_results(&c.text);
-            (p, f, Vec::new())
+            (p, f, Vec::new(), if f > 0 { member_rows.to_vec() } else { Vec::new() })
         }
     };
-    Ok(MemberLibs { ok: c.ok, passed, failed, timings, text: c.text })
+    if crate::suite::never_ran(c.ok, passed, failed) {
+        failing = member_rows.to_vec();
+    }
+    Ok(MemberLibs { ok: c.ok, passed, failed, failing, timings, text: c.text })
+}
+
+/// The read sets the run's recorders left under `readset` (D0481): for each recorder that ran, the
+/// sorted, deduplicated entries of `<readset>/<binary>.reads` and their key at `listing`. A recorder
+/// with no file, an empty one, or one whose set has no key (`reads_key` None) recorded nothing.
+fn collect_reads(repo: &Path, readset: &Path, listing: &crate::contentkey::Listing, ran: &[String], recorders: &[String]) -> Reads {
+    let mut out = Reads::new();
+    for b in ran.iter().filter(|b| recorders.contains(b)) {
+        let Ok(text) = std::fs::read_to_string(readset.join(format!("{b}.reads"))) else { continue };
+        let mut reads: Vec<String> = text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect();
+        reads.sort();
+        reads.dedup();
+        if let Some(key) = crate::contentkey::reads_key(repo, listing, &reads) {
+            out.insert(b.clone(), (reads, key));
+        }
+    }
+    out
+}
+
+/// nextest when installed (D0475), else `cargo test` - said once on stderr, with the install line.
+fn choose_runner(repo: &Path) -> Runner {
+    nextest_version(repo).map_or_else(
+        || {
+            eprintln!("{NEXTEST_INSTALL}");
+            Runner::CargoTest
+        },
+        Runner::Nextest,
+    )
 }
 
 /// Run the set, minus the binaries observed green at this content (D0474), unless `force`.
@@ -930,34 +1103,43 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
     std::fs::create_dir_all(&metrics).map_err(|e| format!("cannot create {}: {e}", metrics.display()))?;
     let set = t.binaries();
     let prior = read_observed(repo);
-    let keys = crate::contentkey::compute(repo);
-    let (to_run, skipped) = match (&keys, force) {
-        (Some(k), false) => split(&set, &t.self_reading, &prior, k),
+    // D0481: one listing, digested for every key the set is judged at - D0474's pair, each member's
+    // scoped code, and the recorders' read sets as they stand now.
+    let graph = crate::wsgraph::read_graph(repo).unwrap_or_default();
+    let listing = keel_perf::perf::phase("contentkey:listing", || crate::contentkey::Listing::read(repo));
+    let keys = listing.as_ref().map(|l| SetKeys::read(repo, l, &graph, &t.members));
+    let (to_run, skipped) = match (&keys, &listing, force) {
+        (Some(k), Some(l), false) => split(&set, &t.self_reading, &t.recorders, &prior, k, |reads| crate::contentkey::reads_key(repo, l, reads)),
         _ => (set, Vec::new()),
     };
+    let header = |k: &Option<SetKeys>| k.as_ref().map(|k| k.keys.clone());
     if to_run.is_empty() {
         // Every binary was observed green at exactly this content: the invariant holds and there is
         // nothing left to execute. The receipt says so, and keeps the table that says why.
         let r = Run { skipped, ..none() };
-        write_receipt(repo, t, Phase::Done(&r), &Memo { keys, observed: prior });
+        write_receipt(repo, t, Phase::Done(&r), &Memo { keys: header(&keys), observed: prior });
         return Ok(r);
     }
     let started = now_secs();
     let log = metrics.join(format!("touched-{started}.log"));
-    write_receipt(repo, t, Phase::Running { started, log: &log, skipped: &skipped, pid: std::process::id() }, &Memo { keys: keys.clone(), observed: prior.clone() });
+    write_receipt(repo, t, Phase::Running { started, log: &log, skipped: &skipped, pid: std::process::id() }, &Memo { keys: header(&keys), observed: prior.clone() });
+    // The recorders' scratch (D0481): fresh per run, one `<binary>.reads` per recording process,
+    // removed once read. Under `.keel/` so it is outside every key; `capture` hands it to the test
+    // processes absolute (`readset_env`).
+    let readset = metrics.join(format!("readset-{started}"));
+    let _ = std::fs::remove_dir_all(&readset);
+    std::fs::create_dir_all(&readset).map_err(|e| format!("cannot create {}: {e}", readset.display()))?;
     let manifest = repo.join("keel-cli").join("Cargo.toml");
-    let runner = nextest_version(repo).map_or_else(
-        || {
-            eprintln!("{NEXTEST_INSTALL}");
-            Runner::CargoTest
-        },
-        Runner::Nextest,
-    );
-    let custom = custom_harness_tests(&std::fs::read_to_string(&manifest).unwrap_or_default());
-    // Under nextest the custom harnesses go to cargo test; under the fallback everything does.
+    let manifest_text = std::fs::read_to_string(&manifest).unwrap_or_default();
+    let cli_package = package_name(&manifest_text).unwrap_or_else(|| CLI_PACKAGE.to_string());
+    let runner = choose_runner(repo);
+    let custom = custom_harness_tests(&manifest_text);
+    // The member rows run from the root manifest; everything else from keel-cli's, where under
+    // nextest the custom harnesses go to cargo test and under the fallback everything does.
+    let (member_rows, cli_rows): (Vec<String>, Vec<String>) = to_run.iter().cloned().partition(|n| row_member(n).is_some());
     let (under_nextest, under_cargo_test): (Vec<String>, Vec<String>) = match runner {
-        Runner::Nextest(_) => to_run.iter().cloned().partition(|n| !custom.contains(n)),
-        Runner::CargoTest => (Vec::new(), to_run.clone()),
+        Runner::Nextest(_) => cli_rows.iter().cloned().partition(|n| !custom.contains(n)),
+        Runner::CargoTest => (Vec::new(), cli_rows),
     };
     let (mut text, mut ok, mut passed, mut failed, mut failing, mut timings) = (String::new(), true, 0u64, 0u64, Vec::new(), Vec::new());
     if !under_nextest.is_empty() {
@@ -968,8 +1150,8 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
         cmd.arg("--no-tests").arg("pass");
         cmd.arg("--color").arg("never").arg("--status-level").arg("all").arg("--final-status-level").arg("none");
         select_targets(&mut cmd, &under_nextest);
-        let c = capture(cmd, repo)?;
-        let rows = parse_nextest(&c.text);
+        let c = capture(cmd, repo, &readset)?;
+        let rows = parse_nextest(&c.text, &cli_package);
         let count = |want: bool| u64::try_from(rows.iter().filter(|r| r.passed == want).count()).unwrap_or(u64::MAX);
         let (p, f) = (count(true), count(false));
         // A list or build failure is not a verdict about the tests - but it IS a reason not to push:
@@ -989,7 +1171,7 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("test").arg("--release").arg("--manifest-path").arg(&manifest).arg("--no-fail-fast");
         select_targets(&mut cmd, &under_cargo_test);
-        let c = capture(cmd, repo)?;
+        let c = capture(cmd, repo, &readset)?;
         let (p, f) = crate::suite::count_results(&c.text);
         if crate::suite::never_ran(c.ok, p, f) {
             failing.extend(under_cargo_test.iter().cloned());
@@ -1001,14 +1183,11 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
         ok &= c.ok;
         text.push_str(&c.text);
     }
-    // `lib` in the set means every workspace member's lib tests, not keel-cli's alone (sprint 714):
-    // the leaf members carry the unit tests of the modules that moved into them.
-    let members = member_libs(repo);
-    if to_run.iter().any(|n| n == LIB) && !members.is_empty() {
-        let m = run_member_libs(repo, &runner, &members)?;
-        if crate::suite::never_ran(m.ok, m.passed, m.failed) || m.failed > 0 {
-            failing.push(LIB.to_string());
-        }
+    // The member rows (D0481): the unit tests of exactly the members the change reaches, from the
+    // root manifest. Before D0481 `lib` ran every member's (sprint 714).
+    if !member_rows.is_empty() {
+        let m = run_member_libs(repo, &runner, &member_rows, &readset)?;
+        failing.extend(m.failing);
         passed += m.passed;
         failed += m.failed;
         ok &= m.ok;
@@ -1018,12 +1197,14 @@ pub fn run(repo: &Path, t: &Touched, force: bool) -> Result<Run, String> {
     failing.sort();
     failing.dedup();
     let _ = std::fs::write(&log, &text);
+    let reads = listing.as_ref().map(|l| collect_reads(repo, &readset, l, &to_run, &t.recorders)).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&readset);
     let at = now_secs();
     // The keys again: a tree that moved while cargo ran is not one tree, and its greens are nobody's.
-    let held = keys.as_ref().filter(|k| crate::contentkey::compute(repo).as_ref() == Some(*k));
-    let observed = merge_observed(&prior, &to_run, &failing, ok, held, at);
+    let held = keys.as_ref().filter(|k| crate::contentkey::Listing::read(repo).map(|l| SetKeys::read(repo, &l, &graph, &t.members)).as_ref() == Some(*k));
+    let observed = merge_observed(&prior, &to_run, &failing, ok, held, &reads, at);
     let r = Run { passed, failed, failing, seconds: at.saturating_sub(started), cargo_ok: ok, log, ran: to_run, skipped, runner: runner.label(), timings };
-    write_receipt(repo, t, Phase::Done(&r), &Memo { keys, observed });
+    write_receipt(repo, t, Phase::Done(&r), &Memo { keys: header(&keys), observed });
     Ok(r)
 }
 
@@ -1041,7 +1222,11 @@ fn describe(t: &Touched) -> String {
     }
     if t.lib {
         s.push_str("; plus the lib unit tests (a source path changed)");
-    } else if t.tests.is_empty() {
+    }
+    if !t.members.is_empty() {
+        let _ = write!(s, "; plus the lib unit tests of {} member{} [{}] (D0481)", t.members.len(), if t.members.len() == 1 { "" } else { "s" }, t.members.join(", "));
+    }
+    if t.nothing_to_run() {
         s.push_str(", nothing to run");
     }
     s
@@ -1171,8 +1356,8 @@ pub fn cmd(repo: &Path, force: bool) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        compute, embedded_stem, exclusive_refusal, failing_binaries, live_run_in, merge_observed, module_stem, names_stem, parse_observed, pid_alive, render_receipt, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests, LiveRun, Memo, Observed,
-        custom_harness_tests, is_unattributed_source, millis_of, parse_nextest, workspace_members, Phase, Run, Touched, LIB,
+        compute, embedded_stem, exclusive_refusal, failing_binaries, live_run_in, member_row, merge_observed, module_stem, names_stem, package_name, parse_observed, pid_alive, recorder_tests, render_receipt, row_member, self_reading_tests, split, test_name, text_carries_acceptance, touched_tests,
+        custom_harness_tests, is_unattributed_source, millis_of, parse_nextest, workspace_members, LiveRun, Memo, Observed, Phase, Reads, Run, SetKeys, Touched, LIB,
     };
     use crate::contentkey::ContentKeys;
 
@@ -1183,7 +1368,9 @@ mod tests {
             unattributed: vec![],
             tests: vec!["orient_bdd".into()],
             lib: true,
+            members: vec![],
             self_reading: vec![LIB.into()],
+            recorders: vec![],
             changed: vec!["keel-cli/src/scaffold.rs".into()],
             eol: vec![],
             eol_scanned: 3,
@@ -1191,8 +1378,17 @@ mod tests {
         }
     }
 
-    fn keys(code: &str, tree: &str) -> ContentKeys {
-        ContentKeys { code: code.into(), tree: tree.into() }
+    fn keys(code: &str, tree: &str) -> SetKeys {
+        SetKeys { keys: ContentKeys { code: code.into(), tree: tree.into() }, member_code: std::collections::BTreeMap::new() }
+    }
+
+    fn at(binary: &str, code: &str, tree: &str, at: u64) -> Observed {
+        Observed::at_keys(binary, code, tree, at)
+    }
+
+    /// The pure `split` with no recorder and no read set - the D0474 shape.
+    fn split_plain(set: &[String], self_reading: &[String], observed: &[Observed], k: &SetKeys) -> (Vec<String>, Vec<String>) {
+        split(set, self_reading, &[], observed, k, |_| None)
     }
 
     fn run_of(passed: u64, failed: u64, failing: &[&str], cargo_ok: bool, ran: &[&str], skipped: &[&str]) -> Run {
@@ -1298,15 +1494,120 @@ mod tests {
     /// observation (known-negative) - never as a green.
     #[test]
     fn the_observation_table_round_trips_through_the_receipt() {
-        let observed = vec![Observed { binary: "orient_bdd".into(), code: "c1".into(), tree: "t1".into(), at: 50 }, Observed { binary: LIB.into(), code: "c1".into(), tree: "t2".into(), at: 51 }];
+        let mut recorder = at("reads_hooks", "c1", "t1", 52);
+        recorder.reads = vec![".githooks".into(), "keel-cli/src/main.rs".into()];
+        recorder.reads_key = "r9".into();
+        let observed = vec![at("orient_bdd", "c1", "t1", 50), at(LIB, "c1", "t2", 51), recorder];
         let run = run_of(3, 0, &[], true, &[LIB], &["orient_bdd"]);
-        let text = render_receipt(&fixture(), "1234567", 100, Phase::Done(&run), &Memo { keys: Some(keys("c1", "t2")), observed: observed.clone() });
+        let mut t = fixture();
+        t.members = vec!["keel-fs".into()];
+        t.recorders = vec!["reads_hooks".into()];
+        let text = render_receipt(&t, "1234567", 100, Phase::Done(&run), &Memo { keys: Some(keys("c1", "t2").keys), observed: observed.clone() });
         assert!(text.contains("code_key = \"c1\"\ntree_key = \"t2\"\n"), "{text}");
-        assert!(text.contains("self_reading = [\"lib\"]"), "{text}");
+        assert!(text.contains("members = [\"keel-fs\"]\nself_reading = [\"lib\"]\nrecorders = [\"reads_hooks\"]\n"), "{text}");
         assert!(text.contains("outcome = \"pass\"") && text.contains("skipped = [\"orient_bdd\"]") && text.contains("ran = [\"lib\"]"), "{text}");
+        assert!(text.contains("reads = [\".githooks\", \"keel-cli/src/main.rs\"]\nreads_key = \"r9\"\n"), "the recorder's row carries its read set:\n{text}");
+        assert_eq!(text.matches("\nreads_key = ").count(), 1, "a row with no read set carries no read-set field:\n{text}");
         assert_eq!(parse_observed(&text), observed, "the table reads back as written:\n{text}");
         assert!(parse_observed("outcome = \"pass\"\n").is_empty(), "no table is no observation");
         assert!(parse_observed("this is not = = toml").is_empty(), "an unparseable receipt is no observation");
+    }
+
+    /// D0481 known-positive: a member row is keyed on ITS member's scoped code - the unrelated member's
+    /// green stands across the edit, the reached member's runs. Known-negative: a member row with no
+    /// scoped key in `SetKeys` falls back to the set's code key, exactly as before D0481.
+    #[test]
+    fn a_member_row_is_judged_at_its_own_members_code() {
+        let (fs, view) = (member_row("keel-fs"), member_row("keel-view"));
+        assert_eq!(row_member(&fs), Some("keel-fs"));
+        assert_eq!(row_member(LIB), None, "the cli lib is not a member row");
+        let set: Vec<String> = vec![fs.clone(), view.clone(), "a_gate".into()];
+        let self_reading: Vec<String> = vec![fs.clone(), view.clone()];
+        let observed = vec![at(&fs, "fs1", "t1", 1), at(&view, "view1", "t1", 1), at("a_gate", "c1", "t1", 1)];
+        let mut k = keys("c1", "t1");
+        k.member_code.insert("keel-fs".into(), "fs1".into());
+        k.member_code.insert("keel-view".into(), "view2".into());
+        assert_eq!(k.code_of(&fs), "fs1");
+        assert_eq!(k.code_of("a_gate"), "c1", "a cli row reads the set's key");
+        assert_eq!(k.code_of(&member_row("keel-nowhere")), "c1", "an unscoped member row falls back to the set's key");
+        let (run, skipped) = split_plain(&set, &self_reading, &observed, &k);
+        assert_eq!(skipped, vec!["a_gate".to_string(), fs.clone()], "keel-fs's scope did not move");
+        assert_eq!(run, vec![view.clone()], "keel-view's scope did");
+        // merge writes each ran row at its own key.
+        let got = merge_observed(&observed, std::slice::from_ref(&view), &[], true, Some(&k), &Reads::new(), 9);
+        assert_eq!(got.iter().find(|o| o.binary == view).map(|o| o.code.as_str()), Some("view2"), "{got:?}");
+        assert_eq!(got.iter().find(|o| o.binary == fs).map(|o| o.code.as_str()), Some("fs1"), "a row not run keeps its own");
+    }
+
+    /// D0481 known-positive: a recorder observed at the current code key and an OLDER tree key is skipped
+    /// while the bytes under its recorded read set are unchanged, and runs once they move. Known-negative:
+    /// a self-reading binary that is not a recorder, or a recorder whose row has no read set, is judged on
+    /// the tree key exactly as D0474 did.
+    #[test]
+    fn a_recorder_is_judged_at_the_paths_it_read() {
+        let set: Vec<String> = vec!["reads_all".into(), "reads_hooks".into(), "unrecorded".into()];
+        let self_reading: Vec<String> = set.clone();
+        let recorders: Vec<String> = vec!["reads_all".into(), "reads_hooks".into()];
+        let mut hooks = at("reads_hooks", "c1", "t1", 1);
+        hooks.reads = vec![".githooks".into()];
+        hooks.reads_key = "h1".into();
+        let observed = vec![hooks, at("reads_all", "c1", "t1", 1), at("unrecorded", "c1", "t1", 1)];
+        // The tree moved (t1 -> t2) somewhere outside .githooks: the read set still keys to h1.
+        let same = |reads: &[String]| (reads == [".githooks".to_string()]).then(|| "h1".to_string());
+        let (run, skipped) = split(&set, &self_reading, &recorders, &observed, &keys("c1", "t2"), same);
+        assert_eq!(skipped, vec!["reads_hooks".to_string()], "green across an edit outside its read set");
+        assert_eq!(run, vec!["reads_all".to_string(), "unrecorded".to_string()], "no read set = the tree key, which moved");
+        // An edit inside .githooks: the read set keys to something else.
+        let moved = |reads: &[String]| (reads == [".githooks".to_string()]).then(|| "h2".to_string());
+        let (run, skipped) = split(&set, &self_reading, &recorders, &observed, &keys("c1", "t2"), moved);
+        assert!(skipped.is_empty(), "stale on an edit inside the set: {skipped:?}");
+        assert_eq!(run, set);
+        // The code key moved: a recorder is still keyed on its member's code first.
+        let (run, _) = split(&set, &self_reading, &recorders, &observed, &keys("c2", "t1"), same);
+        assert_eq!(run, set, "a code edit runs every recorder");
+        // The read set rides the merge into the next receipt.
+        let mut reads = Reads::new();
+        reads.insert("reads_hooks".into(), (vec![".githooks".into()], "h3".into()));
+        let got = merge_observed(&observed, &["reads_hooks".to_string()], &[], true, Some(&keys("c1", "t2")), &reads, 9);
+        let row = got.iter().find(|o| o.binary == "reads_hooks").expect("row");
+        assert_eq!((row.reads.clone(), row.reads_key.as_str(), row.tree.as_str()), (vec![".githooks".to_string()], "h3", "t2"));
+    }
+
+    /// D0481: a recorder reaches the tree ONLY through `test_support`; naming the manifest dir, the cwd,
+    /// or a `..` climb keeps the binary on the tree key (known-negative) - a narrowing it could escape.
+    #[test]
+    fn a_recorder_reaches_the_tree_only_through_the_support_layer() {
+        let tests = vec![
+            ("pure".to_string(), "let r = keel_fs::test_support::repo_path(\"keel-cli/src/main.rs\");".to_string()),
+            ("also_manifest".to_string(), "test_support::repo_root(); env!(\"CARGO_MANIFEST_DIR\")".to_string()),
+            ("also_cwd".to_string(), "test_support::repo_root(); std::env::current_dir()".to_string()),
+            ("also_climbs".to_string(), "test_support::repo_root(); root.join(\"..\")".to_string()),
+            ("childs_cwd".to_string(), "test_support::repo_path(\".githooks\"); Command::new(bin).current_dir(&tmp)".to_string()),
+            ("not_reading".to_string(), "keel init over a temp dir".to_string()),
+        ];
+        assert_eq!(recorder_tests(&tests), vec!["childs_cwd".to_string(), "pure".to_string()], "a child's cwd is not a read of ours");
+        assert_eq!(self_reading_tests(&tests), vec!["also_climbs".to_string(), "also_cwd".to_string(), "also_manifest".to_string(), "childs_cwd".to_string(), LIB.to_string(), "pure".to_string()], "every recorder is self-reading");
+    }
+
+    /// D0481: the manifest's package name is read, so the lib row is not tied to the name `keel-cli`.
+    #[test]
+    fn the_package_name_is_read_from_the_manifest() {
+        assert_eq!(package_name("[package]\nname = \"fake\"\nversion = \"0.1.0\"\n").as_deref(), Some("fake"));
+        assert_eq!(package_name("[workspace]\nmembers = [\"a\"]\n"), None);
+    }
+
+    /// The read-set directory reaches the test processes ABSOLUTE (sprint 741's first land handed a
+    /// `.`-rooted path to processes nextest starts in `keel-cli/`; eighteen recorders wrote nothing).
+    /// Positive: a relative path comes back absolute and still ends in the same components. Negative:
+    /// an absolute path is unchanged.
+    #[test]
+    fn the_readset_directory_reaches_the_test_processes_absolute() {
+        let rel = std::path::Path::new(".").join(".keel").join("metrics").join("readset-1");
+        let env = super::readset_env(&rel).expect("absolutizable");
+        assert!(env.is_absolute(), "{}", env.display());
+        assert!(env.ends_with(std::path::Path::new(".keel").join("metrics").join("readset-1")), "{}", env.display());
+        let abs = std::path::absolute(".").expect("cwd").join("readset-2");
+        assert_eq!(super::readset_env(&abs).expect("absolutizable"), abs);
     }
 
     /// D0474 known-positive: a binary observed green at the current code key is skipped; a self-reading
@@ -1316,21 +1617,17 @@ mod tests {
     fn a_binary_is_skipped_only_at_the_content_its_outcome_depends_on() {
         let set: Vec<String> = vec!["a_gate".into(), "b_reads_repo".into(), LIB.into(), "z_new".into()];
         let self_reading: Vec<String> = vec!["b_reads_repo".into(), LIB.into()];
-        let observed = vec![
-            Observed { binary: "a_gate".into(), code: "c2".into(), tree: "t1".into(), at: 1 },
-            Observed { binary: "b_reads_repo".into(), code: "c2".into(), tree: "t1".into(), at: 1 },
-            Observed { binary: LIB.into(), code: "c2".into(), tree: "t2".into(), at: 1 },
-        ];
+        let observed = vec![at("a_gate", "c2", "t1", 1), at("b_reads_repo", "c2", "t1", 1), at(LIB, "c2", "t2", 1)];
         // The unchanged tree: everything observed is skipped, the new binary runs.
-        let (run, skipped) = split(&set, &self_reading, &observed, &keys("c2", "t1"));
+        let (run, skipped) = split_plain(&set, &self_reading, &observed, &keys("c2", "t1"));
         assert_eq!(skipped, vec!["a_gate".to_string(), "b_reads_repo".to_string()]);
         assert_eq!(run, vec![LIB.to_string(), "z_new".to_string()], "lib was observed at another tree and is self-reading");
         // A ceremony write: the tree moved, the code did not - exactly the self-reading binaries run.
-        let (run, skipped) = split(&set, &self_reading, &observed, &keys("c2", "t3"));
+        let (run, skipped) = split_plain(&set, &self_reading, &observed, &keys("c2", "t3"));
         assert_eq!(skipped, vec!["a_gate".to_string()]);
         assert_eq!(run, vec!["b_reads_repo".to_string(), LIB.to_string(), "z_new".to_string()]);
         // A code edit: the code moved - everything runs.
-        let (run, skipped) = split(&set, &self_reading, &observed, &keys("c3", "t1"));
+        let (run, skipped) = split_plain(&set, &self_reading, &observed, &keys("c3", "t1"));
         assert!(skipped.is_empty());
         assert_eq!(run, set);
     }
@@ -1340,23 +1637,19 @@ mod tests {
     /// tree moved (`keys` None) or that cargo never finished records no green (known-negative).
     #[test]
     fn the_table_gains_the_greens_that_ran_and_drops_the_red() {
-        let prior = vec![
-            Observed { binary: "kept".into(), code: "c1".into(), tree: "t1".into(), at: 1 },
-            Observed { binary: "red".into(), code: "c1".into(), tree: "t1".into(), at: 1 },
-            Observed { binary: "green".into(), code: "c1".into(), tree: "t1".into(), at: 1 },
-        ];
+        let prior = vec![at("kept", "c1", "t1", 1), at("red", "c1", "t1", 1), at("green", "c1", "t1", 1)];
         let ran: Vec<String> = vec!["green".into(), "red".into(), LIB.into()];
         let k = keys("c2", "t2");
-        let got = merge_observed(&prior, &ran, &["red".to_string()], false, Some(&k), 9);
+        let got = merge_observed(&prior, &ran, &["red".to_string()], false, Some(&k), &Reads::new(), 9);
         let names: Vec<&str> = got.iter().map(|o| o.binary.as_str()).collect();
         assert_eq!(names, vec!["green", "kept", LIB]);
         assert!(got.iter().filter(|o| o.binary != "kept").all(|o| o.code == "c2" && o.tree == "t2" && o.at == 9), "{got:?}");
         assert_eq!(got.iter().find(|o| o.binary == "kept").map(|o| o.code.as_str()), Some("c1"), "a binary not run keeps its observation");
         // The tree moved mid-run: nothing new, the ran entries are gone.
-        let moved = merge_observed(&prior, &ran, &[], true, None, 9);
+        let moved = merge_observed(&prior, &ran, &[], true, None, &Reads::new(), 9);
         assert_eq!(moved.iter().map(|o| o.binary.as_str()).collect::<Vec<_>>(), vec!["kept"]);
         // Cargo did not finish and attributed nothing (a build error): nobody's green.
-        let built_not = merge_observed(&prior, &ran, &[], false, Some(&k), 9);
+        let built_not = merge_observed(&prior, &ran, &[], false, Some(&k), &Reads::new(), 9);
         assert_eq!(built_not.iter().map(|o| o.binary.as_str()).collect::<Vec<_>>(), vec!["kept"]);
     }
 
@@ -1478,7 +1771,7 @@ mod tests {
                    ────────────\n\
                         Summary [ 722.834s] 797 tests run: 796 passed, 1 failed, 0 skipped\n\
                            FAIL [  12.100s] keel-cli::orient_x a_ready_item_is_listed\n";
-        let rows = parse_nextest(out);
+        let rows = parse_nextest(out, "keel-cli");
         let names: Vec<(&str, &str, u64, bool)> = rows.iter().map(|r| (r.binary.as_str(), r.test.as_str(), r.millis, r.passed)).collect();
         assert_eq!(
             names,
@@ -1491,7 +1784,14 @@ mod tests {
             ]
         );
         assert_eq!(rows.iter().filter(|r| !r.passed).count(), 1, "the re-listed failure after Summary is not a second red");
-        assert!(parse_nextest("error: creating test list failed\nexit=104\n").is_empty(), "a list failure has no rows");
+        assert!(parse_nextest("error: creating test list failed\nexit=104\n", "keel-cli").is_empty(), "a list failure has no rows");
+        // D0481: a member's lib row (package alone, not the cli package) is the member row; the cli
+        // package's is `lib` only when it IS the cli package - the run from the root manifest passes "".
+        let members = "        PASS [   0.010s] (  1/2) keel-fs test_support::tests::repo_root_holds_the_workspace_manifest_and_the_engine\n\
+                       FAIL [   0.020s] (  2/2) keel-view a_card\n";
+        let member_rows = parse_nextest(members, "");
+        let rows: Vec<(&str, bool)> = member_rows.iter().map(|r| (r.binary.as_str(), r.passed)).collect();
+        assert_eq!(rows, vec![("lib:keel-fs", true), ("lib:keel-view", false)]);
         assert_eq!(millis_of("0.0"), 0);
         assert_eq!(millis_of("7"), 7000);
         assert_eq!(millis_of("1.5"), 1500);
@@ -1735,5 +2035,46 @@ mod tests {
             "a test keyed on a cwd-relative anchor breaks when its crate sits two levels down (sprints 714, 718); use keel_fs::test_support::repo_root() instead:\n{}",
             offenders.join("\n")
         );
+    }
+
+    /// D0481 (sprint 741) converted eighteen integration tests from `CARGO_MANIFEST_DIR` to
+    /// `keel_fs::test_support`, so each is a RECORDER keyed on what it read. A test that reaches the
+    /// tree past the helpers again (`UNRECORDED_REACH`) silently falls back to the tree key - green,
+    /// but paying the whole-tree re-run D0481 removed. This is the control (D0047): no `keel-cli/tests`
+    /// binary carries an unrecorded reach. Negative: a synthetic source with each idiom is named,
+    /// a comment is not. Positive: the population is non-empty and every recorder is one.
+    #[test]
+    fn no_integration_test_reaches_the_tree_past_the_recording_helpers() {
+        let synthetic = "let a = env!(\"CARGO_MANIFEST_DIR\");\n// let b = env!(\"CARGO_MANIFEST_DIR\");\nlet c = std::env::current_dir();\nlet d = root.join(\"..\");\nCommand::new(bin).current_dir(&tmp);\n";
+        let found = unrecorded_reaches(synthetic);
+        assert_eq!(found.iter().map(|(l, _)| *l).collect::<Vec<_>>(), vec![1, 3, 4], "each idiom is named once, the comment and the child's cwd are not: {found:?}");
+
+        let root = keel_fs::test_support::repo_root();
+        let files: Vec<std::path::PathBuf> = test_bearing_sources(&root).into_iter().filter(|(_, always_test)| *always_test).map(|(p, _)| p).collect();
+        assert!(files.len() > 40, "keel-cli/tests is the population, asserted non-empty: {}", files.len());
+        let mut offenders = Vec::new();
+        let mut recorders = 0usize;
+        for f in &files {
+            let src = std::fs::read_to_string(f).expect("a test is readable");
+            recorders += usize::from(src.contains(super::RECORDING_MARK));
+            for (line, idiom) in unrecorded_reaches(&src) {
+                offenders.push(format!("{}:{line} {idiom}", f.strip_prefix(&root).unwrap_or(f).display()));
+            }
+        }
+        assert!(recorders >= 18, "the sprint-741 recorders are in the population: {recorders}");
+        assert!(
+            offenders.is_empty(),
+            "an integration test reaching this repository past keel_fs::test_support is keyed on the whole tree (D0481); read through repo_root()/repo_path(rel):\n{}",
+            offenders.join("\n")
+        );
+    }
+
+    /// The `(line, idiom)` pairs of `UNRECORDED_REACH` in one source, comment lines excluded.
+    fn unrecorded_reaches(src: &str) -> Vec<(usize, String)> {
+        src.lines()
+            .enumerate()
+            .filter(|(_, l)| !l.trim_start().starts_with("//"))
+            .filter_map(|(i, l)| super::UNRECORDED_REACH.iter().find(|m| l.contains(**m)).map(|m| (i + 1, (*m).to_string())))
+            .collect()
     }
 }

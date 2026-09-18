@@ -285,7 +285,7 @@ fn pre_push_refuses_a_main_push_that_is_not_a_fast_forward_of_the_trunk() {
     let out = Command::new("git").arg("init").arg("--bare").arg("-q").arg(&bare).output().expect("bare init");
     assert!(out.status.success());
 
-    let hook_src = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("workspace root").join(".githooks");
+    let hook_src = keel_fs::test_support::repo_path(".githooks");
     let clone = |name: &str| -> PathBuf {
         let dst = base.join(name);
         let out = Command::new("git").arg("clone").arg("-q").arg(&bare).arg(&dst).output().expect("clone");

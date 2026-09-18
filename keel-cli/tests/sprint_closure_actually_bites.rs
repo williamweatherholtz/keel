@@ -99,7 +99,7 @@ fn stamping_the_task_clears_the_violation() {
 
 #[test]
 fn this_repository_is_clean_under_the_new_guard() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("repo root").to_path_buf();
+    let root = keel_fs::test_support::repo_root();
     let report = keel_cli::guards::sprint_closure(&root);
     assert!(
         report.violations.is_empty(),
