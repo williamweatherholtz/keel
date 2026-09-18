@@ -5581,6 +5581,12 @@ for _p14, _n14 in _DOCS14.items():
     _doc14_before[_p14] = ((_out14 or "").splitlines() + [""] * _n14)[_n14 - 1] if _ok14 else None
 _mig14 = (read(os.path.join(REPO, "members", "keel-process", "src", "migrate.rs")) or "").splitlines()
 _mig14_804 = _mig14[803] if len(_mig14) >= 804 else None
+# the range the two docs cite TODAY (the fn moves as the file grows - D0519 pushed it from 804 to 883): both docs must
+# cite the same members/ path and range, and the range's first line must name the fn the citation is about
+_cited14 = {p: ((lambda m: m.groups() if m else (None, None))(re.search(r"members/keel-process/src/migrate\.rs:(\d+)-(\d+)", l or ""))) for p, l in _doc14_today.items()}
+_cited14_ranges = {tuple(int(x) for x in r) for r in _cited14.values() if r and r[0]}
+_cited14_start = min(_cited14_ranges)[0] if len(_cited14_ranges) == 1 else None
+_mig14_cited = _mig14[_cited14_start - 1] if _cited14_start and len(_mig14) >= _cited14_start else None
 # live: the guard over the working tree, the count from keel version, and a scaffolded project - the shape that
 # reddened 23 touched tests on the first ladder (a root with no Cargo.toml has no corpus and scans nothing)
 _rc14g, _out14g = run_rc([KEEL, "gate", "guard", "source-reference", "--no-receipt", "."], timeout=120)
@@ -5644,7 +5650,10 @@ fact("livingDocsCiteSourceThatResolves", {
         "constraintRow": bool(re.search(r"constraint def sourceReference;\s*// guard 76", _gc14)),
         "controlMapRow": 'title = "guard: source-reference"' in _cm14,
         "docLinesToday": _doc14_today,
-        "docLinesRepointed": {p: "members/keel-process/src/migrate.rs:804-807" in (_doc14_today.get(p) or "") for p in _DOCS14},
+        "docLinesRepointed": {p: bool(_cited14.get(p) and _cited14[p][0]) for p in _DOCS14},
+        "docLinesCiteOneRange": _cited14_start is not None,
+        "citedRange": "-".join(str(x) for x in min(_cited14_ranges)) if _cited14_start else None,
+        "citedLineNamesTheFn": bool(_mig14_cited) and _mig14_cited.startswith("pub fn check_preconditions"),
         "docLinesBefore": _doc14_before,
         "docLinesWereStale": {p: "migrate.rs:664-666" in (_doc14_before.get(p) or "") for p in _DOCS14},
         "migrateLine804": _mig14_804, "migrateLine804NamesTheFn": bool(_mig14_804) and _mig14_804.startswith("pub fn check_preconditions"),
@@ -5691,7 +5700,7 @@ fact("livingDocsCiteSourceThatResolves", {
      "`GUARD_NAMES: [&str; N]` and its quoted members (sourceReferenceIsLast = the array's final member); members/keel-guards/src/surface.rs searched for the FAMILY arm, the fn "
      "signature, the `Cargo.toml` early return, five helper signatures and five test fns; the guards.md row beginning `| \\`source-reference\\` |`, the guard-constraints "
      "`constraint def sourceReference; // guard 76` line, the control-map title; docLinesToday = line 10 of the project-migration skill and line 15 of the process file as the "
-     "tree holds them, docLinesBefore = the same lines from `git show " + _LAND743_FROM + ":<path>`; migrateLine804 = members/keel-process/src/migrate.rs line 804 verbatim. live: `" + KEEL +
+     "tree holds them, docLinesBefore = the same lines from `git show " + _LAND743_FROM + ":<path>`; migrateLine804 = members/keel-process/src/migrate.rs line 804 verbatim (the line at the record's date); citedRange = the `members/keel-process/src/migrate.rs:N-M` both docs cite today (one range or null), citedLineNamesTheFn = line N of the file today starts `pub fn check_preconditions`. live: `" + KEEL +
      " gate guard source-reference --no-receipt .` summary line; `" + KEEL + " version`'s `guards:` line; scaffold = `" + KEEL + " init <tempdir>` then the same guard over that root "
      "(hasManifest = whether the scaffold has a Cargo.toml), the directory removed after; touchedReceipt / ladderReceipt as section 32 reads .keel/metrics/*.toml. landed = `git diff "
      "--name-status -M " + _LAND743_FROM + " " + _LAND743_TO + "` first letters counted and `--shortstat` over the range. issues 591 and 603 as section 34; sprint743 from its delivery "
@@ -6077,6 +6086,89 @@ fact("groundStepBindsToACheckThatReadsThePage", {
      ".engine/rules - `brief-page-quality`; scripts/exec_brief/build_*.py counted, those importing check_templates and those calling assert_fits. live: "
      "`" + KEEL + " gate guard step-check-resolves --no-receipt .` last line; `" + KEEL + " show hardening .` rows and the one naming dsGround. intake: st161 and "
      "us117 as section 50. issue606 as section 34; the charter line; resolver facts as section 48.")
+
+# ================================================================ 52. D0519 - a project-migration writes the evidence its own gate reads (issue609)
+# Recorded by claudeOpus5 in a parallel session and landed at 0c131b73 under the #ProspectiveChange marker; the page reads
+# the landed source, not the commit message. The record names no OPTION so it is a held acceptance, not a fork.
+_d0519 = _dec_file("0519-")
+_f519 = _decision_facts(_d0519, "d0519")
+_mig19 = read(os.path.join(REPO, "members", "keel-process", "src", "migrate.rs")) or ""
+_emb19 = read(os.path.join(REPO, "members", "keel-schema", "src", "embedded.rs")) or ""
+_ident19 = read(os.path.join(REPO, "members", "keel-guards", "src", "identity.rs")) or ""
+_iss19 = read(os.path.join(REPO, ".tracking", "issues-claudeOpus5.sysml")) or ""
+def _line19(text, needle):
+    for _n, _l in enumerate(text.splitlines(), 1):
+        if needle in _l:
+            return _n
+    return None
+def _rollback_paths19():
+    _m = re.search(r'run\(&\["checkout", sha, "--", ([^\]]*)\]\)', _mig19)
+    return sorted(re.findall(r'"([^"]+)"', _m.group(1))) if _m else []
+def _porcelain_paths19():
+    _m = re.search(r'"status", "--porcelain", "-uall", "--", ([^\]]*)\]', _mig19)
+    return sorted(re.findall(r'"([^"]+)"', _m.group(1))) if _m else []
+_dev19 = re.search(r"pub fn is_engine_dev_only\(rel: &Path\) -> bool \{(.*?)\n\}", _emb19, re.S)
+_i609 = re.search(r"part issue609 : Issue\s*\{(.*?)\n\s*\}", _iss19, re.S)
+_i609b = _i609.group(1) if _i609 else ""
+_ok19, _own19 = run([KEEL, "gate", "guard", "ownership", "--no-receipt", "."], timeout=300)
+_ol19 = _last00(_own19)
+_om19 = re.search(r"(PASS|FAIL|WARN)\b.*?(\d+)\s+scanned.*?(\d+)\s+warning.*?(\d+)\s+violation", _ol19)
+_okl19, _landed19 = run(["git", "log", "--format=%h", "-1", "--", "members/keel-process/src/migrate.rs"])
+_landed19 = (_landed19 or "").strip()[:8] if _okl19 else None
+_okci19, _ci19 = run(["gh", "run", "list", "--limit", "8", "--json", "headSha,conclusion,status"], timeout=60)
+_cij19 = as_json(_ci19) if _okci19 else None
+_ci_rows19 = {r["headSha"][:8]: r.get("conclusion") for r in (_cij19 or []) if isinstance(r, dict) and r.get("headSha")}
+fact("projectMigrationWritesTheEvidenceItsOwnGateReads", {
+    **_f519,
+    "fork": bool(re.search(r"\bOPTION [A-Z]\b", _f519["decision"] or "")),
+    "namesIssue609": "issue609" in (_f519["consequences"] or ""),
+    "namesTheRecordPath": ".engine/tools/migrations/<date>-engine-resync-<build>.md" in (_f519["decision"] or ""),
+    "namesTheExclusion": "is_engine_dev_only" in (_f519["context"] or ""),
+    "namesTheSurfaceDrift": "claude-surface-drift" in (_f519["context"] or ""),
+    "namesFiveOwners": "five distinct createdBy values" in (_f519["context"] or ""),
+    "namesSurfaceInTheRun": "regenerates the `.claude/` surface as part of the run" in (_f519["decision"] or ""),
+    "namesClaudeInRollback": "`.claude/` joins `.engine/` and `.tracking/` in the cleanliness precondition and in the rollback" in (_f519["decision"] or ""),
+    "namesGeneratedNotShipped": "generated rather than shipped" in (_f519["rationale"] or ""),
+    "namesNoopWritesNone": "a no-op resync writes none" in (_f519["consequences"] or ""),
+    "namesTheTwoResiduals": "issue314" in (_f519["consequences"] or "") and "CLAUDE.md is its own" in (_f519["consequences"] or ""),
+    "today": {
+        "stepResyncRecordLine": _line19(_mig19, "fn step_resync_record("),
+        "recordPathLine": _line19(_mig19, '.join("migrations").join(format!("{date}-engine-resync-{build}.md"))'),
+        "noopReturnsEmpty": "if resync.files.is_empty() {" in _mig19 and "nothing crossed an ownership boundary" in _mig19,
+        "porcelainPaths": _porcelain_paths19(),
+        "porcelainLine": _line19(_mig19, '"status", "--porcelain", "-uall", "--"'),
+        "rollbackPaths": _rollback_paths19(),
+        "rollbackLine": _line19(_mig19, 'run(&["checkout", sha, "--"'),
+        "resyncSurfaceLine": _line19(_mig19, "fn resync_surface("),
+        "syncClaudeCallLine": _line19(_mig19, "keel_write::claude_surface::sync_claude(root, false)"),
+        "surfaceFailureRollsBack": "Some(rollback_after_failure(root, pre_sha, written))" in _mig19,
+        "unitTests": [n for n in ("a_resync_that_wrote_files_records_the_transform_its_own_gate_reads", "a_noop_resync_records_nothing") if f"fn {n}()" in _mig19],
+        "devOnlyExcludesTools": bool(_dev19) and 's == "tools"' in _dev19.group(1),
+        "devOnlyLine": _line19(_emb19, "pub fn is_engine_dev_only("),
+        "ownershipReadsMigrationsDir": '.starts_with(".engine/tools/migrations/")' in _ident19,
+        "ownershipExemptionLine": _line19(_ident19, '.starts_with(".engine/tools/migrations/")'),
+        "landedCommit": _landed19,
+        "landedCi": _ci_rows19.get(_landed19) if _landed19 else None,
+        "headCi": _ci_rows19.get(TREE[:8]),
+    },
+    "live": {"ownership": {"verdict": _om19.group(1) if _om19 else None, "scanned": int(_om19.group(2)) if _om19 else None,
+                           "warnings": int(_om19.group(3)) if _om19 else None, "violations": int(_om19.group(4)) if _om19 else None,
+                           "line": _ol19[:200], "exit0": _ok19}},
+    "issue609": {"exists": bool(_i609), "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _i609b) or [None, None])[1],
+                 "createdBy": (re.search(r'createdBy\s*=\s*"([^"]+)"', _i609b) or [None, None])[1],
+                 "title": (re.search(r'title\s*=\s*"([^"]+)"', _i609b) or [None, None])[1],
+                 "resolver": (re.search(r"#Resolves dependency from (\w+) to issue609;", _iss19) or [None, None])[1],
+                 "noIssue608Part": "part issue608 : Issue" not in _iss19,
+                 "fable608Exists": "part issue608 : Issue" in _iss},
+}, "the held acceptance, what the Decision names, the landed source as it stands, the ownership guard live, and issue609",
+     _DEC_HOW + " fork = any `OPTION X` token in the decision field (none: a held acceptance). Names by literal search in the fields. today: "
+     "members/keel-process/src/migrate.rs - the line of `fn step_resync_record(`, the line joining `migrations` into the record path, the empty-files "
+     "early return with its comment, the `--porcelain` path list and the `checkout sha --` path list read as sorted string lists, `fn resync_surface(` and "
+     "the `sync_claude(root, false)` call, the rollback on a surface failure, the two unit test names; members/keel-schema/src/embedded.rs - "
+     "`is_engine_dev_only` body still excludes a `tools` component; members/keel-guards/src/identity.rs - the `.engine/tools/migrations/` prefix the "
+     "ownership guard reads; `git log -1 -- migrate.rs` for the commit that last touched it and `gh run list --json headSha,conclusion` for its "
+     "CI conclusion and HEAD's. live: `" + KEEL + " gate guard ownership --no-receipt .` last line. issue609: regex over .tracking/issues-claudeOpus5.sysml "
+     "(the other actor's file; `noIssue608Part` = no part by the colliding number remains there after e7084f9f's renumber); fable608Exists reads my own file.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
