@@ -27,4 +27,8 @@ package Decision0516 {
     // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
     verification d0516Accept : Test { :>> id = "cbd1a8dc-fa15-4570-80a8-d59f39554fdc"; :>> method = VerificationMethod::confirmation; :>> procedureText = "recorded from chat - their words, verbatim: “Accept all decisions as recommended. Proceed to release and fix downstream” WARN: read-back - the quoted words do not name d0516 (D0201 B); recorded as given (D0423)."; }
     part d0516AcceptR1 : TestResult { :>> id = "97dbc131-fbdb-4bb1-8bec-b9fcc8bff4e3"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "4d00c1bc"; :>> judgedAt = "2026-09-18"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
+
+    // grounded (D0098 rootedness): this Decision serves the Need that a pass is never AI testimony alone -
+    // st065, the human's words behind the D0425 ceremony line (verifier, recorder, ladder, rendered receipt)
+    #DerivedFrom dependency from d0516 to nVerificationByAuthorityAndMethod;
 }

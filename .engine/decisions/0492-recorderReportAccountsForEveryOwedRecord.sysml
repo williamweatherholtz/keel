@@ -24,4 +24,8 @@ package Decision0492 {
     // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
     verification d0492Accept : Test { :>> id = "e4aca008-4c9b-4d5c-93d1-36ca690b5f01"; :>> method = VerificationMethod::confirmation; :>> procedureText = "recorded from chat - their words, verbatim: “Accept the owed-count check on the recorder's report. [x] Accept: check_report.py takes --owed N and refuses a recorder report whose WROTE plus REFUSED lines number fewer than N, and with or without --owed refuses a report with zero WROTE lines and no REFUSED line; the recorder brief passes the count (recommended)”"; }
     part d0492AcceptR1 : TestResult { :>> id = "0e495742-91f6-40ee-84b2-bff7ce00d4eb"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "444333d"; :>> judgedAt = "2026-09-15"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
+
+    // grounded (D0098 rootedness): this Decision serves the Need that a pass is never AI testimony alone -
+    // st065, the human's words behind the D0425 ceremony line (verifier, recorder, ladder, rendered receipt)
+    #DerivedFrom dependency from d0492 to nVerificationByAuthorityAndMethod;
 }

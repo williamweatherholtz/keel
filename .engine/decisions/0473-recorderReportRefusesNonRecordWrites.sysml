@@ -24,4 +24,8 @@ package Decision0473 {
     // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
     verification d0473Accept : Test { :>> id = "32fbc5ea-247a-4875-a8ac-28a0966216ce"; :>> method = VerificationMethod::confirmation; :>> procedureText = "Said in chat 2026-09-14 over the twenty-eighth publish of the decision brief, which carried fifteen held asks; one instruction covers the fourteen non-forks, d0473 among them. The fork d0466 is not covered - it needs an option letter and stays held. - their words, verbatim: “Accept all proposals. Proceed to design with needs, etc.” WARN: read-back - the quoted words do not name d0473 (D0201 B); recorded as given (D0423)."; }
     part d0473AcceptR1 : TestResult { :>> id = "f05c5e56-7d65-4ac1-adf9-11b7f81c459d"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "d110d0a"; :>> judgedAt = "2026-09-14"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
+
+    // grounded (D0098 rootedness): this Decision serves the Need that a pass is never AI testimony alone -
+    // st065, the human's words behind the D0425 ceremony line (verifier, recorder, ladder, rendered receipt)
+    #DerivedFrom dependency from d0473 to nVerificationByAuthorityAndMethod;
 }

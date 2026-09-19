@@ -11,6 +11,7 @@ package EngineSelfAnalysisNeeds {
     private import EngineElement::*;
     private import EngineNeeds::*;
     private import EngineRelationships::*;
+    private import EngineVerification::*;
 
     part nKeelIsADefinedSystem : Need {
         :>> id = "f6a7d8e9-1b2c-4d3e-8f90-a1b2c3d4e5f6";
@@ -39,4 +40,20 @@ package EngineSelfAnalysisNeeds {
     #DerivedFrom dependency from nKeelIsADefinedSystem to us069;
     #DerivedFrom dependency from nControlGapsFoundByAnalysis to us071;
     #DerivedFrom dependency from nVerificationByAuthorityAndMethod to us070;
+
+    // ACCEPTANCE (Business gate). A Need counts as accepted when a human's confirmation reaches it
+    // through a #Verify-linked Test. This Test is the claim; it carries NO result until the human
+    // gives their word on it (D0051, D0192) - an AI actor cannot supply human acceptance. Recorded
+    // seventeen days after the Needs, because nothing computed showed them waiting (issue661).
+    verification engineSelfAnalysisNeedsAccept : Test {
+        :>> id = "603b45be-b429-4ee6-b580-785f62ceb710";
+        :>> title = "The three self-analysis Needs accepted as the stakeholder contract behind the D0425 ceremony line (Business gate)";
+        :>> createdAt = "2026-09-19"; :>> createdBy = "claudeFable5";
+        :>> method = VerificationMethod::confirmation;
+        :>> procedureText = "The human confirms that nKeelIsADefinedSystem, nControlGapsFoundByAnalysis and nVerificationByAuthorityAndMethod say what they meant in st065 and st066 (2026-09-02), as translated through us069, us070 and us071 - in particular that a pass is one of three things by who judged and how, and never AI testimony alone. Accepting binds: the ten ceremony Decisions (D0425, D0438, D0473, D0476, D0492, D0500, D0501, D0502, D0516, D0533) become need-rooted work rather than my own judgment, and SystemRequirements may be derived from the verification Need. Declining or narrowing: the Need is edited to their words and this claim is re-put. Recorded by keel accept or a confirmation result judgedBy the Person, never by an AI actor.";
+    }
+
+    #Verify dependency from engineSelfAnalysisNeedsAccept to nKeelIsADefinedSystem;
+    #Verify dependency from engineSelfAnalysisNeedsAccept to nControlGapsFoundByAnalysis;
+    #Verify dependency from engineSelfAnalysisNeedsAccept to nVerificationByAuthorityAndMethod;
 }

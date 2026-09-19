@@ -2623,4 +2623,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcTouchedReceiptNamesItsWriter to issue660;
+
+    part issue661 : Issue {
+        :>> id = "33c39caa-e47f-4725-ac4a-50f5c8454eda";
+        :>> title = "Need acceptance is invisible: authority-queue has no kind for a Need awaiting the human's word, and three Needs waited seventeen days";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The three EngineSelfAnalysisNeeds were recorded 2026-09-02 from the human's own words (st065, st066) and had no acceptance Test and no human result on 2026-09-19 - seventeen days - while ten Decisions (D0425 through D0533) and eleven sprints were recorded against the verification Need they translate. The Business workflow's ordering rule says no SystemRequirement or architecture Decision is recorded until the Needs it serves are accepted, and nothing computed can show that rule broken: keel show authority-queue lists decisionAcceptance, findingDisposition and contentionAdjudication rows and has no kind for a Need awaiting the human's word, so the wait was invisible to the human and to the decision-surfacing brief. Need acceptance is a per-file convention (a set-level confirmation Test judgedBy a Person) bound to its Needs by #Verify edges only sometimes, so even a view that wanted to compute it could not.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcAuthorityQueueListsNeedsAwaitingAcceptance to issue661;
 }

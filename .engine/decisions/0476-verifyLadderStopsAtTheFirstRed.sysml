@@ -24,4 +24,8 @@ package Decision0476 {
     // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
     verification d0476Accept : Test { :>> id = "827d937e-42e1-4336-938d-a372f56f24c2"; :>> method = VerificationMethod::confirmation; :>> procedureText = "chat acceptance of the three panel proposals labelled A (D0474), B (D0475), C (D0476) in the panel report of 2026-09-13; their words verbatim: ABC, continue! - their words, verbatim: “ABC, continue!” WARN: read-back - the quoted words do not name d0476 (D0201 B); recorded as given (D0423)."; }
     part d0476AcceptR1 : TestResult { :>> id = "324e26e6-52a6-4854-a5bb-fffa115caa7e"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "8b731e6"; :>> judgedAt = "2026-09-14"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
+
+    // grounded (D0098 rootedness): this Decision serves the Need that a pass is never AI testimony alone -
+    // st065, the human's words behind the D0425 ceremony line (verifier, recorder, ladder, rendered receipt)
+    #DerivedFrom dependency from d0476 to nVerificationByAuthorityAndMethod;
 }
