@@ -1569,6 +1569,29 @@ mod tests {
         assert!(v.is_empty() && w.is_empty(), "distinct identities -> clean: {v:?} {w:?}");
     }
 
+    /// issue624 / D0524, the D0388 pair. KNOWN-POSITIVE: two per-actor issue files - two PACKAGES -
+    /// each declaring `part issue620 : Issue` with distinct ids is a violation naming both locations
+    /// (class 2 is per-package and stays silent; this is the case it missed on 2026-09-18).
+    /// KNOWN-NEGATIVE: the same two files at `issue620` and `issue621` are clean, and a disposition
+    /// `issue620Disp1` declared beside its Issue is not an allocated name.
+    #[test]
+    fn an_allocated_name_is_one_namespace_across_packages() {
+        let mine = |name: &str, id: &str| {
+            ("issues-a.sysml".to_string(), format!("package IssuesA {{\n    part {name} : Issue {{ :>> id = \"{id}\"; }}\n    part {name}Disp1 : Disposition {{ :>> id = \"7{}\"; }}\n}}", &id[1..]))
+        };
+        let theirs = |name: &str| {
+            ("issues-b.sysml".to_string(), format!("package IssuesB {{\n    part {name} : Issue {{ :>> id = \"66666666-6666-4666-9666-666666666666\"; }}\n}}"))
+        };
+        let (_, collide) = duplicate_scan(&[mine("issue620", "55555555-5555-4555-9555-555555555555"), theirs("issue620")]);
+        assert_eq!(collide.len(), 1, "two packages minting issue620 is ONE violation: {collide:?}");
+        assert!(collide[0].contains("allocated name `issue620`") && collide[0].contains("issues-a.sysml:2") && collide[0].contains("issues-b.sysml:2"), "{collide:?}");
+
+        let (w, v) = duplicate_scan(&[mine("issue620", "55555555-5555-4555-9555-555555555555"), theirs("issue621")]);
+        assert!(v.is_empty() && w.is_empty(), "distinct numbers across packages -> clean: {v:?} {w:?}");
+        assert!(is_allocated_name("issue620") && is_allocated_name("st167") && is_allocated_name("us102"));
+        assert!(!is_allocated_name("issue620Disp1") && !is_allocated_name("issue") && !is_allocated_name("story12") && !is_allocated_name("status"));
+    }
+
     #[test]
     fn a_duplicate_id_now_fails_with_no_exemption_list() {
         // issue080 RESOLVED. The 18 bootstrap duplicates across 26 records were re-identified by a

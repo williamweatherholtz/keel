@@ -81,7 +81,7 @@ The pin, the wrapper, and the library — the portability release (D0250/D0251/D
 The downloaded 0.5.0, run over a tree `keel init` 0.4.1 had scaffolded, still rolled itself back - on
 the adopter's own words. This release makes that run land (sprint 746; GH#86-90 answered).
 
-### Downstream adoption (D0523; issue615-617, issue620)
+### Downstream adoption (D0523; issue615-617, issue622)
 - **A verb fold travels with `keel migrate`** (D0523). The new `verb-respell` step rewrites every
   retired `keel <verb>` reference in the living docs the resync does not write - the project's
   `CLAUDE.md` as the 0.4.1 `keel init` template wrote it, the comments of its project-owned contracts,
@@ -99,6 +99,10 @@ the adopter's own words. This release makes that run land (sprint 746; GH#86-90 
   ledger line (issue616).
 - `keel onboard` no longer tells a first-time adopter to restore an `activation.toml` from a history
   that has none (issue617, GH#89).
+- Guard `duplicate-identity` reads an allocated name - `issueNNN`, `stNNN`, `usNNN` - as one namespace
+  across every package (D0524, issue624): two clones that each minted `issue620` into their own
+  per-actor file merged green and the lens showed one Issue with both resolvers. `keel land`'s
+  merged-tree gate now refuses that before the push.
 
 ## v0.5.0 — 2026-09-18
 

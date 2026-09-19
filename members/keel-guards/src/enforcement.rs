@@ -111,7 +111,7 @@ pub fn is_locked_path(p: &str) -> bool {
 }
 
 /// Is this locked path's text under `read` exactly what the engine embedded in this binary WRITES -
-/// an engine RESYNC (D0441 / issue475) or its verb RESPELL (D0523 / issue620) - not a
+/// an engine RESYNC (D0441 / issue475) or its verb RESPELL (D0523 / issue622) - not a
 /// self-modification?
 ///
 /// `keel migrate` writes `.engine/` from the engine embedded in the binary (D0275), and skills,

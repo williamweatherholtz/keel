@@ -666,7 +666,7 @@ fn step_engine_resync(root: &Path, engine: &Dir) -> StepPlan {
 }
 
 /// Step 1c — the project's OWN living docs are respelled to the verbs this binary dispatches
-/// (D0523, issue620).
+/// (D0523, issue622).
 ///
 /// Five verb folds each shipped a committed transform over THIS repository's call sites and a
 /// stricter `cli-reference` guard; nothing carried the fold into a downstream project's own text. So
@@ -1831,7 +1831,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// D0388 pair for issue620 (D0523), chosen before the tree was read. The downloaded 0.5.0 rolled
+    /// D0388 pair for issue622 (D0523), chosen before the tree was read. The downloaded 0.5.0 rolled
     /// itself back on sixteen `cli-reference` violations in files the run never writes.
     ///
     /// KNOWN-POSITIVE: a fixture CLAUDE.md naming `keel orient`, `keel add-task` and `keel report`,

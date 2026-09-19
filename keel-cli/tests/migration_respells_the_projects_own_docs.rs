@@ -1,4 +1,4 @@
-//! A verb fold travels with migrate (D0523, issue620, GH#86-90).
+//! A verb fold travels with migrate (D0523, issue622, GH#86-90).
 //!
 //! The downloaded 0.5.0, run over a tree `keel init` 0.4.1 had scaffolded, applied its resync and
 //! then failed its own `cli-reference` guard on sixteen references in files the run never writes -

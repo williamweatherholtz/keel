@@ -1035,7 +1035,7 @@ mod cli_reference_tests {
         assert!(d.ends_with("usage dump"), "{d}");
     }
 
-    /// D0388 pair for D0523/issue620, chosen before the tree was read. KNOWN-POSITIVE: a CLAUDE.md as
+    /// D0388 pair for D0523/issue622, chosen before the tree was read. KNOWN-POSITIVE: a CLAUDE.md as
     /// `keel init` 0.4.1 scaffolded it - `keel orient` (a lens), `keel validate` (a same-named
     /// sub-verb), `keel add-task` and `keel report` (renamed facts, from the shipped table) - in code
     /// spans and a command-shaped prose phrase, plus a contract comment naming `keel guard

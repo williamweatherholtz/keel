@@ -70,7 +70,8 @@ fn record_issue_locked(root: &Path, n: &NewIssue) -> Result<(String, String), Wr
     // issue210: the number allocates over ALL of .tracking (per-actor files included), the record
     // lands in the AUTHOR's file. A `part issueNNNDispM` declaration also drives the max, which can
     // only skip numbers ahead, never collide - and the duplicate-identity guard backstops collisions
-    // from offline clones exactly as before.
+    // from offline clones: its class 5 reads an allocated name across every package, because the
+    // per-actor files are separate packages and class 2 alone landed one such merge green (issue624).
     let mut all_text = String::new();
     for f in keel_model::corpus::collect_sysml(&root.join(".tracking")) {
         if let Ok(s) = std::fs::read_to_string(&f) {

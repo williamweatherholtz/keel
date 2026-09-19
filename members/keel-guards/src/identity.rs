@@ -304,11 +304,13 @@ pub(crate) fn declared_name(line: &str) -> Option<String> {
 /// applies to two `sprintNNN_*` files (both counted by `in_progress_sprints`) and to hand-appended
 /// `issueNNN` names. Corruption therefore lands GREEN and is undetectable afterwards.
 ///
-/// Four classes are detected:
+/// Five classes are detected:
 /// 1. repeated element `id` — identity itself (CLAUDE.md §2.3), also the backstop for a UUID collision
 /// 2. repeated declared item name within one package
 /// 3. repeated `package` name across files — the silently-merged case
 /// 4. repeated allocated sequence number (decision file `NNNN-`, sprint file `sprintNNN_`)
+/// 5. repeated allocated NAME across packages (`issueNNN`, `stNNN`, `usNNN`; issue624 / D0524) — the
+///    per-actor files are separate packages, so class 2 never saw two clones both minting `issue620`
 ///
 /// Per D0047 a recurrable defect class gets a permanent automated control, not vigilance — and this
 /// one bit the engine's own authors during D0129 (two workstreams both allocated `issue071`; nothing
@@ -344,6 +346,13 @@ pub(crate) fn duplicate_scan(files: &[(String, String)]) -> (Vec<String>, Vec<St
     let mut ids: HashMap<String, String> = HashMap::new();
     let mut pkgs: HashMap<String, String> = HashMap::new();
     let mut items: HashMap<(String, String), String> = HashMap::new();
+    // Class 5 (issue624 / D0524): a name the write API ALLOCATES by scanning the whole tree -
+    // `issueNNN`, `stNNN`, `usNNN` - is one namespace across every package, because the per-actor
+    // files (D0108) are separate packages and every lens resolves the bare name. Two clones each
+    // minting `issue620` collide in different files with no git conflict; class 2 is per-package and
+    // never saw it, while `open-issues` showed one Issue with both resolvers and hid the other's open
+    // state behind the first's pass.
+    let mut allocated: HashMap<String, String> = HashMap::new();
 
     for (rel, text) in files {
         let mut cur_pkg = String::new();
@@ -389,11 +398,28 @@ pub(crate) fn duplicate_scan(files: &[(String, String)]) -> (Vec<String>, Vec<St
                         "{loc}: duplicate declared name `{name}` in package `{cur_pkg}` (also at {prev}) — concurrent allocation produces no git conflict, so nothing else would warn"
                     ));
                 }
+                if is_allocated_name(&name) {
+                    if let Some(prev) = allocated.insert(name.clone(), loc.clone()) {
+                        violations.push(format!(
+                            "{loc}: allocated name `{name}` is also declared at {prev} — an issue/st/us number is minted over the WHOLE tree and every lens resolves the bare name, so two packages holding it are one item to every reader (issue624); renumber the later one, never repoint an edge"
+                        ));
+                    }
+                }
             }
         }
     }
 
     (warnings, violations)
+}
+
+/// A name the write API mints by a whole-tree number scan: `issueNNN` (`keel-issues/issue_write.rs`),
+/// `stNNN` and `usNNN` (`keel-issues/intake_write.rs`) - the prefix and digits only, so `issue620Disp1`
+/// (a disposition declared beside its Issue) is not one.
+pub(crate) fn is_allocated_name(name: &str) -> bool {
+    ["issue", "st", "us"].iter().any(|p| {
+        name.strip_prefix(p)
+            .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+    })
 }
 
 /// Detect two files in `dir` that claim the same allocated sequence number.

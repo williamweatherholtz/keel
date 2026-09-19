@@ -2206,7 +2206,7 @@ package IssuesClaudeFable5 {
     }
     #Resolves dependency from dcReleaseGuardFixturesPinTheBinaryVersion to issue619;
 
-    part issue620 : Issue {
+    part issue622 : Issue {
         :>> id = "59b5dcb4-5122-4938-a954-adc1363be6cf";
         :>> title = "A 0.4.1 adopter's own CLAUDE.md and project-owned contracts keep the folded verb spellings, so the 0.5.0 migrate fails cli-reference inside the run and rolls itself back";
         :>> createdAt = "2026-09-18";
@@ -2215,9 +2215,9 @@ package IssuesClaudeFable5 {
         :>> discoveredInField = false;
         :>> severity = Severity::High;
     }
-    #Resolves dependency from dcVerbFoldsTravelWithMigrate to issue620;
+    #Resolves dependency from dcVerbFoldsTravelWithMigrate to issue622;
 
-    part issue621 : Issue {
+    part issue623 : Issue {
         :>> id = "2be93068-ac8c-4fee-9ea6-6f9eaf569851";
         :>> title = "A single-valued flag repeated on the command line keeps one value and drops the rest silently (--derived-from twice lost an edge)";
         :>> createdAt = "2026-09-18";
@@ -2226,5 +2226,16 @@ package IssuesClaudeFable5 {
         :>> discoveredInField = false;
         :>> severity = Severity::Low;
     }
-    #Resolves dependency from dcARepeatedSingleFlagIsRefused to issue621;
+    #Resolves dependency from dcARepeatedSingleFlagIsRefused to issue623;
+
+    part issue624 : Issue {
+        :>> id = "ad296464-0156-453b-8fbd-e30eeee514a4";
+        :>> title = "Two clones minted the same issue number into different per-actor files and the guard set landed the merge green; the lens then showed one Issue with both resolvers and hid the other's open state";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "On 2026-09-18 two sessions on two machines each ran `keel record issue` twice against a tree at 4a0abc85: claudeFable5 minted issue620 and issue621 into issues-claudeFable5.sysml (1809e70f), claudeOpus5 minted issue620 and issue621 into issues-claudeOpus5.sysml (1228a756). Neither push conflicted in git - different files - and the merge (5170199e) passed `keel gate validate` (863 clean) and every enforced guard, duplicate-identity PASS 1497 scanned included. Read against the tree: the number allocates over ALL of .tracking (members/keel-issues/src/issue_write.rs:69-73) and its comment says 'the duplicate-identity guard backstops collisions from offline clones exactly as before', but the guard's class 2 keys on (package, name) (members/keel-guards/src/identity.rs, `items`), the D0108 per-actor files are separate packages, and no class reads a bare name across packages. The lenses do: `keel show open-issues` at 5170199e listed one `issue621` whose resolvers were dcARepeatedSingleFlagIsRefused (claudeFable5's) AND dcConfirmationFlipChecksItsDelegation (claudeOpus5's), and listed no issue620 at all - claudeFable5's carried a passing DoD result, so claudeOpus5's open issue620 (session actor inherits silently) was computed resolved by another Issue's pass. A documented control that does not fire on the case it names, and the failure is silent: a stranger's open defect disappears from the frontier.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcAllocatedNameIsOneNamespaceAcrossPackages to issue624;
 }
