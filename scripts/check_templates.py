@@ -47,8 +47,10 @@ PLACEHOLDER_DATE = re.compile(r"YYYY-MM-DD")
 
 
 def markup_only(raw: str) -> str:
-    """CSS and JS legitimately mention the same selectors; contract checks read markup."""
-    return re.sub(r"<style>[\s\S]*?</style>|<script>[\s\S]*?</script>", "", raw)
+    """CSS and JS legitimately mention the same selectors; contract checks read markup. A script element with
+    attributes (a JSON data block, a typed module) is no more visible than a bare one (issue659: the brief's
+    carried verdict block was counted as 900 words of reader prose naming six record ids)."""
+    return re.sub(r"<style\b[^>]*>[\s\S]*?</style>|<script\b[^>]*>[\s\S]*?</script>", "", raw)
 
 
 def field_text(fragment: str) -> str:
@@ -242,6 +244,8 @@ AGGREGATE_RE = re.compile(
     r"(?:the\s+|every\s+|all\s+)?(?:remaining\s+|other\s+|more\s+)?"
     r"(?:\d+|two|three|four|five|six|seven|eight|nine|ten|\w+teen|twenty|thirty|forty|fifty)\s+"
     r"(?:more\s+)?\w+", re.I)
+# issue659: a localStorage draft key built from document.title - the same string on every brief.
+DRAFT_TITLE_KEY = re.compile(r"""['"]keel-brief:['"]\s*\+\s*document\.title""")
 # D0407: the ceiling is measured per tab (frame + one panel) once that Decision is accepted; summed until then.
 PER_TAB_DECISION = ROOT / ".engine" / "decisions" / "0407-briefCeilingIsMeasuredPerTab.sysml"
 
@@ -408,6 +412,13 @@ def check_brief(path: Path, ceiling: int | None = None, raw: str | None = None,
             fail("an external link does not open a new tab; sandboxed hosts block same-frame navigation")
     if re.search(r"REPLACE", raw) and "template" not in path.name:
         fail("instance still carries REPLACE marks")
+    # 7. the reader's draft (chosen courses, the note) is keyed on what THIS page asks, never on the title
+    # (issue659): every brief carries the same title, so a title-keyed draft restored the previous brief's
+    # note into the next one and the Record tap wrote it as the human's words on six verdicts.
+    if DRAFT_TITLE_KEY.search(raw):
+        fail("the draft store is keyed on document.title, which every brief shares - the previous brief's note "
+             "and choices restore into this one and Record writes them as the answer (issue659); key it on the "
+             "published set (the .page data-set attribute) and restore nothing when the page declares none")
     return bad
 
 def check_tree(root: Path) -> list[str]:
@@ -688,6 +699,12 @@ def self_test() -> int:
         ("two 300-word tabs pass the ceiling per tab", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", panels=2, panel_words=300), per_tab=True), []),
         ("the same page fails the ceiling summed", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", panels=2, panel_words=300), per_tab=False), ["reader prose: 6"]),
         ("a 460-word tab fails per tab, naming it", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", panels=2, panel_words=460), per_tab=True), ["tab 1: ", "tab 2: "]),
+        # issue659: the draft store keyed on the title is refused; keyed on the published set it passes
+        ("title-keyed draft store refused", check_brief(p, ceiling=None, raw=fx("The page waits.", "Accept.", extra="<script>var key='keel-brief:'+document.title;</script>")), ["draft store is keyed on document.title"]),
+        ("set-keyed draft store passes", check_brief(p, ceiling=None, raw=fx("The page waits.", "Accept.", extra="<script>var _pg=document.querySelector('.page[data-set]');var key=_pg?'keel-brief:'+_pg.getAttribute('data-set'):null;</script>")), []),
+        # issue659: a typed script block (the carried verdict JSON) is not reader prose - its ids and words do not count
+        ("a JSON data block is not reader prose", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", extra='<script type="application/json" id="keel-verdicts">[{"decision":"d0999","words":"' + " ".join(["word"] * 500) + ' five days"}]</script>'), per_tab=False), []),
+        ("the same words in a paragraph are refused", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", extra='<p>d0999 ' + " ".join(["word"] * 500) + ' five days</p>'), per_tab=False), ["record id(s) in reader-facing text", "implementation duration", "reader prose: 5"]),
     ]
     failed = 0
     for name, got, want in checks:

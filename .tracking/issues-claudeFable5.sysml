@@ -2601,4 +2601,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcResolverLookupCoversEveryDef to issue658;
+
+    part issue659 : Issue {
+        :>> id = "273bfdf7-202e-4925-ba1c-9eb51b8215f6";
+        :>> title = "The brief's draft store restores a note across briefs and Record stamps it onto the verdicts";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The decision brief's draft store restores a note across briefs and Record stamps it onto the verdicts. The page script keys the reader's draft (chosen radios and the note textarea) on 'keel-brief:'+document.title, and the title is identical on every brief, so the note the human wrote for the d0523/d0524 brief was restored into the six-held brief's note field and the first Record tap wrote it as the words on all six verdict records (seq 1-6, 2026-09-19T16:44:58Z, tree 5d2e799f). The human noticed on the copied digest: I think comment section is messed up. Found by reading the live artifact back (the keel-verdicts block) against the page source (var key='keel-brief:'+document.title, inherited from the previous page's tail by every builder since 2026-09-09). Consequence: the six captured words are not the human's words on these decisions and cannot be cited under D0289; the course choices stand. Same pass: the copied digest ends 131 open. repository. because the footer link text is flattened into the sentence.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcBriefDraftKeyIsThePublishedSet to issue659;
 }

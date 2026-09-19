@@ -13,8 +13,9 @@ one accepted Decision) surfaced, each a fork of its own: project-supplied critiq
 edges traversable by name, analysis suspicion along declared edges, a DesignInput item type. Six tabs, six asks (D0404); every
 count is a facts.py fact, never typed; each metric says what it does.
 
-Usage: python scripts/exec_brief/build_2026_09_19_six_held.py <facts.json> <previous.html> <out.html>
+Usage: python scripts/exec_brief/build_2026_09_19_six_held.py <facts.json> <previous.html> <out.html> [--carry VERDICTS.json]
 """
+import json
 import re
 import sys
 from html import escape
@@ -29,6 +30,14 @@ from fit_check import assert_fits              # noqa: E402  (D0402: a page whos
 facts_path, prev_path, out_path = sys.argv[1:4]
 if prev_path == out_path:
     sys.exit("refusing: the style source and the output are the same file - copy the previous page aside first")
+# --carry FILE: the live page's verdict records (read back from the artifact), carried into the republish
+# untouched. A fix to the page must never drop a verdict the human recorded on it (issue659).
+CARRY = "[]"
+if "--carry" in sys.argv:
+    _carried = json.load(open(sys.argv[sys.argv.index("--carry") + 1], encoding="utf-8"))
+    if not isinstance(_carried, list):
+        sys.exit("refusing: --carry must be the verdict block's list")
+    CARRY = json.dumps(_carried, ensure_ascii=False).replace("<", "\\u003c")
 J = require_complete(facts_path)
 if not (J.get("instrument") or {}).get("sources"):
     sys.exit("refusing: the facts carry no instrument hashes - they predate the issue560 control; re-run facts.py")
@@ -347,7 +356,7 @@ panel_bodies = {
 
 
 def frame(panels_html, tabs_html, title, sub):
-    return f"""<div class="page" data-tree="{TREE}">
+    return f"""<div class="page" data-tree="{TREE}" data-set="{','.join(QUEUE)}@{TREE}">
 <p class="sub" data-digest="project">keel &middot; williamweatherholtz/sysmlv2-ai-toolkit</p>
 <h1 data-digest="title">{title}</h1>
 <div class="topbar"><p class="sub" data-digest="subtitle">{sub}</p><button class="copy" data-copy type="button" aria-label="Copy this brief for AI">&#8681; Copy for AI</button></div>
@@ -359,9 +368,9 @@ def frame(panels_html, tabs_html, title, sub):
 {panels_html}
 <label class="note-row">Anything to add<textarea data-d="note" rows="2" placeholder="optional"></textarea></label>
 <div class="capture" id="kv"><div class="capture-row"><button class="copy" id="kv-record" type="button" disabled>&#10003; Record on this page</button><button class="copy" id="kv-bind" type="button" disabled>I am wweatherholtz</button><span id="kv-who" class="kv-who"></span></div><p id="kv-status" class="kv-status" role="status">Checking write access&hellip;</p><ol id="kv-list" class="kv-list"></ol></div>
-<script type="application/json" id="keel-verdicts">[]</script>
+<script type="application/json" id="keel-verdicts">{CARRY}</script>
 <div class="copy-bottom"><button class="copy" data-copy type="button">&#8681; Copy for AI</button></div>
-<footer data-digest="provenance">Repository at {TREE}, {DATE}; {dirty} uncommitted files; {tests} tests, {failing} failing; guards live ({N_UR_SCANNED} stories, {N_JR_SCANNED} forks); {N_GH} downstream issues; {N_ISSUES} findings today ({_SEVS}); {N_OPEN} open. <a href="https://github.com/williamweatherholtz/sysmlv2-ai-toolkit" target="_blank" rel="noopener">repository</a>.</footer>
+<footer data-digest="provenance">Repository at {TREE}, {DATE}; {dirty} uncommitted files; {tests} tests, {failing} failing; guards live ({N_UR_SCANNED} stories, {N_JR_SCANNED} forks); {N_GH} downstream issues; {N_ISSUES} findings today ({_SEVS}); {N_OPEN} open. <a href="https://github.com/williamweatherholtz/sysmlv2-ai-toolkit" target="_blank" rel="noopener">Source repository</a>.</footer>
 </div>
 """
 
@@ -483,6 +492,21 @@ render();
 if "keel-verdicts" not in tail:
     assert tail.count("</script>") == 1
     tail = tail.replace("</script>", CAPTURE_JS)
+# The reader's draft (chosen courses, the note) is keyed on the published set and tree, never on the title:
+# the title is the same on every brief, so a title key restored the previous brief's note into this one and
+# Record wrote it as the words on six verdicts (issue659). A page declaring no set restores nothing.
+DRAFT_KEY_OLD = "var key='keel-brief:'+document.title;"
+DRAFT_KEY_NEW = ("var _pg=document.querySelector('.page[data-set]');"
+                 "var key=_pg?'keel-brief:'+_pg.getAttribute('data-set'):null;")
+DRAFT_SAVE_OLD = "function save(){try{var s={r:{},n:''};"
+DRAFT_SAVE_NEW = "function save(){if(!key)return;try{var s={r:{},n:''};"
+DRAFT_LOAD_OLD = "(function(){try{var s=JSON.parse(localStorage.getItem(key)||'{}');"
+DRAFT_LOAD_NEW = "(function(){if(!key)return;try{var s=JSON.parse(localStorage.getItem(key)||'{}');"
+if DRAFT_KEY_OLD in tail:
+    for o, n in ((DRAFT_KEY_OLD, DRAFT_KEY_NEW), (DRAFT_SAVE_OLD, DRAFT_SAVE_NEW), (DRAFT_LOAD_OLD, DRAFT_LOAD_NEW)):
+        assert tail.count(o) == 1, o
+        tail = tail.replace(o, n)
+assert DRAFT_KEY_NEW in tail and "document.title;" not in tail.split("keel-brief:")[1][:80], "the draft key is the published set"
 DIGEST_OLD = ".page > h2, .page > h3, .page > p, .page > ul, .page > blockquote, .page > .ask, .page > .turn, .page > .tbl-wrap, .page > .opts, figure.diagram > .msg"
 DIGEST_NEW = ".page > .ask, .page > p, [role=\"tabpanel\"] > h2, [role=\"tabpanel\"] > p, [role=\"tabpanel\"] > .tbl-wrap, [role=\"tabpanel\"] > .opts, figure.diagram > .msg"
 if DIGEST_OLD in tail:
