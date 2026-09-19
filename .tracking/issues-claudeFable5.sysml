@@ -2194,4 +2194,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcABuiltBriefIsDistinguishableFromAPublishedOne to issue618;
+
+    part issue619 : Issue {
+        :>> id = "5527033a-e4d2-414f-b87b-f7dd7e58c4b5";
+        :>> title = "Two wrapper-pin guard tests pinned the literal 0.4.1 and were refused under skew on the v0.5.0 release cut";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found landing the v0.5.0 release cut (72eebf0a, local). keel land ran the touched set and refused the push: keel-cli::release_checksums_catch_it failed two tests (a_pin_with_no_wrapper_entries_is_a_warning_naming_every_missing_asset, a_pin_whose_table_carries_every_asset_is_clean_and_a_partial_table_names_the_gap) with the panic quoting `engine-version SKEW: this binary is 0.5.0 but this project PINS 0.4.1` and `guard REFUSED under engine-version skew (D0251)`. The fixtures (write_pin_and_table, lines 104-127 before the fix) pinned the LITERAL '0.4.1' - the release the tests were written under - so they exercised the wrapper-pin-checksummed guard only while the binary happened to be 0.4.1; the pin is binding, and the first version bump turned two guard tests into two skew refusals. The defect class: a fixture that encodes the current release as a literal is green by coincidence and red on the next release cut, at the one moment (the cut) when the land must not be blocked by anything but the release's own content. Every other fixture that writes a pin writes 0.0.1 deliberately (skew is their subject: federation.rs, migration_fixture_is_realistic.rs, migration_rolls_back.rs, obligation_does_not_lock_the_tree.rs); this file alone meant to match the binary and named it by hand. The control is the fixture reading env!('CARGO_PKG_VERSION'): the pin moves with the crate, and the release cut that bumps the crate bumps the fixture in the same build.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcReleaseGuardFixturesPinTheBinaryVersion to issue619;
 }

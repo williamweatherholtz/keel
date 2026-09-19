@@ -92,6 +92,13 @@ fn a_hash_file_named_but_never_computed_is_a_violation() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The pin these fixtures write is the BINARY's own version, never a literal: the engine pin is
+/// binding (D0251), so a fixture pinned at a literal release runs the guard only while the binary
+/// happens to be that release - the two wrapper-pin tests were green at 0.4.1 by coincidence and
+/// red on the v0.5.0 release cut, refused before the guard ran (issue619). The stale table below the
+/// pin stays a literal older release, which is the shape the guard exists to catch.
+const PIN: &str = env!("CARGO_PKG_VERSION");
+
 fn write_pin_and_table(root: &Path, pin: &str, table: &str) {
     let contracts = root.join(".engine").join("contracts");
     std::fs::create_dir_all(&contracts).expect("contracts dir");
@@ -104,13 +111,13 @@ fn a_pin_with_no_wrapper_entries_is_a_warning_naming_every_missing_asset() {
     let root = scaffold("pinwarn");
     write_pin_and_table(
         &root,
-        "0.4.1",
+        PIN,
         "[\"0.3.1\"]\n\"keel-linux-x86_64\" = \"aa\"\n\"keel-macos-aarch64\" = \"bb\"\n\"keel-windows-x86_64.exe\" = \"cc\"\n",
     );
     let out = run(&root, &["gate", "guard", "wrapper-pin-checksummed", "."]);
     assert!(
         out.contains("WARN")
-            && out.contains("0.4.1")
+            && out.contains(PIN)
             && out.contains("keel-linux-x86_64, keel-macos-aarch64, keel-windows-x86_64.exe")
             && out.contains("0 violation(s)"),
         "the pre-sprint state of this project: a warning naming the pin and every asset, never a block: {out}"
@@ -123,13 +130,13 @@ fn a_pin_whose_table_carries_every_asset_is_clean_and_a_partial_table_names_the_
     let root = scaffold("pinok");
     write_pin_and_table(
         &root,
-        "0.4.1",
-        "[\"0.3.1\"]\n\"keel-linux-x86_64\" = \"aa\"\n[\"0.4.1\"]\n\"keel-linux-x86_64\" = \"11\"\n\"keel-macos-aarch64\" = \"22\"\n\"keel-windows-x86_64.exe\" = \"33\"\n",
+        PIN,
+        &format!("[\"0.3.1\"]\n\"keel-linux-x86_64\" = \"aa\"\n[\"{PIN}\"]\n\"keel-linux-x86_64\" = \"11\"\n\"keel-macos-aarch64\" = \"22\"\n\"keel-windows-x86_64.exe\" = \"33\"\n"),
     );
     let out = run(&root, &["gate", "guard", "wrapper-pin-checksummed", "."]);
     assert!(out.contains("0 warning(s)"), "every asset present under the pin: {out}");
 
-    write_pin_and_table(&root, "0.4.1", "[\"0.4.1\"]\n\"keel-linux-x86_64\" = \"11\"\n");
+    write_pin_and_table(&root, PIN, &format!("[\"{PIN}\"]\n\"keel-linux-x86_64\" = \"11\"\n"));
     let out = run(&root, &["gate", "guard", "wrapper-pin-checksummed", "."]);
     assert!(
         out.contains("WARN") && out.contains("keel-macos-aarch64, keel-windows-x86_64.exe") && !out.contains("for keel-linux"),
