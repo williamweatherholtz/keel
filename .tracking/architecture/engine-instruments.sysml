@@ -498,4 +498,25 @@ package EngineInstruments {
         :>> reading = SensorReading::verdict;
         :>> producesFeedback = fbVerbHomes;
     }
+
+    // verifyReceipt: scripts/verify_receipt.py (D0533, sprint 751, issue490/issue567)
+    // KNOWN FAILURE MODES: it reads the four receipt files as the ladder left them, so a slot rewritten by a later writer (keel land after the ladder, issue660) is reported only when its at is later than the ladder's - a rewrite within the same second passes as the ladder's own; writer liveness is a pid probe plus a process-name scan (tasklist/pgrep), so a ladder whose pid was reused by another process reads as WAIT; the changed-stem rule mirrors members/keel-suite/src/touched.rs by hand and drifts if that file changes without this one; the test-summary line is the first `keel suite --touched:` line of verify-touched.out, so a ladder run twice into one .out file quotes the earlier run.
+    // PUBLISHED TO: the verifier's receipt file (the D0425 ceremony, dispatched by the delegated-ceremony brief and the test-verify skill); the CI script-probe step (D0394) and the pre-commit script_probes.py run --probe; the DoD of dcVerifierReceiptOutcomeIsRenderedNotTyped (its D0388 pair).
+    part fbVerifyReceipt : Feedback {
+        :>> id = "1acdda2a-248a-44bd-8317-a8bc89f9264a";
+        :>> title = "what the pre-commit ladder and its touched run actually recorded - every verdict below the receipt header as a field read, and the computed DISCREPANCIES between those receipts, HEAD, the changed set and the outside checks - in place of the verifier's typed summary (issue490)";
+        :>> createdAt = "2026-09-19"; :>> createdBy = "claudeFable5";
+        :>> sensedFrom = cpWork;
+        :>> reportsTo = ctAgent;
+    }
+    part snVerifyReceipt : Sensor {
+        :>> id = "4f0628ff-a0f6-405c-aa8b-f5d433401f8f";
+        :>> title = "verifyReceipt";
+        :>> createdAt = "2026-09-19"; :>> createdBy = "claudeFable5";
+        :>> mechanism = "scripts/verify_receipt.py";
+        :>> measures = "from verify-receipt.toml, touched-receipt.toml, verify-launch.epoch and verify-touched.out: the ladder's outcome, stopped-at rung and per-rung verdicts with exit and command; the touched run's outcome, passed, failed, failing names, runner, long pole and stems; check-engine and sync-claude --check run in-process; and DISCREPANCIES as the computed list - ladder or touched not pass, a failing rung or test, a rung missing or not run, a receipt older than the launch epoch or newer than the ladder, a head other than HEAD, stems other than the changed set - rendered as the verifier's receipt (exit 0), WAIT while the ladder's writer lives (exit 2), KILLED or NO RECEIPT when none does (exit 3); under --probe, twelve fixture checks incl. the issue490 red-as-NONE case, exit 1 on any";
+        :>> determinism = Determinism::tree;
+        :>> reading = SensorReading::verdict;
+        :>> producesFeedback = fbVerifyReceipt;
+    }
 }

@@ -2612,4 +2612,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcBriefDraftKeyIsThePublishedSet to issue659;
+
+    part issue660 : Issue {
+        :>> id = "d9577ea9-bd00-45a7-b12c-f031f47b1f55";
+        :>> title = "touched-receipt.toml has one slot and two writers: keel land rewrites the ladder's touched verdict";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = ".keel/metrics/touched-receipt.toml has one slot and two writers. The verify ladder's touched rung writes it (D0476) and so does keel land's pre-push touched run (D0421); the file names neither. Sprint 751's first live render of the verifier's receipt read 736 passed from the file while the ladder's own touched rung had passed 963 - keel land had run after the ladder over the landed range and rewritten the slot - and until the renderer compared the two receipts' at fields nothing could tell the ladder's verdict from the later one. Every prior verifier receipt that quoted the touched receipt after a land is suspect for the same reason. The renderer's dated-after-ladder discrepancy detects the overwrite; the writer stamp and separate slot prevent it.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcTouchedReceiptNamesItsWriter to issue660;
 }

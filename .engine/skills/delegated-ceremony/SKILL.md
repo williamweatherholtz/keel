@@ -46,8 +46,11 @@ verbatim - it is your whole procedure. Binary: <KEEL, a copy such as ./target/re
 Project root: <ABS ROOT>. D0388 probe pair for this sprint: the pair file at <ABS PAIR FILE> - two
 lines, the known-positive command then the known-negative, written by the primary; pass its path as
 `--probe-from <ABS PAIR FILE>` and transcribe nothing (if no file is named, launch without it and say
-PROBE PAIR: not named by the dispatch). Write the receipt to <ABS SCRATCH PATH>/verifier-receipt.txt
-in the skill's shape and return only its path and its DISCREPANCIES line. You write nothing else anywhere.
+PROBE PAIR: not named by the dispatch). The receipt is RENDERED (D0533): after `KEEL verify --wait .`
+run `python scripts/verify_receipt.py --root . --keel <KEEL> --out <ABS SCRATCH PATH>/verifier-receipt.txt`
+until it exits 0 or 3 (exit 2 = WAIT, call again), adding `--noted "<line>"` only for a write you noticed is
+owed; never open or edit the file it wrote. Return only its path and its DISCREPANCIES line. You write
+nothing else anywhere.
 ```
 
 The primary fills `<KEEL>`, `<ABS ROOT>`, the pair file's path and the scratch path. The pair file
