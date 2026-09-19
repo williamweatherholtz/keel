@@ -3528,4 +3528,5 @@ package EngineBacklog {
     // GH#85 / GH#84 are UNTRUSTED sources (D0264): the resolvers wait on the held Decision, computed.
     #CharteredBy dependency from dcBareNameResolvesLocallyOrUniquelyOrRefuses to d0517;
     #CharteredBy dependency from dcGroundStepBindsToACheckThatReadsThePage to d0518;
+    #CharteredBy dependency from dcSprintNamesTheItemItDelivers to d0515;
 }

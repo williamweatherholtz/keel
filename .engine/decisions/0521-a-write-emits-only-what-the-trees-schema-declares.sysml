@@ -1,4 +1,4 @@
-// D0521 (PROPOSED — NOT YET ACCEPTED) — A write emits only what the tree's own schema declares; a verdict member the tree's VerdictKind lacks is a refusal naming the vintage and keel migrate
+// D0521 (status: the `status` field below is the truth) — A write emits only what the tree's own schema declares; a verdict member the tree's VerdictKind lacks is a refusal naming the vintage and keel migrate
 // Recorded via `keel record decision` (D0105 RMWX axis; issue054). Acceptance is a separate explicit
 // human gate (method=confirmation, D0106): flip status + add the d0521Accept event on sign-off.
 package Decision0521 {
@@ -14,7 +14,7 @@ package Decision0521 {
         :>> title = "A write emits only what the tree's own schema declares; a verdict member the tree's VerdictKind lacks is a refusal naming the vintage and keel migrate";
         :>> createdAt = "2026-09-18";
         :>> createdBy = "claudeFable5";
-        :>> status = DecisionStatus::proposed;
+        :>> status = DecisionStatus::accepted;
         :>> context = "GH#86 (st166; public repo, untrusted, D0264): on plotwright, binary `keel 0.4.1` build 0c131b7 with the project's `.engine` at b171cd7, `keel record gate-result` wrote `outcome = VerdictKind::proposed` and the next `keel gate validate` rejected the tree, blocking every sprint ceremony downstream. Read against this tree before triage: members/keel-write/src/write.rs:625 `proposed_tier` returns the binary's constant PROPOSED (:657) for an AI-examined pass (D0312 B) and neither it nor its two callers (:814 DoD result, :1270 gate result) read the tree's schema; .engine/schema/core/element.sysml:27 gained the `proposed` member at 24dbcfb3 on 2026-09-10, and tag v0.4.1 is b171cd7f of 2026-09-06, so every tree `keel init` scaffolded from the release lacks the member while every binary built from main since emits it. Nothing in write.rs validates what it wrote: `keel gate validate` takes 82 seconds on this tree, so a post-write validate is not a control the write path can afford, and the write was reported as success. The human's direction, verbatim in st167 and st168: migrate is blocked in many projects, migration should be smooth, make downstream projects whole.";
         :>> decision = "Before a write lands an enum member the binary knows, it reads the member's enum in the tree's own schema (.engine/schema/core/*.sysml) and refuses when the tree does not declare it, writing nothing and naming the member, the enum, the tree's engine vintage and `keel migrate` as the act that cures it. Applied today to the one member a write can emit that a released schema lacks: `VerdictKind::proposed` from `record gate-result` and `record result` (the DoD path). A tree with no `.engine/schema/core/element.sysml` is the write API's own fixture and is not read.";
         :>> rationale = "A write that produces a file the tree's validator rejects has not recorded a fact; it has left the adopter a red tree to hand-edit, and `record` reported success while doing it. Refusing is the honest fail-closed: nothing is written, the tree stays valid, and the message names the one act that makes the write possible. The rejected alternative - writing `pass` when the tree lacks `proposed` - would grade an AI-examined claim as a standing pass on an older schema, which is the fabricated-tier D0312 B exists to prevent; writing `inconclusive` would record a verdict nobody reached. The read is of the enum's declaration line in the tree's schema file, the same text `validate` registers (keel_model::validate::validate_root registers every `.engine` package before it validates), so the write and the gate agree by construction rather than by a second vocabulary constant. Cost is one file read per proposal-tier write.";
@@ -22,4 +22,8 @@ package Decision0521 {
     }
     #DerivedFrom dependency from d0521 to st167;
     #DerivedFrom dependency from d0521 to st168;
+
+    // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
+    verification d0521Accept : Test { :>> id = "e5f3d71f-dc9a-4455-a654-20aaf81ea897"; :>> method = VerificationMethod::confirmation; :>> procedureText = "recorded from chat - their words, verbatim: “Accept all decisions as recommended. Proceed to release and fix downstream” WARN: read-back - the quoted words do not name d0521 (D0201 B); recorded as given (D0423)."; }
+    part d0521AcceptR1 : TestResult { :>> id = "2d7339fc-4017-46b3-9f1a-c32fd9367e16"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "4d00c1bc"; :>> judgedAt = "2026-09-18"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
 }

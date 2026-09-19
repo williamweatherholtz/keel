@@ -6,6 +6,8 @@ package ProjectDeliveryS745 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from downstreamProjectsWholeStory to d0520;
+    #CharteredBy dependency from downstreamProjectsWholeStory to d0521;
+    #CharteredBy dependency from downstreamProjectsWholeStory to d0522;
 
     part downstreamProjectsWholeStory : Story {
         :>> id = "c67680ae-9838-4637-b69c-c021bef29118";
