@@ -172,4 +172,14 @@ package ProjectBaselines {
         :>> tag = "v0.5.0";
         :>> purpose = "The release downstream adopters asked for (GH#68, GH#86-90; D0519-D0522). A resync is not a self-modification of the owner's items and writes the evidence its own gate reads; a gate that runs in an adopting project holds the adopter to its own claims and sets the shipped engine docs aside; a manifest's charter resolves in either decisions directory; the parser-coverage ratchet is never seeded into a project that has none; a write emits only what the tree's own schema declares and refuses, naming keel migrate, when a member is absent; a record tolerated at the door survives the run. Beside it, the CLI surface the adopters will call: five verb families folded under render, show, record, gate/audit and github with the old names removed (D0449-D0453), a human's chat acceptance recorded as their own words (D0375/D0423), the touched test set run before every first push (D0421/D0475), and every release asset checksummed by the run that built it (D0385). The human's direction: migration should be smooth; make downstream projects whole.";
     }
+
+    part release051 : Release {
+        :>> id = "ff09d557-4d55-4678-8cd2-12b4cbcbc03f";
+        :>> title = "v0.5.1 - the downloaded binary lands over a tree keel init 0.4.1 scaffolded";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> commit = "d19cb819";  // the last content commit; the tag sits on the cut commit that follows this record (issue311)
+        :>> tag = "v0.5.1";
+        :>> purpose = "The downloaded 0.5.0, run over a tree keel init 0.4.1 had scaffolded, still rolled itself back on the adopter's own words (issue622): the 0.4.1 CLAUDE.md template named retired verbs that guard cli-reference reads as absent. A verb fold now travels with keel migrate (D0523): the verb-respell step rewrites the retired spellings in the project's own living docs from the shipped verb-renames.toml, CLAUDE.md joins the run's scope and its rollback, and the process-change lock reads a contract whose text is exactly the respell of its HEAD text as the engine arriving. Beside it, the sprint's other downstream fixes: the guard set runs over an adopter-shaped tree in test (issue615), SchemaLacksMember is a ledgered refusal (issue616), keel onboard no longer names an activation.toml a first-time adopter never had (issue617), a repeated single flag is refused (issue623), and guard duplicate-identity reads an allocated issue/st/us number as one namespace across every per-actor package (D0524, issue624) so keel land refuses the collision two offline clones can mint before the push.";
+    }
 }
