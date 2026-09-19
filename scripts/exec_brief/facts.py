@@ -3519,6 +3519,15 @@ def _receipt94(fname):
     return _r
 
 
+def _after94(land_to, receipt):
+    """True when the one-deep receipt was written by a commit that descends from the landing's end (any later commit, not only
+    the next one): `git merge-base --is-ancestor <land_to> <receipt head>`; None when the receipt has no head."""
+    if not receipt.get("head"):
+        return None
+    _rc, _ = run_rc(["git", "merge-base", "--is-ancestor", land_to, receipt["head"]])
+    return _rc == 0
+
+
 _vr94 = _receipt94("verify-receipt.toml")
 _tr94 = _receipt94("touched-receipt.toml")
 # the .engine paths in the commit each receipt is over (a landed run's change set is that commit against its parent);
@@ -4939,7 +4948,7 @@ fact("suiteDependsOnNoViewOrGuard", {
                           "violations": int(_pc06.group(4)) if _pc06 else None, "line": _pc06_last[:240] or None},
         "guards": {"total": int(_guards06.group(1)), "hardBlocking": int(_guards06.group(2)), "warningOnly": int(_guards06.group(3))} if _guards06 else None,
         "landingReceipt": _tr06,
-        "landingLog": {"window": _win06, "nextCommit": _next06[:8] if _next06 else None, "logsInWindow": len(_inwin06), "epoch": _inwin06[-1] if _inwin06 else None,
+        "landingLog": {"window": _win06, "nextCommit": _next06[:8] if _next06 else None, "receiptHeadAfterLanding": _after94(_LAND735_TO, _tr06), "logsInWindow": len(_inwin06), "epoch": _inwin06[-1] if _inwin06 else None,
                        "binaries": len(_sum06), "run": sum(int(r[1]) for r in _sum06), "passed": sum(int(r[2]) for r in _sum06),
                        "failed": sum(int(r[3] or 0) for r in _sum06), "skipped": sum(int(r[4]) for r in _sum06),
                        "seconds": round(sum(float(r[0]) for r in _sum06), 1)} if _sum06 else None,
@@ -4978,7 +4987,8 @@ fact("suiteDependsOnNoViewOrGuard", {
      "(added and removed lines verbatim; lockedDiffIsTheTwoDescents = the removed lines hold the module line and forced's signature, the added lines hold the re-export and no fn), every old or new name held against the lock's file list and directory prefix. "
      "live: `" + KEEL + " gate guard process-change --no-receipt .` last line; `" + KEEL + " version`'s `guards:` line split into total / hard-blocking / warning-only; the touched receipt as section 32 reads it; landingLog = the latest "
      ".keel/metrics/touched-<epoch>.log whose epoch lies in [the landing commit's %ct, the next commit's %ct) - the receipt itself is overwritten by every run - with its nextest "
-     "`Summary [..s] N tests run: N passed[, N failed], N skipped` lines summed over the binaries. "
+     "`Summary [..s] N tests run: N passed[, N failed], N skipped` lines summed over the binaries; receiptHeadAfterLanding = `git merge-base --is-ancestor "
+     "<landing end> <receipt head>` (the receipt is one deep, so any later commit's run may stand over the landing's, not only the next commit's). "
      "issues 588 and 589 as section 34. resolverPositions as section 34; sprint735 from its delivery file, charter d0479, plus literal spans in the retro gate's procedureText; retroFindings = `(n) ` markers opening a sentence or "
      "following a label's colon in that text; retroNotTrackedCount = the phrase counted; storyDodResults = the story's DoDRn outcomes and shas in the delivery file; itemDodResults = the backlog item's DoDRn outcomes and shas.")
 # ================================================================ 43. D0508 - the item member reads the model and the write API and nothing above (sprint 737, brief 43)
@@ -5132,7 +5142,7 @@ fact("issuesReadsTheModelAndTheWriteApi", {
                           "violations": int(_pc08.group(4)) if _pc08 else None, "line": _pc08_last[:240] or None},
         "guards": {"total": int(_guards08.group(1)), "hardBlocking": int(_guards08.group(2)), "warningOnly": int(_guards08.group(3))} if _guards08 else None,
         "landingReceipt": _tr08,
-        "landingLog": {"window": _win08, "nextCommit": _next08[:8] if _next08 else None, "logsInWindow": len(_inwin08), "epoch": _inwin08[-1] if _inwin08 else None,
+        "landingLog": {"window": _win08, "nextCommit": _next08[:8] if _next08 else None, "receiptHeadAfterLanding": _after94(_LAND737_TO, _tr08), "logsInWindow": len(_inwin08), "epoch": _inwin08[-1] if _inwin08 else None,
                        "binaries": len(_sum08), "run": sum(int(r[1]) for r in _sum08), "passed": sum(int(r[2]) for r in _sum08),
                        "failed": sum(int(r[3] or 0) for r in _sum08), "skipped": sum(int(r[4]) for r in _sum08),
                        "seconds": round(sum(float(r[0]) for r in _sum08), 1)} if _sum08 else None,
@@ -5333,7 +5343,7 @@ fact("serveSitsAboveEveryMemberAndBelowTheBinary", {
                           "violations": int(_pc09.group(4)) if _pc09 else None, "line": _pc09_last[:240] or None},
         "guards": {"total": int(_guards09.group(1)), "hardBlocking": int(_guards09.group(2)), "warningOnly": int(_guards09.group(3))} if _guards09 else None,
         "landingReceipt": _tr09,
-        "landingLog": {"window": _win09, "nextCommit": _next09[:8] if _next09 else None, "logsInWindow": len(_inwin09), "epoch": _inwin09[-1] if _inwin09 else None,
+        "landingLog": {"window": _win09, "nextCommit": _next09[:8] if _next09 else None, "receiptHeadAfterLanding": _after94(_LAND738_TO, _tr09), "logsInWindow": len(_inwin09), "epoch": _inwin09[-1] if _inwin09 else None,
                        "binaries": len(_sum09), "run": sum(int(r[1]) for r in _sum09), "passed": sum(int(r[2]) for r in _sum09),
                        "failed": sum(int(r[3] or 0) for r in _sum09), "skipped": sum(int(r[4]) for r in _sum09),
                        "seconds": round(sum(float(r[0]) for r in _sum09), 1)} if _sum09 else None,
@@ -5602,7 +5612,23 @@ _sr14s = re.search(r"\[guard:source-reference\] (PASS|FAIL)\s+\S+\s+(\d+) scanne
 _scaf14_manifest = os.path.isfile(os.path.join(_scaf14, "Cargo.toml"))
 shutil.rmtree(_scaf14, ignore_errors=True)
 _tr14 = _receipt94("touched-receipt.toml")
-_vr14 = _receipt94("verify-receipt.toml")
+_vr14 = _receipt94("verify-receipt.toml")# the receipt is one deep (D0421): once a later commit lands, sprint 743's own run survives only as its log, the
+# touched-<epoch>.log written between the landing commit's time and the next commit's (as section 42 reads sprint 735's)
+_ok14t, _out14t = run(["git", "log", "-1", "--format=%ct", _LAND743_TO])
+_ok14n2, _out14n2 = run(["git", "rev-list", "--reverse", _LAND743_TO + "..HEAD"])
+_next14 = (_out14n2.split() or [None])[0] if _ok14n2 else None
+_ok14t2, _out14t2 = run(["git", "log", "-1", "--format=%ct", _next14]) if _next14 else (False, "")
+_win14 = (int(_out14t.strip()), int(_out14t2.strip()) if _ok14t2 and _out14t2.strip() else None) if _ok14t and _out14t.strip() else None
+_logs14 = sorted(int(m.group(1)) for f in os.listdir(os.path.join(REPO, ".keel", "metrics")) for m in [re.match(r"touched-(\d+)\.log$", f)] if m)
+_inwin14 = [e for e in _logs14 if _win14 and e >= _win14[0] and (_win14[1] is None or e < _win14[1])]
+_log14 = read(os.path.join(REPO, ".keel", "metrics", f"touched-{_inwin14[-1]}.log")) if _inwin14 else ""
+_sum14 = re.findall(r"^\s*Summary \[\s*([\d.]+)s\] (\d+) tests run: (\d+) passed(?: \(\d+ slow\))?(?:, (\d+) failed)?, (\d+) skipped", _log14 or "", re.M)
+_llog14 = {"window": _win14, "nextCommit": _next14[:8] if _next14 else None, "receiptHeadAfterLanding": _after94(_LAND743_TO, _tr14),
+           "logsInWindow": len(_inwin14), "epoch": _inwin14[-1] if _inwin14 else None,
+           "binaries": len(_sum14), "run": sum(int(r[1]) for r in _sum14), "passed": sum(int(r[2]) for r in _sum14),
+           "failed": sum(int(r[3] or 0) for r in _sum14), "skipped": sum(int(r[4]) for r in _sum14),
+           "seconds": round(sum(float(r[0]) for r in _sum14), 1)} if _sum14 else None
+
 _ok14d, _out14d = run(["git", "diff", "--name-status", "-M", _LAND743_FROM, _LAND743_TO])
 _names14 = [l.split("\t")[-1] for l in (_out14d or "").splitlines() if l.strip()] if _ok14d else []
 _codes14 = "".join(l[0] for l in (_out14d or "").splitlines() if l.strip()) if _ok14d else ""
@@ -5667,7 +5693,7 @@ fact("livingDocsCiteSourceThatResolves", {
         "scaffold": {"initExit0": _rc14i == 0, "hasManifest": _scaf14_manifest, "exit0": _rc14s == 0,
                      "verdict": _sr14s.group(1) if _sr14s else None, "scanned": int(_sr14s.group(2)) if _sr14s else None,
                      "violations": int(_sr14s.group(4)) if _sr14s else None},
-        "touchedReceipt": _tr14, "ladderReceipt": _vr14,
+        "touchedReceipt": _tr14, "ladderReceipt": _vr14, "landingLog": _llog14,
     },
     "landed": {
         "range": [_LAND743_FROM, _LAND743_TO],
@@ -5695,14 +5721,14 @@ fact("livingDocsCiteSourceThatResolves", {
     "readyItems": len(_ready_names),
     "backlogItems": len(_bl00_actions),
 } if _d0514 and _gn14 and _sf14 else None,
-     "the held clause of a guard that has landed: Decision and edges, the seventy-sixth guard in the array and the catalogue rows, the two doc lines before and today against migrate.rs line 804, the guard live over this tree and over a scaffolded project, the touched and ladder receipts, the landing range, the two findings and the sprint",
+     "the held clause of a guard that has landed: Decision and edges, the seventy-sixth guard in the array and the catalogue rows, the two doc lines before and the range they cite today against migrate.rs, the guard live over this tree and over a scaffolded project, the touched and ladder receipts, the landing range, the two findings and the sprint",
      _DEC_HOW + " Names by literal search in the field named; dependsOn = the `#DependsOn dependency from d0514 to dNNNN;` lines. source: members/keel-schema/src/guard_names.rs "
      "`GUARD_NAMES: [&str; N]` and its quoted members (sourceReferenceIsLast = the array's final member); members/keel-guards/src/surface.rs searched for the FAMILY arm, the fn "
      "signature, the `Cargo.toml` early return, five helper signatures and five test fns; the guards.md row beginning `| \\`source-reference\\` |`, the guard-constraints "
      "`constraint def sourceReference; // guard 76` line, the control-map title; docLinesToday = line 10 of the project-migration skill and line 15 of the process file as the "
      "tree holds them, docLinesBefore = the same lines from `git show " + _LAND743_FROM + ":<path>`; migrateLine804 = members/keel-process/src/migrate.rs line 804 verbatim (the line at the record's date); citedRange = the `members/keel-process/src/migrate.rs:N-M` both docs cite today (one range or null), citedLineNamesTheFn = line N of the file today starts `pub fn check_preconditions`. live: `" + KEEL +
      " gate guard source-reference --no-receipt .` summary line; `" + KEEL + " version`'s `guards:` line; scaffold = `" + KEEL + " init <tempdir>` then the same guard over that root "
-     "(hasManifest = whether the scaffold has a Cargo.toml), the directory removed after; touchedReceipt / ladderReceipt as section 32 reads .keel/metrics/*.toml. landed = `git diff "
+     "(hasManifest = whether the scaffold has a Cargo.toml), the directory removed after; touchedReceipt / ladderReceipt as section 32 reads .keel/metrics/*.toml; landingLog as section 42 reads it (the log in [landing %ct, next commit %ct); receiptHeadAfterLanding = merge-base --is-ancestor). landed = `git diff "
      "--name-status -M " + _LAND743_FROM + " " + _LAND743_TO + "` first letters counted and `--shortstat` over the range. issues 591 and 603 as section 34; sprint743 from its delivery "
      "file, charter d0471, retroFindings = `(n) ` markers opening a sentence or following a label's colon, plus literal spans; resolverPositions = 1-based place among the backlog's "
      "declared actions (D0052); resolverDodResults = the item's DoDRn outcomes and shas; resolverReadyRank = its line in `keel show whats-next .`.")
@@ -6102,7 +6128,7 @@ def _line19(text, needle):
             return _n
     return None
 def _rollback_paths19():
-    _m = re.search(r'run\(&\["checkout", sha, "--", ([^\]]*)\]\)', _mig19)
+    _m = re.search(r'run\(&(?:words\(&)?\["checkout", sha, "--", ([^\]]*)\]\)', _mig19)
     return sorted(re.findall(r'"([^"]+)"', _m.group(1))) if _m else []
 def _porcelain_paths19():
     _m = re.search(r'"status", "--porcelain", "-uall", "--", ([^\]]*)\]', _mig19)
@@ -6113,7 +6139,7 @@ _i609b = _i609.group(1) if _i609 else ""
 _ok19, _own19 = run([KEEL, "gate", "guard", "ownership", "--no-receipt", "."], timeout=300)
 _ol19 = _last00(_own19)
 _om19 = re.search(r"(PASS|FAIL|WARN)\b.*?(\d+)\s+scanned.*?(\d+)\s+warning.*?(\d+)\s+violation", _ol19)
-_okl19, _landed19 = run(["git", "log", "--format=%h", "-1", "--", "members/keel-process/src/migrate.rs"])
+_okl19, _landed19 = run(["git", "log", "-Sfn step_resync_record(", "--format=%h", "-1", "--", "members/keel-process/src/migrate.rs"])
 _landed19 = (_landed19 or "").strip()[:8] if _okl19 else None
 _okci19, _ci19 = run(["gh", "run", "list", "--limit", "8", "--json", "headSha,conclusion,status"], timeout=60)
 _cij19 = as_json(_ci19) if _okci19 else None
@@ -6138,10 +6164,10 @@ fact("projectMigrationWritesTheEvidenceItsOwnGateReads", {
         "porcelainPaths": _porcelain_paths19(),
         "porcelainLine": _line19(_mig19, '"status", "--porcelain", "-uall", "--"'),
         "rollbackPaths": _rollback_paths19(),
-        "rollbackLine": _line19(_mig19, 'run(&["checkout", sha, "--"'),
+        "rollbackLine": _line19(_mig19, '["checkout", sha, "--"'),
         "resyncSurfaceLine": _line19(_mig19, "fn resync_surface("),
         "syncClaudeCallLine": _line19(_mig19, "keel_write::claude_surface::sync_claude(root, false)"),
-        "surfaceFailureRollsBack": "Some(rollback_after_failure(root, pre_sha, written))" in _mig19,
+        "surfaceFailureRollsBack": bool(re.search(r"Some\(rollback_after_failure\(root, pre_sha, written(, keep)?\)\)", _mig19)),
         "unitTests": [n for n in ("a_resync_that_wrote_files_records_the_transform_its_own_gate_reads", "a_noop_resync_records_nothing") if f"fn {n}()" in _mig19],
         "devOnlyExcludesTools": bool(_dev19) and 's == "tools"' in _dev19.group(1),
         "devOnlyLine": _line19(_emb19, "pub fn is_engine_dev_only("),
@@ -6169,6 +6195,260 @@ fact("projectMigrationWritesTheEvidenceItsOwnGateReads", {
      "ownership guard reads; `git log -1 -- migrate.rs` for the commit that last touched it and `gh run list --json headSha,conclusion` for its "
      "CI conclusion and HEAD's. live: `" + KEEL + " gate guard ownership --no-receipt .` last line. issue609: regex over .tracking/issues-claudeOpus5.sysml "
      "(the other actor's file; `noIssue608Part` = no part by the colliding number remains there after e7084f9f's renumber); fable608Exists reads my own file.")
+
+# ================================================================ 53-55. D0520-D0522 - downstream projects made whole (sprint 745, GH#86-90)
+# Three held process-changes from one GitHub intake (public repository, untrusted, D0264), recorded here and landed at
+# b652add3 under the #ProspectiveChange marker; no OPTION token in any, so three held acceptances, not forks. The page
+# reads the landed source, the intake records, the findings and the sprint record - never the commit message.
+_surf20 = read(os.path.join(REPO, "members", "keel-guards", "src", "surface.rs")) or ""
+_onb20 = read(os.path.join(REPO, "members", "keel-model", "src", "onboard.rs")) or ""
+_enf20 = read(os.path.join(REPO, "members", "keel-guards", "src", "enforcement.rs")) or ""
+_mig20 = read(os.path.join(REPO, "members", "keel-process", "src", "migrate.rs")) or ""
+_wr20 = read(os.path.join(REPO, "members", "keel-write", "src", "write.rs")) or ""
+_el20 = read(os.path.join(REPO, ".engine", "schema", "core", "element.sysml")) or ""
+_chtest20 = read(os.path.join(REPO, "keel-cli", "tests", "charter_must_resolve.rs")) or ""
+_in20 = read(os.path.join(REPO, ".tracking", "intake", "intake-2026-09-18.sysml")) or ""
+_s745 = _sprint_facts("sprint745_downstreamProjectsWhole.sysml", "d0520")
+_okci20, _ci20 = run(["gh", "run", "list", "--limit", "8", "--json", "headSha,conclusion,status"], timeout=60)
+_cij20 = as_json(_ci20) if _okci20 else None
+_ci_rows20 = {r["headSha"][:8]: r.get("conclusion") for r in (_cij20 or []) if isinstance(r, dict) and r.get("headSha")}
+
+
+def _landed_at(needle, path):
+    """The commit that introduced `needle` into `path` (git log -S), first 8 of the sha - the change's own landing, not the file's latest."""
+    _ok, _o = run(["git", "log", "-S" + needle, "--format=%h", "-1", "--", path])
+    return (_o or "").strip()[:8] or None if _ok else None
+
+
+def _ci_of(sha):
+    """CI at that sha from its check-runs: `success` when every run concluded success, the joined conclusions otherwise, None when none."""
+    if not sha:
+        return None
+    _ok, _o = run(["gh", "api", f"repos/williamweatherholtz/sysmlv2-ai-toolkit/commits/{sha}/check-runs", "--jq", "[.check_runs[] | .conclusion] | unique"], timeout=60)
+    _j = as_json(_o) if _ok else None
+    return None if not _j else ("success" if _j == ["success"] else ",".join(str(c) for c in _j))
+
+
+def _land20(needle, path):
+    _sha = _landed_at(needle, path)
+    return {"landedCommit": _sha, "landedCi": _ci_of(_sha), "headCi": _ci_rows20.get(TREE[:8])}
+
+
+
+
+def _stmt20(name):
+    _m = re.search(r"part " + name + r" : Statement\s*\{(.*?)\n\s*\}", _in20, re.S)
+    _b = _m.group(1) if _m else ""
+    return {"present": bool(_m), "channel": (re.search(r"channel\s*=\s*StatementChannel::(\w+)", _b) or [None, None])[1],
+            "trust": (re.search(r"sourceTrust\s*=\s*SourceTrust::(\w+)", _b) or [None, None])[1],
+            "sourceUrl": (re.search(r'sourceUrl\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "saidBy": (re.search(r'saidBy\s*=\s*"([^"]+)"', _b) or [None, None])[1]}
+
+
+def _resolver20(name):
+    return {"onBacklog": name in _bl00_actions,
+            "position": (_bl00_actions.index(name) + 1) if name in _bl00_actions else None,
+            "def": _bl00_defs.get(name),
+            "dodResults": _dod_results(name),
+            "readyRank": (_ready_names.index(name) + 1) if name in _ready_names else None}
+
+
+def _held20(dname, text):
+    _f = _decision_facts(text, dname)
+    return {**_f,
+            "fork": bool(re.search(r"\bOPTION [A-Z]\b", _f["decision"] or "")),
+            "derivedFromSt167": f"#DerivedFrom dependency from {dname} to st167;" in text,
+            "derivedFromSt168": f"#DerivedFrom dependency from {dname} to st168;" in text,
+            "namesHeld": "HELD proposed under D0337" in (_f["consequences"] or ""),
+            "namesResidual": "Stated residual" in (_f["consequences"] or ""),
+            "namesTheDirection": "migrate is blocked in many projects, migration should be smooth, make downstream projects whole" in (_f["context"] or "")}
+
+
+_HELD_HOW = (_DEC_HOW + " fork = any `OPTION X` token in the decision field (none: a held acceptance). derivedFromSt16N = the `#DerivedFrom` line "
+             "in the Decision's file. namesHeld / namesResidual / namesTheDirection by literal search in consequences and context. intake: "
+             ".tracking/intake/intake-2026-09-18.sysml - each `part stN : Statement {` body's channel, sourceTrust, sourceUrl, saidBy; each story as "
+             "section 51 (implication, #DerivedFrom, #Implicates targets). findings as section 34 (`_issue_facts`); resolvers: position in the "
+             "backlog's declaration order, the action def holding it, DoD result outcomes and shas, ready rank from `" + KEEL + " show whats-next .`. "
+             "sprint 745 as section 27. landedCommit = `git log -1` over migrate.rs, surface.rs and write.rs together; landedCi / headCi from "
+             "`gh run list --json headSha,conclusion` keyed on the first 8 of the sha for HEAD; landedCommit = `git log -S<anchor> -1` over the file the change "
+             "entered (the change's own landing, never the file's latest commit); landedCi = the unique conclusions of that sha's check-runs (`gh api .../commits/<sha>/check-runs`).")
+_sprint20 = {k: v for k, v in _s745.items() if k != "text"} | ({
+    "retroFindings": len(re.findall(r"\(\d\)", (re.search(r"downstreamProjectsWholeRetroGate : Test \{.*?procedureText = \"(.*?)\";", _s745["text"], re.S) or [None, ""])[1])),
+    "retroNamesIssue615to617": all(f"issue61{n}" in _s745["text"] for n in (5, 6, 7)),
+    "storyDod": _dod_results("storyDownstreamProjectsWhole") or [{"outcome": o, "judgedAgainst": s} for o, s in re.findall(r"part storyDownstreamProjectsWholeDoDR\d+ : TestResult \{[^}]*?outcome = VerdictKind::(\w+);[^}]*?judgedAgainst = \"([^\"]+)\"", _s745["text"])],
+} if _s745.get("exists") else {})
+
+# --- 53. D0520: a gate in an adopting project holds the adopter to its own claims (GH#88 / #89 / #90)
+_d0520 = _dec_file("0520-")
+_f520 = _held20("d0520", _d0520)
+_ok20a, _sr20 = run([KEEL, "gate", "guard", "source-reference", "--no-receipt", "."], timeout=300)
+_srl20 = _last00(_sr20)
+_srm20 = re.search(r"(PASS|FAIL|WARN)\b.*?(\d+)\s+scanned.*?(\d+)\s+warning.*?(\d+)\s+violation", _srl20 or "")
+_ok20b, _am20 = run([KEEL, "gate", "guard", "activation-manifest", "--no-receipt", "."], timeout=300)
+_aml20 = _last00(_am20)
+_amm20 = re.search(r"(PASS|FAIL|WARN)\b.*?(\d+)\s+scanned.*?(\d+)\s+warning.*?(\d+)\s+violation", _aml20 or "")
+_R20 = {"source": "dcSourceReferenceReadsTheAdoptersOwnClaims", "charter": "dcCharterResolvesInBothDecisionDirectories", "ratchet": "dcRatchetOverTheProjectsCorpusIsNeverSeeded"}
+fact("shippedClaimsAreHeldWhereTheyAreMade", {
+    **_f520,
+    "namesThreeReports": all(f"GH#{n}" in (_f520["context"] or "") for n in (88, 89, 90)),
+    "namesSurfaceRs227": "members/keel-guards/src/surface.rs:227" in (_f520["context"] or ""),
+    "namesOnboardRs72": "members/keel-model/src/onboard.rs:72" in (_f520["context"] or ""),
+    "namesSkippedSeven": "skipped = 7" in (_f520["context"] or ""),
+    "namesSelfBuildPredicate": "keel_model::corpus::is_self_build" in (_f520["decision"] or ""),
+    "namesTheRatchet": "parser-coverage-baseline.toml" in (_f520["decision"] or ""),
+    "namesBothDirectories": ".engine/decisions/ and .engine/reference/decisions/ both" in (_f520["decision"] or ""),
+    "namesIssue380Holds": "issue380's property holds" in (_f520["decision"] or ""),
+    "namesIssue591": "issue591" in (_f520["rationale"] or ""),
+    "namesD0519Rejected": "D0519 already rejected the claimable shape" in (_f520["rationale"] or ""),
+    "namesNotAFlag": "is not a flag" in (_f520["rationale"] or ""),
+    "namesThreeResolvers": all(r in (_f520["consequences"] or "") for r in _R20.values()),
+    "namesActivationResidual": "activation.toml" in (_f520["consequences"] or ""),
+    "namesTheCitationMove": "move to 908-911" in (_f520["consequences"] or ""),
+    "today": {
+        "selfBuildReadLine": _line19(_surf20, "let self_build = keel_model::corpus::is_self_build(root);"),
+        "setAsideBranchLine": _line19(_surf20, "if !self_build && is_shipped_engine_doc(&rel) {"),
+        "setAsideWarningLine": _line19(_surf20, "shipped living doc(s) set aside - the engine's claims, held in the self-build (D0520)"),
+        "isShippedEngineDocLine": _line19(_surf20, "fn is_shipped_engine_doc(rel: &str) -> bool {"),
+        "shippedReadsEmbeddedDir": "keel_schema::embedded::ENGINE_DIR.get_file(inner).is_some()" in _surf20,
+        "surfaceTest": _line19(_surf20, "fn outside_the_self_build_a_shipped_doc_is_set_aside_and_the_adopters_own_claim_is_read()"),
+        "charterResolvesLine": _line19(_onb20, "pub fn charter_resolves(root: &Path, charter: &str) -> bool {"),
+        "charterReadsBothDirs": _onb20.count(".engine/reference/decisions/") >= 2 and "charter_resolves" in _onb20,
+        "onboardTest": _line19(_onb20, "fn a_charter_resolves_in_the_deployed_directory_as_in_the_authoring_one()"),
+        "guardMessageNamesBothDirs": "no .engine/decisions/{n}-*.sysml and no .engine/reference/decisions/{n}-*.sysml" in _enf20,
+        "guardMessageLine": _line19(_enf20, "no .engine/decisions/{n}-*.sysml and no .engine/reference/decisions/{n}-*.sysml"),
+        "charterBinaryTests": [n for n in ("a_charter_naming_a_decision_the_project_does_not_hold_is_a_violation_and_onboard_says_so", "a_charter_the_project_holds_still_reads_chartered") if f"fn {n}()" in _chtest20],
+        "danglingFixtureIsHeldNowhere": 'charter(&root, "d9998");' in _chtest20 and 'charter(&root, "d0226");' not in _chtest20,
+        "ratchetPredicateLine": _line19(_mig20, "fn is_ratchet_over_project_corpus(mapped: &Path) -> bool {"),
+        "ratchetNeverSeededLine": _line19(_mig20, "if is_ratchet_over_project_corpus(&mapped) && !dst.exists() {"),
+        "ratchetNamesTheFile": 'Some("parser-coverage-baseline.toml")' in _mig20,
+        "ratchetTest": _line19(_mig20, "fn a_ratchet_over_the_projects_corpus_is_never_seeded_and_an_authored_one_is_kept()"),
+        **_land20("fn is_shipped_engine_doc", "members/keel-guards/src/surface.rs"),
+    },
+    "live": {
+        "sourceReference": {"verdict": _srm20.group(1) if _srm20 else None, "scanned": int(_srm20.group(2)) if _srm20 else None,
+                            "warnings": int(_srm20.group(3)) if _srm20 else None, "violations": int(_srm20.group(4)) if _srm20 else None, "line": (_srl20 or "")[:200], "exit0": _ok20a},
+        "activationManifest": {"verdict": _amm20.group(1) if _amm20 else None, "scanned": int(_amm20.group(2)) if _amm20 else None,
+                               "warnings": int(_amm20.group(3)) if _amm20 else None, "violations": int(_amm20.group(4)) if _amm20 else None, "line": (_aml20 or "")[:200], "exit0": _ok20b},
+    },
+    "intake": {"st162": _stmt20("st162"), "st163": _stmt20("st163"), "st164": _stmt20("st164"), "st167": _stmt20("st167"), "st168": _stmt20("st168"),
+               "us118": _story17("us118"), "us119": _story17("us119"), "us120": _story17("us120")},
+    "issues": {"issue610": _issue_facts("610", _R20["ratchet"]), "issue611": _issue_facts("611", _R20["charter"]), "issue612": _issue_facts("612", _R20["source"])},
+    "resolvers": {k: _resolver20(v) for k, v in _R20.items()},
+    "retro": {"issue615": _issue_facts("615", "dcAFreshAdopterTreeIsGreenUnderEveryGuard"), "issue617": _issue_facts("617", "dcUnresolvedCharterAdviceFitsAFirstTimeAdopter")},
+    "sprint745": _sprint20,
+    "backlogItems": len(_bl00_actions),
+}, "the held acceptance, what the Decision names, the three fixes as they stand in the source, two guards live, the intake, the findings and the sprint",
+     _HELD_HOW + " Names by literal search in the fields. today: surface.rs - the `is_self_build` read, the set-aside branch, the warning text, "
+     "`fn is_shipped_engine_doc` and its ENGINE_DIR lookup, the adopter-shaped test; onboard.rs - `pub fn charter_resolves`, at least two mentions of the "
+     "deployed directory, the pair test; enforcement.rs - the violation naming both directories; keel-cli/tests/charter_must_resolve.rs - the two binary "
+     "tests and a dangling fixture naming d9998 (d0226 is held by a scaffold now, GH#89); migrate.rs - `fn is_ratchet_over_project_corpus`, the "
+     "`!dst.exists()` early return and the test. live: `" + KEEL + " gate guard source-reference --no-receipt .` and `... activation-manifest ...` last lines.")
+
+# --- 54. D0521: a write emits only what the tree's schema declares (GH#86)
+_d0521 = _dec_file("0521-")
+_f521 = _held20("d0521", _d0521)
+_R21 = "dcAWriteRefusesTheMemberTheTreesSchemaLacks"
+_vk20 = re.search(r"enum def VerdictKind \{([^}]*)\}", _el20)
+fact("aWriteEmitsOnlyWhatTheTreesSchemaDeclares", {
+    **_f521,
+    "namesGh86": "GH#86 (st166" in (_f521["context"] or ""),
+    "namesWriteRs625": "members/keel-write/src/write.rs:625" in (_f521["context"] or ""),
+    "namesTheTwoCommits": "24dbcfb3" in (_f521["context"] or "") and "b171cd7f" in (_f521["context"] or ""),
+    "namesEightyTwoSeconds": "82 seconds" in (_f521["context"] or ""),
+    "namesTheSchemaRead": ".engine/schema/core/*.sysml" in (_f521["decision"] or ""),
+    "namesKeelMigrate": "`keel migrate` as the act that cures it" in (_f521["decision"] or ""),
+    "namesTheOneMember": "`VerdictKind::proposed` from `record gate-result` and `record result`" in (_f521["decision"] or ""),
+    "namesTheFixtureExemption": "is the write API's own fixture and is not read" in (_f521["decision"] or ""),
+    "namesRejectedPass": "writing `pass` when the tree lacks `proposed`" in (_f521["rationale"] or ""),
+    "namesRejectedInconclusive": "writing `inconclusive` would record a verdict nobody reached" in (_f521["rationale"] or ""),
+    "namesOneRead": "Cost is one file read per proposal-tier write" in (_f521["rationale"] or ""),
+    "namesResolver": _R21 in (_f521["consequences"] or "") and "issue614" in (_f521["consequences"] or ""),
+    "namesDoorNotWall": "the refusal is a door, not a wall" in (_f521["consequences"] or ""),
+    "today": {
+        "variantLine": _line19(_wr20, "SchemaLacksMember(String, String, String),"),
+        "messageNamesMigrate": "Run `keel migrate` to bring the" in _wr20 and "A write emits only what the tree's schema declares (D0521, issue614)" in _wr20,
+        "messageLine": _line19(_wr20, "Self::SchemaLacksMember(member, enum_name, file) => {"),
+        "refuseFnLine": _line19(_wr20, "fn refuse_member_the_trees_schema_lacks(path: &Path, verdict: &str) -> Result<(), WriteError> {"),
+        "readsElementSysml": '.join(".engine").join("schema").join("core").join("element.sysml")' in _wr20,
+        "onlyProposedIsRead": "if verdict != PROPOSED {" in _wr20,
+        "fixtureRootNotRead": "let Ok(text) = std::fs::read_to_string(&file) else { return Ok(()) };" in _wr20,
+        "callSites": _wr20.count("refuse_member_the_trees_schema_lacks("),
+        "proposedTierLine": _line19(_wr20, "fn proposed_tier<'a>("),
+        "pairTest": _line19(_wr20, "fn a_write_refuses_the_member_the_trees_schema_lacks()"),
+        "pairTestNamesMigrate": 'msg.contains("VerdictKind::proposed") && msg.contains("keel migrate") && msg.contains("element.sysml")' in _wr20,
+        "schemaDeclaresProposed": bool(_vk20) and "proposed" in _vk20.group(1),
+        "schemaLine": _line19(_el20, "enum def VerdictKind {"),
+        "verdictMembers": [m.strip() for m in _vk20.group(1).split(";") if m.strip()] if _vk20 else None,
+        **_land20("SchemaLacksMember", "members/keel-write/src/write.rs"),
+    },
+    "intake": {"st166": _stmt20("st166"), "us122": _story17("us122")},
+    "issue614": _issue_facts("614", _R21),
+    "resolver": _resolver20(_R21),
+    "retro": {"issue616": _issue_facts("616", "dcSchemaLacksMemberRefusalIsLedgered")},
+    "sprint745": _sprint20,
+    "backlogItems": len(_bl00_actions),
+}, "the held acceptance, what the Decision names, the refusal as it stands in write.rs, the schema it reads, the intake, the finding and the resolver",
+     _HELD_HOW + " Names by literal search in the fields. today: write.rs - the `SchemaLacksMember` variant line, its Display arm and whether the message "
+     "names `keel migrate` and the Decision, `fn refuse_member_the_trees_schema_lacks`, the element.sysml join, the PROPOSED-only early return, the "
+     "fixture-root early return, the count of call sites (definition included), `fn proposed_tier`, the D0388 pair test and its three asserted "
+     "substrings; .engine/schema/core/element.sysml - the `enum def VerdictKind {` line and its members.")
+
+# --- 55. D0522: a record migrate tolerates at the door it tolerates through the run (GH#87)
+_d0522 = _dec_file("0522-")
+_f522 = _held20("d0522", _d0522)
+_R22 = "dcToleratedRecordsSurviveTheRun"
+_ks20 = re.search(r"fn clean_args\(keep: &\[String\]\) -> Vec<String> \{(.*?)\n\}", _mig20, re.S)
+fact("aToleratedRecordSurvivesTheRun", {
+    **_f522,
+    "namesGh87": "GH#87 (st165" in (_f522["context"] or ""),
+    "namesTheObligation": "obligation35c54864" in (_f522["context"] or ""),
+    "namesTheDeletedFile": ".tracking/obligations/red-yield-35c54864.sysml" in (_f522["context"] or ""),
+    "namesCheckPreconditions908": "check_preconditions (members/keel-process/src/migrate.rs:908)" in (_f522["context"] or ""),
+    "namesTheCleanLines": "996-997" in (_f522["context"] or ""),
+    "namesTheWindow": "the gap between two red turns" in (_f522["context"] or ""),
+    "namesPropertyOfTheRun": "a property of the run, not of its first step" in (_f522["decision"] or ""),
+    "namesGateDiscount": "the post-apply gate does not count a violation whose subject is a part declared in a tolerated record" in (_f522["decision"] or ""),
+    "namesCleanExcludes": "the rollback's `git clean` excludes every tolerated path" in (_f522["decision"] or ""),
+    "namesModifiedStaysRefused": "MODIFIED rather than new stays refused at the door" in (_f522["decision"] or ""),
+    "namesK7": "K7" in (_f522["rationale"] or ""),
+    "namesRejectedRegressionShape": "Judging only regressions against a pre-apply gate run would mask every pre-existing red" in (_f522["rationale"] or ""),
+    "namesResolver": _R22 in (_f522["consequences"] or "") and "issue613" in (_f522["consequences"] or ""),
+    "namesStillRedAfter": "an untriaged obligation is still red under `keel gate guard` after the migration" in (_f522["consequences"] or ""),
+    "today": {
+        "checkPreconditionsLine": _line19(_mig20, "pub fn check_preconditions(root: &Path, dry_run: bool) -> Result<Vec<String>, Refusal> {"),
+        "checkPreconditionsReturnsTolerated": "Ok(tolerated.into_iter().map(str::to_string).collect())" in _mig20,
+        "isTolerableLine": _line19(_mig20, "fn is_tolerable_obligation(status: &str, path: &str) -> bool {"),
+        "toleratedPathsLine": _line19(_mig20, "fn tolerated_paths(tolerated: &[String]) -> Vec<String> {"),
+        "toleratedPartsLine": _line19(_mig20, "fn tolerated_parts(root: &Path, paths: &[String]) -> Vec<String> {"),
+        "discountLine": _line19(_mig20, "fn discount_tolerated(output: &str, parts: &[String]) -> Result<Vec<String>, Vec<String>> {"),
+        "discountKeepsOtherReds": "if discounted.is_empty() || !red.is_empty() {" in _mig20,
+        "cleanArgsLine": _line19(_mig20, "fn clean_args(keep: &[String]) -> Vec<String> {"),
+        "cleanExcludesKeep": bool(_ks20) and 'args.push("-e".to_string());' in _ks20.group(1),
+        "restoreTakesKeep": "fn restore(root: &Path, sha: &str, keep: &[String]) -> Result<(), String> {" in _mig20,
+        "restoreLine": _line19(_mig20, "fn restore(root: &Path, sha: &str, keep: &[String]) -> Result<(), String> {"),
+        "markerCarriesKeep": "any further lines are the tolerated paths" in _mig20,
+        "markerLine": _line19(_mig20, "any further lines are the tolerated paths"),
+        "projectGateLine": _line19(_mig20, "fn project_gate(root: &Path, tolerated_parts: &[String]) -> Result<(), (String, String)> {"),
+        "gateDiscountsOnlyGuard": 'if gate == "guard" && !tolerated_parts.is_empty() {' in _mig20,
+        "discountedReportLine": _line19(_mig20, "failing line(s) DISCOUNTED - each names a record tolerated at the door (D0522):"),
+        "keepFlowsFromDoor": "let keep = tolerated_paths(&tolerated);" in _mig20 and "project_gate(root, &tolerated_parts(root, keep))" in _mig20,
+        "pairTest": _line19(_mig20, "fn a_record_tolerated_at_the_door_is_discounted_by_the_gate_and_kept_by_the_clean()"),
+        "pairTestHoldsBothHalves": 'expect_err("a violation on another subject is the run\'s red")' in _mig20 and '"clean", "-fdq", "-e", ".tracking/obligations/red-yield-abc.sysml", "--", ".engine", ".tracking", ".claude"' in _mig20,
+        "emptyKeepIsTodaysClean": 'assert!(discount_tolerated(green, &[]).is_err(), "nothing tolerated, nothing discounted");' in _mig20,
+        "migrateLines": len(_mig20.splitlines()),
+        **_land20("fn discount_tolerated", "members/keel-process/src/migrate.rs"),
+    },
+    "intake": {"st165": _stmt20("st165"), "us121": _story17("us121")},
+    "issue613": _issue_facts("613", _R22),
+    "resolver": _resolver20(_R22),
+    "sprint745": _sprint20,
+    "backlogItems": len(_bl00_actions),
+}, "the held acceptance, what the Decision names, the one keep list as it flows through migrate.rs, the intake, the finding and the resolver",
+     _HELD_HOW + " Names by literal search in the fields. today: migrate.rs - `pub fn check_preconditions` and its `Ok(tolerated...)` return, "
+     "`fn is_tolerable_obligation`, `fn tolerated_paths`, `fn tolerated_parts`, `fn discount_tolerated` and its other-red guard clause, `fn clean_args` "
+     "pushing `-e` per kept path, `fn restore` taking `keep`, the marker comment carrying the tolerated paths, `fn project_gate` discounting only the "
+     "guard gate, the DISCOUNTED report line, the two lines that carry `keep` from the door to the gate, the D0388 pair test and the substrings it "
+     "asserts, the file's line count.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "

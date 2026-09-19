@@ -14,9 +14,17 @@ The fiftieth publish adds a third new tab, recorded by the other actor session t
 downstream project because the ownership exemption lives on a path a migration could not write; the record has the run write its own
 resync record and regenerate the surface inside the run. Applied under the held marker at 0c131b73; one clause, no OPTION, so a held
 acceptance beside the two forks.
-Twenty-two tabs, twenty-two asks (D0404); every count is a facts.py fact, never typed; each metric says what it does (issue562).
+The fifty-first publish adds three tabs from the same day's GitHub intake (five reports, one downstream migration reverting itself;
+public repository, so plan only, D0264) and the human's direction that migration should be smooth. First: a guard that runs in an
+adopting project holds the adopter to its own claims - outside the self-build source-reference sets the shipped living docs aside, a
+charter resolves in either decisions directory, a count over the project's own corpus is never seeded. Second: a write emits only what
+the tree's own schema declares - before landing the proposal-tier verdict member it reads the tree's element.sysml and refuses, naming
+`keel migrate`, when the member is absent. Third: a record migrate tolerates at the door it tolerates through the run - the post-apply
+gate discounts violations on it and the rollback's clean preserves it. All three applied under the held marker at one landing; one
+clause each, no OPTION, so three held acceptances beside the two forks.
+Twenty-five tabs, twenty-five asks (D0404); every count is a facts.py fact, never typed; each metric says what it does (issue562).
 
-Usage: python scripts/exec_brief/build_2026_09_18_three_held.py <facts.json> <previous.html> <out.html>
+Usage: python scripts/exec_brief/build_2026_09_18_downstream_whole.py <facts.json> <previous.html> <out.html>
 """
 import re
 import sys
@@ -56,7 +64,7 @@ def v(name):
 # ---- the queue: eleven held process changes and two held safety changes -------------------------------
 pending = v("pendingAcceptances")
 members = v("pendingMembers")
-QUEUE = ["d0494", "d0495", "d0496", "d0497", "d0499", "d0500", "d0501", "d0502", "d0503", "d0504", "d0505", "d0506", "d0508", "d0509", "d0510", "d0513", "d0514", "d0515", "d0516", "d0517", "d0518", "d0519"]
+QUEUE = ["d0494", "d0495", "d0496", "d0497", "d0499", "d0500", "d0501", "d0502", "d0503", "d0504", "d0505", "d0506", "d0508", "d0509", "d0510", "d0513", "d0514", "d0515", "d0516", "d0517", "d0518", "d0519", "d0520", "d0521", "d0522"]
 if len(members) != pending or [p["slug"] for p in members] != QUEUE:
     sys.exit(f"refusing: this page is written for {QUEUE}; the queue is {[p['slug'] for p in members]} ({pending} pending)")
 FORKS = ["d0517", "d0518"]
@@ -531,6 +539,103 @@ _i609 = MG["issue609"]
 if not (_i609["exists"] and _i609["severity"] == "High" and _i609["resolver"] == "d0519" and _i609["noIssue608Part"] and _i609["fable608Exists"]):
     sys.exit(f"refusing: the page says the finding is High, resolved by the record itself, and renumbered off the colliding number: {_i609}")
 
+# -- asks 22-24 (first three tabs): downstream projects made whole - three held records from one GitHub intake, applied at one landing --
+def _held(name, label):
+    _r = v(name)
+    if _r["status"] != "proposed" or _r["marker"] != "#ProspectiveChange" or _r["acceptance"] is not None or _r["fork"] or _r["createdBy"] != "claudeFable5":
+        sys.exit(f"refusing: the page says a held, unaccepted single clause recorded here ({label}): {_r['status']}, {_r['marker']}, {_r['acceptance']}, fork={_r['fork']}, by {_r['createdBy']}")
+    for _k in ("derivedFromSt167", "derivedFromSt168", "namesHeld", "namesResidual", "namesTheDirection"):
+        if not _r[_k]:
+            sys.exit(f"refusing: the {label} record does not carry what every downstream tab says it carries: {_k}")
+    for _k, _x in _r.items():
+        if _k.startswith("names") and not _x:
+            sys.exit(f"refusing: the {label} record does not say what the page quotes it saying: {_k}")
+    _t = _r["today"]
+    if not (_t["landedCommit"] and _t["landedCi"] == "success" and _t["headCi"] == "success"):
+        sys.exit(f"refusing: the page says the {label} change landed with CI green there and at HEAD: {_t['landedCommit']} {_t['landedCi']} {_t['headCi']}")
+    _s = _r["sprint745"]
+    if not (_s.get("exists") and _s["chartersAsExpected"] and _s["gateResults"] == 6 and _s["retroFindings"] == 6 and _s["retroNamesIssue615to617"]
+            and [d["outcome"] for d in _s["storyDod"]] == ["pass"]):
+        sys.exit(f"refusing: the page says one chartered sprint, six gates, a passing story DoD and a six-finding retro naming three tracked items: {_s}")
+    return _r
+
+
+def _stamped(res, label):
+    if not (res["onBacklog"] and res["position"] and [d["outcome"] for d in res["dodResults"]] == ["pass"] and res["readyRank"] is None):
+        sys.exit(f"refusing: the page says the {label} resolver is on the backlog with one passing DoD result and off the ready frontier: {res}")
+    return res["position"]
+
+
+def _high(iss, label):
+    if not (iss["exists"] and iss["severity"] == "High" and iss["resolverAsExpected"] and iss["resolverDodNamesIssue"]):
+        sys.exit(f"refusing: the page says the {label} finding is High and its resolver's DoD names it: {iss}")
+
+
+SH = _held("shippedClaimsAreHeldWhereTheyAreMade", "shipped-claims")
+SHT = SH["today"]
+if not (SHT["selfBuildReadLine"] and SHT["setAsideBranchLine"] and SHT["setAsideWarningLine"] and SHT["isShippedEngineDocLine"] and SHT["shippedReadsEmbeddedDir"]
+        and SHT["surfaceTest"] and SHT["charterResolvesLine"] and SHT["charterReadsBothDirs"] and SHT["onboardTest"] and SHT["guardMessageNamesBothDirs"]
+        and len(SHT["charterBinaryTests"]) == 2 and SHT["danglingFixtureIsHeldNowhere"] and SHT["ratchetPredicateLine"] and SHT["ratchetNeverSeededLine"]
+        and SHT["ratchetNamesTheFile"] and SHT["ratchetTest"]):
+    sys.exit(f"refusing: the page says the set-aside branch, the two-directory charter read, the never-seeded ratchet, three unit tests and two binary tests all stand in the source: {SHT}")
+L_SB, L_SA, L_CR, L_RT, LANDED_SH = SHT["selfBuildReadLine"], SHT["setAsideBranchLine"], SHT["charterResolvesLine"], SHT["ratchetNeverSeededLine"], SHT["landedCommit"]
+N_UNIT_SH = len([x for x in (SHT["surfaceTest"], SHT["onboardTest"], SHT["ratchetTest"]) if x])
+N_BIN_SH = len(SHT["charterBinaryTests"])
+for _g in ("sourceReference", "activationManifest"):
+    if not (SH["live"][_g]["exit0"] and SH["live"][_g]["verdict"] == "PASS" and SH["live"][_g]["violations"] == 0 and SH["live"][_g]["warnings"] == 0):
+        sys.exit(f"refusing: the page says both guards run green here today: {SH['live']}")
+N_SR, N_AM = SH["live"]["sourceReference"]["scanned"], SH["live"]["activationManifest"]["scanned"]
+for _st in ("st162", "st163", "st164"):
+    if not (SH["intake"][_st]["present"] and SH["intake"][_st]["channel"] == "github" and SH["intake"][_st]["trust"] == "untrusted"):
+        sys.exit(f"refusing: the page says three untrusted GitHub statements: {SH['intake']}")
+for _us, _iss in (("us118", "issue610"), ("us119", "issue611"), ("us120", "issue612")):
+    if not (SH["intake"][_us]["present"] and SH["intake"][_us]["implication"] == "bug" and sorted(SH["intake"][_us]["implicates"]) == ["d0520", _iss]):
+        sys.exit(f"refusing: the page says each story implicates the record and its finding: {SH['intake'][_us]}")
+    _high(SH["issues"][_iss], _iss)
+POS_SR_SH = _stamped(SH["resolvers"]["source"], "source-reference")
+POS_CH_SH = _stamped(SH["resolvers"]["charter"], "charter")
+POS_RT_SH = _stamped(SH["resolvers"]["ratchet"], "ratchet")
+N_BACKLOG_SH = SH["backlogItems"]
+for _k in ("issue615", "issue617"):
+    if not (SH["retro"][_k]["exists"] and SH["retro"][_k]["resolverAsExpected"]):
+        sys.exit(f"refusing: the page says the retro's findings are tracked with resolvers: {SH['retro']}")
+
+SM = _held("aWriteEmitsOnlyWhatTheTreesSchemaDeclares", "schema-member")
+SMT = SM["today"]
+if not (SMT["variantLine"] and SMT["messageNamesMigrate"] and SMT["messageLine"] and SMT["refuseFnLine"] and SMT["readsElementSysml"] and SMT["onlyProposedIsRead"]
+        and SMT["fixtureRootNotRead"] and SMT["callSites"] == 3 and SMT["proposedTierLine"] and SMT["pairTest"] and SMT["pairTestNamesMigrate"]
+        and SMT["schemaDeclaresProposed"] and SMT["schemaLine"] and "proposed" in SMT["verdictMembers"]):
+    sys.exit(f"refusing: the page says the variant, the read of element.sysml, two callers, the fixture exemption and the pair test stand in the source and this tree's schema declares the member: {SMT}")
+L_VAR, L_MSG, L_REF, L_PT_SM, L_SCHEMA, LANDED_SM = SMT["variantLine"], SMT["messageLine"], SMT["refuseFnLine"], SMT["pairTest"], SMT["schemaLine"], SMT["landedCommit"]
+N_CALLERS_SM = SMT["callSites"] - 1
+N_VK = len(SMT["verdictMembers"])
+if not (SM["intake"]["st166"]["present"] and SM["intake"]["st166"]["channel"] == "github" and SM["intake"]["st166"]["trust"] == "untrusted"
+        and SM["intake"]["us122"]["implication"] == "bug" and sorted(SM["intake"]["us122"]["implicates"]) == ["d0521", "issue614"]):
+    sys.exit(f"refusing: the page says one untrusted statement and one story implicating the record and the finding: {SM['intake']}")
+_high(SM["issue614"], "issue614")
+POS_SM = _stamped(SM["resolver"], "schema-member")
+N_BACKLOG_SM2 = SM["backlogItems"]
+if not (SM["retro"]["issue616"]["exists"] and SM["retro"]["issue616"]["resolverAsExpected"]):
+    sys.exit(f"refusing: the page says the refusal's missing ledger row is tracked: {SM['retro']}")
+
+TL = _held("aToleratedRecordSurvivesTheRun", "tolerated-record")
+TLT = TL["today"]
+if not (TLT["checkPreconditionsLine"] and TLT["checkPreconditionsReturnsTolerated"] and TLT["isTolerableLine"] and TLT["toleratedPathsLine"] and TLT["toleratedPartsLine"]
+        and TLT["discountLine"] and TLT["discountKeepsOtherReds"] and TLT["cleanArgsLine"] and TLT["cleanExcludesKeep"] and TLT["restoreTakesKeep"] and TLT["markerCarriesKeep"]
+        and TLT["projectGateLine"] and TLT["gateDiscountsOnlyGuard"] and TLT["discountedReportLine"] and TLT["keepFlowsFromDoor"] and TLT["pairTest"]
+        and TLT["pairTestHoldsBothHalves"] and TLT["emptyKeepIsTodaysClean"]):
+    sys.exit(f"refusing: the page says one keep list flows from the door to the gate, the clean and the marker, and the pair test holds both halves: {TLT}")
+L_CP, L_DT, L_CA, L_MK, L_PT_TL, LANDED_TL = TLT["checkPreconditionsLine"], TLT["discountLine"], TLT["cleanArgsLine"], TLT["markerLine"], TLT["pairTest"], TLT["landedCommit"]
+if not (TL["intake"]["st165"]["present"] and TL["intake"]["st165"]["channel"] == "github" and TL["intake"]["st165"]["trust"] == "untrusted"
+        and TL["intake"]["us121"]["implication"] == "bug" and sorted(TL["intake"]["us121"]["implicates"]) == ["d0522", "issue613"]):
+    sys.exit(f"refusing: the page says one untrusted statement and one story implicating the record and the finding: {TL['intake']}")
+_high(TL["issue613"], "issue613")
+POS_TL = _stamped(TL["resolver"], "tolerated-record")
+N_BACKLOG_TL = TL["backlogItems"]
+if not (LANDED_SH == LANDED_SM == LANDED_TL):
+    sys.exit(f"refusing: the page says the three changes landed together: {LANDED_SH} {LANDED_SM} {LANDED_TL}")
+N_GATES_745, N_RETRO_745, PTS_745 = SH["sprint745"]["gateResults"], SH["sprint745"]["retroFindings"], SH["sprint745"]["estimatedPoints"]
+
 # -- ask 19: a recorder's REFUSED line cannot cite the verifier's noted-writes line - refusal 8, applied under the held marker --
 NW = v("recorderRefusalCannotCiteTheVerifiersWritesLine")
 if NW["status"] != "proposed" or NW["marker"] != "#ProspectiveChange" or NW["acceptance"] is not None:
@@ -905,10 +1010,13 @@ _PF_LATER = {n: (f"pos{n}" in PFR["sides"][0] and f"neg{n}" in PFR["sides"][1]) 
 # sprint 744's pair is the checker's own two fixtures, named for the sprint whose misread they replay (735), run through --probe
 _PF_LATER[744] = ("positive-sprint735-refused-citing-owed-writes" in PFR["sides"][0] and "negative-sprint735-one-owed" in PFR["sides"][1]
                   and "check_report.py" in PFR["sides"][0] and "--probe" in PFR["sides"][0])
+# sprint 745's pair is the write refusal's own unit test against the proposal-tier test beside it (D0521, keel-write)
+_PF_LATER[745] = ("a_write_refuses_the_member_the_trees_schema_lacks" in PFR["sides"][0] and "ai_examined_passes_without_a_replayable_receipt_land_proposed" in PFR["sides"][1]
+                  and "-p keel-write" in PFR["sides"][0])
 if not (_PF_733 or _PF_734 or _PF_735 or any(_PF_LATER.values())):
-    sys.exit(f"refusing: the page says the latest ladder's pair is sprint 733's to 744's, positive then negative: {PFR['sides']}")
-# the pair's sprint, as a count of ladders in a row since 733's (the fourth): 733 -> 4 ... 744 -> 15
-_PF_SPRINT = next((n for n in (744, 743, 742, 741, 740, 739, 738, 737, 736) if _PF_LATER[n]), 735 if _PF_735 else 734 if _PF_734 else 733)
+    sys.exit(f"refusing: the page says the latest ladder's pair is sprint 733's to 745's, positive then negative: {PFR['sides']}")
+# the pair's sprint, as a count of ladders in a row since 733's (the fourth): 733 -> 4 ... 745 -> 16
+_PF_SPRINT = next((n for n in (745, 744, 743, 742, 741, 740, 739, 738, 737, 736) if _PF_LATER[n]), 735 if _PF_735 else 734 if _PF_734 else 733)
 N_PAIR_LADDERS = _PF_SPRINT - 729
 PROBE_S_PF, LADDER_S_PF = PFR["seconds"], sum(PFL["rungSeconds"].values())
 PAIR_FILE = PFR["fileStem"]
@@ -1623,6 +1731,78 @@ figMG3 = downstream(
         ("two residuals", "contracts kept; a project's own CLAUDE.md", "2", "muted"),
     ],
 )
+figSH1 = logic_lanes(
+    "The adopter's guard is red on a claim the engine shipped",
+    ("today", [
+        ("resync deploys docs", "engine's own citations", "accent", ""),
+        ("source-reference", "file not in this tree", "bad", ""),
+        ("gate red", "the run reverts itself", "bad", ""),
+    ], ["", "", ""]),
+    ("as the clause reads", [
+        ("resync deploys docs", "", "accent", ""),
+        ("shipped set aside", "adopter's docs read", "ok", ""),
+        ("guard green", "claim held upstream", "ok", ""),
+    ], ["", "", ""]),
+)
+figSH3 = downstream(
+    "Three shipped claims move to where they are checkable",
+    ("keel migrate", "holds the adopter to its own claims", ""),
+    [
+        ("source-reference", f"shipped docs set aside; line {L_SA}", "1", "ok"),
+        ("the charter", f"either decisions directory; line {L_CR}", "2", "ok"),
+        ("the ratchet", f"never seeded; line {L_RT}", "1", "ok"),
+        ("the findings", "three, High; resolvers stamped", "3", "muted"),
+        ("a residual", "an edited shipped default stays set aside", "1", "muted"),
+    ],
+)
+figSM1 = logic_lanes(
+    "A write lands a member the tree does not declare",
+    ("today", [
+        ("record gate-result", "binary's constant", "accent", ""),
+        ("member written", "release schema lacks it", "bad", ""),
+        ("validate red", "record said success", "bad", ""),
+    ], ["", "", ""]),
+    ("as the clause reads", [
+        ("record gate-result", "reads element.sysml", "accent", ""),
+        ("member absent", "refuse; nothing written", "ok", ""),
+        ("names keel migrate", "tree stays valid", "ok", ""),
+    ], ["", "", ""]),
+)
+figSM3 = downstream(
+    "One read before the write leaves the tree valid",
+    ("record gate-result, record result", "read the tree's own enum first", ""),
+    [
+        ("the read", f"element.sysml, one enum; line {L_REF}", "1", "ok"),
+        ("the refusal", f"member, enum, vintage, cure; line {L_VAR}", "1", "ok"),
+        ("the callers", "DoD result and gate result", f"{N_CALLERS_SM}", "accent"),
+        ("the finding", "High; resolver stamped", "1", "muted"),
+        ("a residual", "one enum read; others need the same", "1", "muted"),
+    ],
+)
+figTL1 = logic_lanes(
+    "The run fails on what its door tolerated, then deletes it",
+    ("today", [
+        ("door tolerates", "new obligation record", "accent", ""),
+        ("gate: untriaged", "red on that record", "bad", ""),
+        ("clean -fdq", "record deleted", "bad", ""),
+    ], ["", "", ""]),
+    ("as the clause reads", [
+        ("door tolerates", "one keep list", "accent", ""),
+        ("gate discounts it", "other reds stay red", "ok", ""),
+        ("clean -e path", "record kept", "ok", ""),
+    ], ["", "", ""]),
+)
+figTL3 = downstream(
+    "One keep list flows from the door through the run",
+    ("check_preconditions", "returns the tolerated paths", ""),
+    [
+        ("the gate", f"discounted by subject; line {L_DT}", "1", "ok"),
+        ("the clean", f"one -e per kept path; line {L_CA}", "1", "ok"),
+        ("the marker", f"paths carried to recovery; line {L_MK}", "1", "ok"),
+        ("the finding", "High; resolver stamped", "1", "muted"),
+        ("a residual", "untriaged stays red after the run", "1", "muted"),
+    ],
+)
 figNW1 = logic_lanes(
     "A recorder takes the verifier's line as its own count",
     ("what happened", [
@@ -1813,6 +1993,9 @@ def words(fragment):
 
 
 ASKS = [
+    ("d0520", "ask-shipped", "Shipped", "shipped"),
+    ("d0521", "ask-schemamember", "Schema", "schemamember"),
+    ("d0522", "ask-tolerated", "Tolerated", "tolerated"),
     ("d0519", "ask-migration", "Migration", "migration"),
     ("d0517", "ask-barename", "Names", "barename"),
     ("d0518", "ask-grounding", "Grounding", "grounding"),
@@ -1825,18 +2008,69 @@ ASKS = [
     ("d0508", "ask-issuesmember", "Issues", "issuesmember"),
     ("d0506", "ask-suitemember", "Suite", "suitemember"),
     ("d0505", "ask-lockedanchor", "Anchor", "lockedanchor"),
-    ("d0504", "ask-guardsource", "Guard source", "guardsource"),
+    ("d0504", "ask-guardsource", "Source", "guardsource"),
     ("d0503", "ask-guardnames", "Guard names", "guardnames"),
     ("d0502", "ask-verifierstop", "Verifier stop", "verifierstop"),
     ("d0501", "ask-ownstart", "Own start", "ownstart"),
-    ("d0500", "ask-pairfile", "Pair file", "pairfile"),
-    ("d0499", "ask-guardtests", "Guard tests", "guardtests"),
+    ("d0500", "ask-pairfile", "Pairs", "pairfile"),
+    ("d0499", "ask-guardtests", "Tests", "guardtests"),
     ("d0497", "ask-wait", "Wait", "wait"),
     ("d0496", "ask-probes", "Probes", "probes"),
     ("d0495", "ask-triple", "Triple", "triple"),
     ("d0494", "ask-stems", "Stems", "stems"),
 ]
 panel_bodies = {
+    "shipped": f"""<h2>A downstream gate holds the adopter to its claims</h2>
+{clause(SH)}
+<p><strong>What happened:</strong> three guard reds from one downstream migration, each on content the engine shipped: living docs citing a file only this repository holds; a charter resolved in the wrong directory; a first adopter handed this engine's parser census as its ratchet. Every Rust adopter's run reverted itself.</p>
+<p><strong>What changes:</strong> outside the self-build, source-reference sets shipped docs aside and says how many; a charter resolves in either decisions directory; this corpus's count is never seeded downstream. Applied under the held marker at {LANDED_SH}; your word keeps or reverts it.</p>
+{figSH1}
+{figSH3}
+{courses([
+    ("Accept (recommended)", "shipped docs set aside; both directories; no seeded count", "a citation in a shipped file is unread"),
+    ("Skip every engine file", "the engine directory is ignored everywhere", "the self-build goes blind"),
+    ("Do nothing", "revert the three", "no Rust adopter can migrate"),
+])}
+<p><strong>True:</strong> the self-build predicate at line {L_SB}, the set-aside branch at {L_SA}, the charter read at {L_CR}, the ratchet's return at {L_RT}; {N_UNIT_SH} unit and {N_BIN_SH} binary tests; both guards green here ({N_SR}, {N_AM} scanned); three High findings, resolvers {POS_RT_SH}–{POS_SR_SH} of {N_BACKLOG_SH}; CI green. <strong>Mine:</strong> a claim is checkable only where its referent is. <strong>What decides it:</strong> is the embedded engine's file set the right line between shipped and authored? <strong>Wrong if</strong> a shipped doc's drift in the self-build reads as set aside.</p>
+{opts("ask-shipped", "d0520", [
+    ("Accept (recommended)", "Accept: in a root that is not the self-build, guard source-reference reads only living docs the embedded engine does not ship and reports how many shipped docs it set aside; a manifest's charteredBy resolves against .engine/decisions/ and .engine/reference/decisions/ both, a charter naming nothing in either still failing; the resync never seeds parser-coverage-baseline.toml into a project that has none (recommended)"),
+    ("Skip every engine file", "Reject as written; ask for the alternative: source-reference skips every file under .engine/ in every root, the self-build included"),
+    ("Do nothing", "Do nothing: the Decision stays proposed; revert the three changes; keel migrate keeps reverting itself in every Rust adopter"),
+])}""",
+    "schemamember": f"""<h2>A write emits only what the tree's schema declares</h2>
+{clause(SM)}
+<p><strong>What happened:</strong> a binary built from main recorded a gate result into a tree scaffolded from the release. It wrote the proposal-tier verdict member the tree's older schema does not declare; the next validate rejected the tree, and the write had reported success.</p>
+<p><strong>What changes:</strong> before landing that member the write reads the enum's declaration in the tree's own element.sysml; a tree lacking it gets a refusal naming the member, the enum, the vintage and <code>keel migrate</code>; nothing is written. Applied under the held marker at {LANDED_SM}; your word keeps or reverts it.</p>
+{figSM1}
+{figSM3}
+{courses([
+    ("Accept (recommended)", "one read per proposal-tier write; refuse, name the cure", "ceremony waits on a migrate"),
+    ("Write pass instead", "an examined claim lands as a standing pass", "a fabricated standing pass"),
+    ("Do nothing", "revert", "a red tree to hand-edit downstream"),
+])}
+<p><strong>True:</strong> the variant at line {L_VAR}, its message at {L_MSG}, the read at {L_REF}, {N_CALLERS_SM} callers, the pair test at {L_PT_SM}; this tree declares {N_VK} verdict members, proposed among them (line {L_SCHEMA}); the finding is High, resolver item {POS_SM} of {N_BACKLOG_SM2}; CI green. <strong>Mine:</strong> a refusal that names its cure is a door. <strong>What decides it:</strong> may a write ever fall back to a member the tree does declare? <strong>Wrong if</strong> a fixture tree with no schema file is refused.</p>
+{opts("ask-schemamember", "d0521", [
+    ("Accept (recommended)", "Accept: before a write lands VerdictKind::proposed it reads the enum's declaration in the tree's own .engine/schema/core/element.sysml and refuses when the member is absent, writing nothing and naming the member, the enum, the vintage and keel migrate; a tree with no such file is the write API's fixture and is not read (recommended)"),
+    ("Write pass instead", "Reject as written; ask for the alternative: when the tree lacks the member the write lands VerdictKind::pass"),
+    ("Do nothing", "Do nothing: the Decision stays proposed; revert the refusal; a write lands the member and the next gate validate rejects the tree"),
+])}""",
+    "tolerated": f"""<h2>A record tolerated at the door survives the run</h2>
+{clause(TL)}
+<p><strong>What happened:</strong> a downstream migration tolerated a new obligation record at its door, failed its post-apply gate on it as untriaged, and its rollback's clean deleted it. The audit trail of a bypassed control was gone; the next attempt passed because the evidence was missing.</p>
+<p><strong>What changes:</strong> one keep list flows from the door through the gate, the clean and the marker: the gate does not count a violation whose subject is a part a tolerated record declares and stays red for every other; the clean excludes the tolerated paths. Applied under the held marker at {LANDED_TL}; your word keeps or reverts it.</p>
+{figTL1}
+{figTL3}
+{courses([
+    ("Accept (recommended)", "discount by the door's own predicate; preserve in the clean", "an untriaged obligation stays red after the run"),
+    ("Judge regressions only", "compare against a pre-apply gate run", "every pre-existing red is masked"),
+    ("Do nothing", "revert", "the record of a bypassed control is destroyed"),
+])}
+<p><strong>True:</strong> the door returns the list at line {L_CP}; the discount keeps every other red ({L_DT}); the clean takes one exclusion per kept path ({L_CA}); the marker carries them ({L_MK}); the pair test holds both halves ({L_PT_TL}); the finding is High, resolver item {POS_TL} of {N_BACKLOG_TL}; CI green. <strong>Mine:</strong> a run tolerates one thing under one definition. <strong>What decides it:</strong> is discounting by subject narrow enough, or must only the deletion be cured? <strong>Wrong if</strong> a violation on another subject is ever discounted.</p>
+{opts("ask-tolerated", "d0522", [
+    ("Accept (recommended)", "Accept: the tolerance check_preconditions grants holds through the run - the post-apply gate does not count a violation whose subject is a part declared in a tolerated record and stays red for every other, the rollback's git clean excludes every tolerated path, the in-progress marker carries them, and a tolerated record that is MODIFIED rather than new stays refused at the door (recommended)"),
+    ("Judge regressions only", "Reject as written; ask for the alternative: the post-apply gate is judged against a pre-apply gate run and only new violations fail the migration"),
+    ("Do nothing", "Do nothing: the Decision stays proposed; revert the keep list; migrate fails on the record its door tolerated and its rollback deletes it"),
+])}""",
     "migration": f"""<h2>A migration writes the record its own gate reads</h2>
 {clause(MG)}
 <p><strong>What happened:</strong> every downstream migration reverted itself. The resync rewrites the engine copy, whose items name five upstream authors; the ownership guard read a non-owner edit and the gate went red. Its one exemption is a transform under the migrations directory, which the shipping filter drops, so downstream it never fires. Cleared, every skill then read stale.</p>
@@ -2233,19 +2467,19 @@ def frame(panels_html, tabs_html, title, sub):
 <div class="topbar"><p class="sub" data-digest="subtitle">{sub}</p><button class="copy" data-copy type="button" aria-label="Copy this brief for AI">&#8681; Copy for AI</button></div>
 
 <div class="ask"><p class="verdict"><strong>A on both forks.</strong></p></div>
-<div class="chips"><span class="chip"><b>Waiting</b> {pending}</span><span class="chip"><b>Safety changes</b> 2</span><span class="chip"><b>Forks</b> {len(FORKS)}</span></div>
+<div class="chips"><span class="chip"><b>Waiting</b> {pending}</span><span class="chip"><b>Safety</b> 2</span><span class="chip"><b>Forks</b> {len(FORKS)}</span></div>
 
 <div class="tabs" role="tablist" aria-label="The asks">{tabs_html}</div>
 {panels_html}
 <label class="note-row">Notes<textarea data-d="note" rows="2" placeholder="optional"></textarea></label>
 <div class="copy-bottom"><button class="copy" data-copy type="button">&#8681; Copy for AI</button></div>
-<footer data-digest="provenance">Computed at {TREE}, {DATE}; {dirty} uncommitted files; {tests} tests, {failing} failing; CI red on {N_CI_RED} of {len(CI_PUSH)} pushes. <a href="https://github.com/williamweatherholtz/sysmlv2-ai-toolkit" target="_blank" rel="noopener">repository</a>.</footer>
+<footer data-digest="provenance">At {TREE}, {DATE}; {dirty} uncommitted; {tests} tests, {failing} failing; CI red on {N_CI_RED} of {len(CI_PUSH)} pushes. <a href="https://github.com/williamweatherholtz/sysmlv2-ai-toolkit" target="_blank" rel="noopener">repository</a>.</footer>
 </div>
 """
 
 
-TITLE = "Accept twenty, two forks"
-SUB = "Twenty-two held"
+TITLE = "Accept twenty-three, two forks"
+SUB = "Twenty-five held"
 
 
 def render(panel_bodies):
@@ -2344,5 +2578,8 @@ print(f"wrote {out_path}: {len(page)} bytes; frame {frame_words} words; panels "
       f"noted writes: {N_REFUSALS_NW} refusals, {N_PAIRS_NW} pairs, fixtures {N_POS_LINES_NW}/{N_NEG_LINES_NW} lines, label on {N_LABEL_SURFACES} surfaces "
       f"({N_NEW_LABEL} new / {N_OLD_LABEL} old), item {POS_NW} of {N_BACKLOG_NW} at {SHA_NW}; "
       f"bare name: {N_DUPS} of {N_DECLARED} duplicated ({N_SPRINT_DUPS} sprint-only, {N_OTHER_DUPS} others), source {BNS}, item {POS_BN} of {N_BACKLOG_BN}, ready {N_READY_BN}; "
-      f"grounding: step line {L_GROUND}, check_brief line {L_CHECK_BRIEF}, {N_BUILD_SCRIPTS} build scripts, {N_STEPS_SCANNED} steps scanned, item {POS_GS} of {N_BACKLOG_GS}")
+      f"grounding: step line {L_GROUND}, check_brief line {L_CHECK_BRIEF}, {N_BUILD_SCRIPTS} build scripts, {N_STEPS_SCANNED} steps scanned, item {POS_GS} of {N_BACKLOG_GS}; "
+      f"downstream whole: landed {LANDED_SH}, shipped lines {L_SB}/{L_SA}/{L_CR}/{L_RT}, {N_UNIT_SH} unit + {N_BIN_SH} binary tests, guards {N_SR}/{N_AM} scanned, "
+      f"resolvers {POS_RT_SH}-{POS_SR_SH} of {N_BACKLOG_SH}; schema lines {L_VAR}/{L_MSG}/{L_REF}/{L_PT_SM}, {N_CALLERS_SM} callers, {N_VK} members (line {L_SCHEMA}), item {POS_SM}; "
+      f"tolerated lines {L_CP}/{L_DT}/{L_CA}/{L_MK}/{L_PT_TL}, item {POS_TL} of {N_BACKLOG_TL}; sprint 745 {N_GATES_745} gates, {N_RETRO_745} findings, {PTS_745} pts")
 assert_fits(out_path)   # probe first, then measure in a browser with and without web fonts; findings remove the page

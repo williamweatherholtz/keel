@@ -2183,4 +2183,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcUnresolvedCharterAdviceFitsAFirstTimeAdopter to issue617;
+
+    part issue618 : Issue {
+        :>> id = "00429205-b1fc-4118-a5c1-e14dda7fc303";
+        :>> title = "The brief's write-back is a manual step nothing checks: the forty-ninth publish was never recorded and the fiftieth page never published, silent for two turns";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The forty-ninth publish of the decision brief (two forks, d0517-d0518, computed at 46a6d9c3) went to the artifact URL and .keel/decision-page.toml was never written back: the file stayed at the forty-eighth publish (19 ids, publishedAgainst e05bd053) while the live page carried 21 data-records. The fiftieth page (d0519, computed at fe57df66, build_2026_09_18_three_held.py) was then built, checked clean and never published at all. Both were found only when the fifty-first build read the live page back (21 ids) against the toml (19) and the lens (25). Consequence: decision-surfacing step 2 - the STATE TEST that decides whether a turn says anything about decisions - compared the lens against a stale set for two turns, so its silence was not the computed state the process claims it is (D0359), and a page the human could not see was treated as published. Nothing in the build or publish path reads the previous page's data-records set against the toml ids, and nothing distinguishes a built page from a published one: a build writes only the page, and the write-back is a separate manual step (skill decision-surfacing step 5) that the step's own text is the only thing holding. Recurrable: the same two-step shape (publish, then remember to write back) has now missed once in fifty-one publishes, and the miss was silent for two turns. Manual vigilance is not a control (D0047).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcABuiltBriefIsDistinguishableFromAPublishedOne to issue618;
 }
