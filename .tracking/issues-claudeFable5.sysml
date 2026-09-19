@@ -2238,4 +2238,48 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcAllocatedNameIsOneNamespaceAcrossPackages to issue624;
+
+    part issue625 : Issue {
+        :>> id = "203a4243-f26e-4381-aa65-4cf1a7d63be6";
+        :>> title = "keel land's merged-tree gate refused a merge on edge endpoints the merged tree declares";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "On 2026-09-18 `keel land`, running inside the post-commit hook of 1809e70f, had its push rejected (claudeOpus5 landed 1228a756 first), merged origin/main to 5170199e, and then refused: 'the MERGED tree does not pass the gate (2 problem(s)): VIOLATION edge-endpoints: .tracking/issues-claudeOpus5.sysml: #Resolves dependency from `dcConfirmationFlipChecksItsDelegation` - declared nowhere' and the same for `dcSessionActorDoesNotInheritSilently`. Both actions ARE declared in .tracking/backlog.sysml (lines 2884 and 2886 of the merged tree, added by 1228a756). `keel gate validate .` on the merged working tree read 863 clean and `keel gate guard --no-receipt .` read ALL PASS, duplicate-identity and edge-endpoints included; the merge was committed by hand and the next land pushed it (d19cb819). members/keel-process/src/sync.rs:212-228: `git merge --no-edit origin/main` then `gate_passes(repo)`, in a process that inherited the hook's GIT_INDEX_FILE and KEEL_HOOK. The refusal named a tree that does not exist - a false red on the one path a contributor cannot bypass without committing a merge by hand, which is what happened. The cause is not established; this Issue holds the observed text so the reproduction starts from the fact and not from memory.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcLandMergedGateReadsTheTreeTheMergeWrote to issue625;
+
+    part issue626 : Issue {
+        :>> id = "c01da675-5de2-44ac-b779-140911df0d75";
+        :>> title = "An incremental build ships the previous .engine tree: include_dir has no rerun-if-changed edge";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-schema/src/embedded.rs:13 embeds the engine tree with `include_dir!('$CARGO_MANIFEST_DIR/../../.engine')` and members/keel-schema has no build.rs, so cargo has no rerun-if-changed edge from .engine/ to the crate: an incremental `cargo build --release` after editing, adding or removing a file under .engine/ produces a binary that still carries the previous tree, and `keel init`, `keel migrate`'s resync and the process-change lock's is_engine_written read (which compares a locked file against the EMBEDDED text) all answer from stale content. Sprint 544's implement gate recorded the failure mode ('include_dir embeds .engine at build time and an incremental build shipped the stale rules file (touch main.rs)') and its retro filed it as a build habit in d0302's consequences; CLAUDE.md section 4 carries `touch members/keel-schema/src/embedded.rs` as the reminder. It is a reminder, not a control (D0047): in this session the D0524 work rebuilt keel-serve.exe twice after adding a .engine/decisions/ file before the touch was applied, and the release cut's rebuild (5f89df77) relied on the touch being remembered. A wrong answer here is silent - the binary reports the right build commit and the wrong engine.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcEngineEmbedRerunsOnEngineChange to issue626;
+
+    part issue627 : Issue {
+        :>> id = "0b378fdb-7ab6-4273-b193-59bbaf81c5f0";
+        :>> title = "A Release purpose named an Issue open at the tagged tree and nothing read the claim";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The v0.5.1 Release record (release051, .tracking/baselines.sysml) was authored at the cut with a purpose naming 'a repeated single flag is refused (issue623)', and the cut commit 5f89df77's message says the same. issue623 was not delivered: its resolver dcARepeatedSingleFlagIsRefused has no TestResult and `keel show open-issues` lists issue623 open at the tagged tree. The AI wrote the list of what shipped from memory of what the sprint tracked, not from the computed resolution state, and the guard set passed the record: release-recorded binds a tag to a Release item and nothing reads the purpose's issue references against the tree. The purpose was corrected by hand in the wrapper-checksum commit; the commit message is history and stays wrong (D0129). A Release's purpose is the one prose an adopter reads to learn what a version fixed, and a fix it names that is not there sends them to a binary that will not do it - the same shape as the CHANGELOG naming a Decision whose code has not landed, which the v0.5.0 cut avoided by hand for D0488-D0490.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcAReleasePurposeNamesOnlyResolvedIssues to issue627;
+
+    part issue628 : Issue {
+        :>> id = "c0ab5c57-f59d-46f6-9181-40ec8174f454";
+        :>> title = "A GitHub answer typed a resolver name the tree does not hold: step 4 has no render";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Answering GH#86-90 for v0.5.1 (github-intake step 4: comment the tracked id and the verdict where the reporter stands), the AI typed each Issue's resolver name into the comment body by hand and got one wrong: GH#88 said issue612 is resolved by `dcSourceReferenceHoldsTheAdopterToItsOwnDocs`; the tree's edge is `#Resolves dependency from dcSourceReferenceReadsTheAdoptersOwnClaims to issue612` (.tracking/issues-claudeFable5.sysml). Caught by reading the edges back AFTER posting, corrected in a second comment. The other four names were right by the same unreliable route. The comment is the one place an outside reporter reads what happened, and every fact in it - the Statement id, the story, the Issue, its resolver, the Release whose tag carries the fix - is computed from the model; typing them is the same defect as authoring state in prose (D0018), with the reader outside the repo. `keel github` has pull/ingest/decider arms and no arm that renders the answer, so step 4 has no write API and every comment is prose from memory.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcGitHubAnswerRendersFromTheModel to issue628;
 }

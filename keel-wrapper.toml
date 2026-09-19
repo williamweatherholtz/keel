@@ -17,3 +17,8 @@
 "keel-linux-x86_64" = "8cf38b2d0b772224752416d18ed8af0ee75ec64cf9f3b805760154eda4efe79b"
 "keel-macos-aarch64" = "c1fb1ffe425ab59ee0ec77e859a5f729a0f5c982ecdaac14ac65ee03571d1255"
 "keel-windows-x86_64.exe" = "62688cbe3ac63efda272b63f186352a81da4bbafe6ed49934a814133d430777e"
+# copied from the v0.5.1 release run's published SHA256SUMS (run 35425995013 at 5f89df77), 2026-09-19
+["0.5.1"]
+"keel-linux-x86_64" = "448c101568e6b6364fe7990d06df8f9c8aadc24380b7f9cca9d87792b0b0fc88"
+"keel-macos-aarch64" = "c9d301ed5276ef440a6a60b51cfbd016306b9f8a303b86f60dccc9b7c77918c1"
+"keel-windows-x86_64.exe" = "2b377a6ac82635731f2694d9a26fde7d83524b9209a380ce0f9f7e075ab696a1"
