@@ -6450,6 +6450,183 @@ fact("aToleratedRecordSurvivesTheRun", {
      "guard gate, the DISCOUNTED report line, the two lines that carry `keep` from the door to the gate, the D0388 pair test and the substrings it "
      "asserts, the file's line count.")
 
+# ================================================================ 56-57. D0523-D0524 - the release that lands downstream (sprint 746, the follow-up cut)
+# Two held process-changes recorded during sprint 746 and landed under the #ProspectiveChange marker; no OPTION token in
+# either (D0524 says NOT A FORK in so many words), so two held acceptances. Each tab reads the landed source, the guard run
+# live over this tree, the finding, the resolver's result and the sprint record - never the commit message or the CHANGELOG.
+_id24 = read(os.path.join(REPO, "members", "keel-guards", "src", "identity.rs")) or ""
+_iw24 = read(os.path.join(REPO, "members", "keel-issues", "src", "issue_write.rs")) or ""
+_gl24 = read(os.path.join(REPO, "members", "keel-guards", "src", "lib.rs")) or ""   # the guard crate's pair tests live here, not beside the class
+_vr23 = read(os.path.join(REPO, ".engine", "contracts", "verb-renames.toml")) or ""
+_gdoc24 = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_s746 = _sprint_facts("sprint746_releaseDownstreamGreen.sysml", "d0519")
+_sprint46 = {k: v for k, v in _s746.items() if k != "text"} | ({
+    "retroFindings": len(re.findall(r"\(\d\)", _s746["text"])),
+    "deliveredNamesBoth": "dcVerbFoldsTravelWithMigrate (added mid-sprint" in _s746["text"] and "dcAllocatedNameIsOneNamespaceAcrossPackages (added mid-sprint" in _s746["text"],
+    "storyDod": _dod_results("storyReleaseDownstreamGreen") or [{"outcome": o, "judgedAgainst": s} for o, s in re.findall(r"part storyReleaseDownstreamGreenDoDR\d+ : TestResult \{[^}]*?outcome = VerdictKind::(\w+);[^}]*?judgedAgainst = \"([^\"]+)\"", _s746["text"])],
+    "reviewSaysIssue623Open": "issue623 as OPEN" in _s746["text"],
+} if _s746.get("exists") else {})
+_bs23 = read(os.path.join(REPO, ".tracking", "baselines.sysml")) or ""
+_rel051 = re.search(r"part release051 : Release\s*\{(.*?)\n\s*\}", _bs23, re.S)
+_rel051b = _rel051.group(1) if _rel051 else ""
+_okg23, _cr23 = run([KEEL, "gate", "guard", "cli-reference", "--no-receipt", "."], timeout=300)
+_crl23 = _last00(_cr23)
+_crm23 = re.search(r"(PASS|FAIL|WARN)\b.*?(\d+)\s+scanned.*?(\d+)\s+warning.*?(\d+)\s+violation", _crl23 or "")
+_okg24, _di24 = run([KEEL, "gate", "guard", "duplicate-identity", "--no-receipt", "."], timeout=300)
+_dil24 = _last00(_di24)
+_dim24 = re.search(r"(PASS|FAIL|WARN)\b.*?(\d+)\s+scanned.*?(\d+)\s+warning.*?(\d+)\s+violation", _dil24 or "")
+_ren23 = re.findall(r'^"([^"]+)"\s*=\s*"([^"]+)"', _vr23, re.M)
+_HELD46_HOW = (_HELD_HOW.replace("intake-2026-09-18.sysml", "intake-2026-09-18.sysml (st167/st168 are the human's direction, section 53-55)")
+               + " sprint 746 as section 27 (retroFindings = `(n)` markers over the whole record; deliveredNamesBoth = the two `added mid-sprint` "
+               "clauses in the story's DoD). release051 = the `part release051 : Release {` body in .tracking/baselines.sysml (tag, commit, whether "
+               "the purpose names issue623 - it must not, issue627). live: `keel gate guard <name> --no-receipt .` last line parsed as section 53.")
+
+# --- 56. D0523: a verb fold travels with migrate (issue622; GH#86-90 class)
+_d0523 = _dec_file("0523-")
+_f523 = _held20("d0523", _d0523)
+_R23 = "dcVerbFoldsTravelWithMigrate"
+fact("aVerbFoldTravelsWithMigrate", {
+    **_f523,
+    "namesIssue622": "(issue622)" in (_f523["context"] or ""),
+    "namesSixteenViolations": "[guard:cli-reference] FAIL - 16 violation(s)" in (_f523["context"] or ""),
+    "namesTheScaffoldVerbs": "`keel orient`, `keel validate`, `keel add-task`, `keel report`" in (_f523["context"] or ""),
+    "namesTheTwoContracts": "attestation-policy.toml and github-actors.toml" in (_f523["context"] or ""),
+    "namesOwnershipPredicate": "is_project_owned_contract (members/keel-process/src/migrate.rs:112)" in (_f523["context"] or ""),
+    "namesTheFiveFolds": "the lens router D0273, the render fold, D0449 gating, D0450 channel, D0451 authoring" in (_f523["context"] or ""),
+    "namesNoActionButHandEdit": "no action the adopter can take but hand-editing what the guard names" in (_f523["context"] or ""),
+    "namesOneFactTwoReaders": "ONE authored fact with two readers" in (_f523["decision"] or ""),
+    "namesTheContract": ".engine/contracts/verb-renames.toml" in (_f523["decision"] or ""),
+    "namesEmbeddedCopy": "read from the binary's embedded copy so a tree's older copy never answers for it" in (_f523["decision"] or ""),
+    "namesTodayItIs": "`today it is` clause" in (_f523["decision"] or ""),
+    "namesTheStep": "`verb-respell` step, planned after the resync" in (_f523["decision"] or ""),
+    "namesOneEditPerFile": "one reported edit per file" in (_f523["decision"] or ""),
+    "namesNoSpellingStays": "a reference with no spelling stays as written and the guard still names it" in (_f523["decision"] or ""),
+    "namesClaudeMdJoinsScope": "CLAUDE.md joins the run's scope" in (_f523["decision"] or ""),
+    "namesLockByContent": "decided by content, one edited byte beyond the fold puts it back under the lock" in (_f523["decision"] or ""),
+    "namesRejectedDiscount": "Discounting the pre-existing red instead (the D0522 shape)" in (_f523["rationale"] or ""),
+    "namesCongruent": "the step is green precisely where the guard would be" in (_f523["rationale"] or ""),
+    "namesIdempotent": "Idempotent by construction" in (_f523["rationale"] or ""),
+    "namesResolver": _R23 in (_f523["consequences"] or "") and "issue622" in (_f523["consequences"] or ""),
+    "namesFutureFoldAddsRow": "adds its row to verb-renames.toml in the same commit" in (_f523["consequences"] or ""),
+    "namesTheFollowUpRelease": "a 0.5.1 follows" in (_f523["consequences"] or ""),
+    "namesResidual": "a retired verb the table does not name is still a red the adopter must edit by hand" in (_f523["consequences"] or ""),
+    "today": {
+        "contractExists": bool(_vr23),
+        "contractRows": len(_ren23),
+        "contractNamesD0523": "(D0523)" in _vr23,
+        "contractSaysEngineOwned": "Engine-owned: resynced." in _vr23,
+        "rowAddTask": dict(_ren23).get("add-task"),
+        "rowReport": dict(_ren23).get("report"),
+        "rowGithubDecider": dict(_ren23).get("github-decider"),
+        "noLensRow": "orient" not in dict(_ren23) and "validate" not in dict(_ren23),
+        "readerOneLine": _line19(_surf20, "fn renamed_verbs() -> Vec<(String, String)> {"),
+        "readerOneReadsEmbedded": 'keel_schema::embedded::ENGINE_DIR.get_file("contracts/verb-renames.toml")' in _surf20,
+        "respellingLine": _line19(_surf20, "pub fn cli_respelling(verb: &str) -> Option<String> {"),
+        "todayItIsLine": _line19(_surf20, 'return format!("; today it is `keel {spelling}`");'),
+        "stepLine": _line19(_mig20, "fn step_verb_respell(root: &Path, engine: &Dir, w: &mut Working) -> StepPlan {"),
+        "stepId": 'StepPlan::empty("verb-respell",' in _mig20,
+        "stepPlannedAfterResync": _line19(_mig20, "let respell = step_verb_respell(root, engine, &mut w);"),
+        "doorReadsClaudeMd": '.args(["status", "--porcelain", "-uall", "--", ".tracking", ".engine", ".claude", "CLAUDE.md"])' in _mig20,
+        "restoreTakesClaudeMdWhenHeld": '.args(["ls-tree", "--name-only", sha, "--", "CLAUDE.md"])' in _mig20 and 'scope.push("CLAUDE.md");' in _mig20,
+        "pairTestLine": _line19(_mig20, "let step = super::step_verb_respell(&dir, engine, &mut w);"),
+        "pairAssertsOneEditPerFile": 'assert_eq!(touched, ["CLAUDE.md", "attestation-policy.toml"], "one edit per file the guard reads and the resync does not write");' in _mig20,
+        "pairAssertsIdempotent": "assert_eq!(super::step_verb_respell(&dir, engine, &mut w3).edits(), 0);" in _mig20,
+        "lockExemptionLine": _line19(_enf20, "if let Some((expected, _)) = crate::surface::respell_cli_references(&before, markdown) {"),
+        "lockMessageNamesD0523": "its resync (D0441) or its verb respell (D0523)" in _enf20,
+        "lockPairLine": _line19(_enf20, "fn a_respelled_locked_contract_is_the_engine_arriving_and_one_more_byte_is_not() {"),
+        "lockPairHoldsOneMoreByte": 'assert!(!is_engine_written(&repo.0, POLICY, read), "an edit that is not the respell is under the lock");' in _enf20,
+        "migrateLines": len(_mig20.splitlines()),
+        **_land20("fn step_verb_respell", "members/keel-process/src/migrate.rs"),
+    },
+    "live": {"cliReference": {"exit0": _okg23, "verdict": _crm23.group(1) if _crm23 else None, "scanned": int(_crm23.group(2)) if _crm23 else None,
+                              "warnings": int(_crm23.group(3)) if _crm23 else None, "violations": int(_crm23.group(4)) if _crm23 else None, "line": _crl23}},
+    "intake": {"st167": _stmt20("st167"), "st168": _stmt20("st168")},
+    "issue622": _issue_facts("622", _R23),
+    "resolver": _resolver20(_R23),
+    "sprint746": _sprint46,
+    "release051": {"present": bool(_rel051), "tag": (re.search(r'tag\s*=\s*"([^"]+)"', _rel051b) or [None, None])[1],
+                   "commit": (re.search(r'commit\s*=\s*"([^"]+)"', _rel051b) or [None, None])[1],
+                   "purposeNamesIssue622": "issue622" in _rel051b, "purposeNamesIssue623": "issue623" in _rel051b},
+    "backlogItems": len(_bl00_actions),
+}, "the held acceptance, what the Decision names, the one fact and its two readers in source, the guard live, the finding, the resolver and the release that carries it",
+     _HELD46_HOW + " today: verb-renames.toml rows = `\"old\" = \"new\"` lines (contractRows), its D0523 and Engine-owned lines; surface.rs "
+     "`fn renamed_verbs` reading the embedded contract, `pub fn cli_respelling`, the `today it is` format line; migrate.rs `fn step_verb_respell`, "
+     "its StepPlan id, the line that plans it after the resync, the door's porcelain scope and the restore's ls-tree probe naming CLAUDE.md, "
+     "the D0388 pair's one-edit-per-file and zero-edits assertions; enforcement.rs the respell exemption line, its message naming D0523, its pair. "
+     "landedCommit = `git log -S'fn step_verb_respell' -1` over migrate.rs.")
+
+# --- 57. D0524: an allocated name is one namespace across packages (issue624)
+_d0524 = _dec_file("0524-")
+_f524 = _held20("d0524", _d0524)
+_R24 = "dcAllocatedNameIsOneNamespaceAcrossPackages"
+_ok24d, _dr24 = run([KEEL, "show", "open-issues", "."], timeout=120)
+_oi24 = as_json(_dr24) if _ok24d else None
+_oi24_names = sorted({str(r.get("issue") or "") for r in ((_oi24 or {}).get("open_issues") or []) if isinstance(r, dict)})
+fact("anAllocatedNameIsOneNamespaceAcrossPackages", {
+    **_f524,
+    "namesTwoSessions": "two sessions on two machines each minted issue620 and issue621" in (_f524["context"] or ""),
+    "namesTheBase": "from a tree at 4a0abc85" in (_f524["context"] or ""),
+    "namesTheTwoFiles": "issues-claudeFable5.sysml at 1809e70f" in (_f524["context"] or "") and "issues-claudeOpus5.sysml at 1228a756" in (_f524["context"] or ""),
+    "namesTheMergeGreen": "the merge 5170199e passed validate and every enforced guard, duplicate-identity included (issue624)" in (_f524["context"] or ""),
+    "namesTheAllocator": "members/keel-issues/src/issue_write.rs:69-73" in (_f524["context"] or ""),
+    "namesClassTwoPerPackage": "class 2 keys a declared name on its PACKAGE" in (_f524["context"] or ""),
+    "namesTheLensSymptom": "showed one issue621 carrying both sessions' resolvers and no issue620" in (_f524["context"] or ""),
+    "namesTheLoss": "The frontier lost a stranger's open defect with nothing said" in (_f524["context"] or ""),
+    "namesOneNamespace": "is one namespace across the whole .tracking tree" in (_f524["decision"] or ""),
+    "namesClassFive": "Guard duplicate-identity gains class 5" in (_f524["decision"] or ""),
+    "namesBothLocations": "a violation naming both locations" in (_f524["decision"] or ""),
+    "namesShapeOnly": "the prefix-and-digits shape only, so a disposition `issue620Disp1` beside its Issue is not one" in (_f524["decision"] or ""),
+    "namesClassTwoStands": "Class 2 (a declared name repeated within one package) stands as it is for every other name" in (_f524["decision"] or ""),
+    "namesRenumberLaterSide": "renumbered on the later-landing side (claudeFable5's, to issue622/issue623; D0108, the owner edits their own)" in (_f524["decision"] or ""),
+    "namesMakeTheClaimTrue": "make the claim true rather than add a second mechanism" in (_f524["rationale"] or ""),
+    "namesLandGatesMerged": "`keel land` gates the MERGED tree before the push" in (_f524["rationale"] or ""),
+    "namesTreeWideWouldBeWrong": "Making class 2 tree-wide for every name would be wrong" in (_f524["rationale"] or ""),
+    "namesRenumberNotQualify": "Renumbering rather than qualifying" in (_f524["rationale"] or ""),
+    "namesRejectedCentralAllocator": "a central allocator (a remote counter) would trade an offline write path for a network dependency" in (_f524["rationale"] or ""),
+    "namesFiveClasses": "Guard duplicate-identity scans five classes" in (_f524["consequences"] or ""),
+    "namesKnownPositive": "an_allocated_name_is_one_namespace_across_packages" in (_f524["consequences"] or ""),
+    "namesResolver": _R24 in (_f524["consequences"] or "") and "issue624" in (_f524["consequences"] or ""),
+    "namesRenumberedMeaning": "means issue622/623 from this commit on" in (_f524["consequences"] or ""),
+    "today": {
+        "classFiveCommentLine": _line19(_id24, "// Class 5 (issue624 / D0524): a name the write API ALLOCATES by scanning the whole tree -"),
+        "allocatedMapLine": _line19(_id24, "let mut allocated: HashMap<String, String> = HashMap::new();"),
+        "classFiveCheckLine": _line19(_id24, "if is_allocated_name(&name) {"),
+        "violationNamesBoth": "allocated name `{name}` is also declared at {prev}" in _id24,
+        "violationSaysRenumber": "renumber the later one, never repoint an edge" in _id24,
+        "predicateLine": _line19(_id24, "pub(crate) fn is_allocated_name(name: &str) -> bool {"),
+        "predicatePrefixes": '["issue", "st", "us"].iter().any(|p| {' in _id24,
+        "predicateDigitsOnly": "d.bytes().all(|b| b.is_ascii_digit())" in _id24,
+        "predicateDocNamesDisp": "`issue620Disp1`" in _id24,
+        "pairTestLine": _line19(_gl24, "fn an_allocated_name_is_one_namespace_across_packages()"),
+        "classTwoUnchanged": "duplicate declared name `{name}` in package `{cur_pkg}` (also at {prev})" in _id24,
+        "allocatorCommentNamesClassFive": "its class 5 reads an allocated name across every package" in _iw24,
+        "allocatorCommentLine": _line19(_iw24, "its class 5 reads an allocated name across every package"),
+        "allocatorScansWholeTree": "the number allocates over ALL of .tracking (per-actor files included)" in _iw24,
+        "guardsDocRowNamesClassFive": "no repeated ALLOCATED name - `issueNNN`, `stNNN`, `usNNN` - across packages (D0524/issue624)" in _gdoc24,
+        "identityLines": len(_id24.splitlines()),
+        **_land20("fn is_allocated_name", "members/keel-guards/src/identity.rs"),
+    },
+    "live": {"duplicateIdentity": {"exit0": _okg24, "verdict": _dim24.group(1) if _dim24 else None, "scanned": int(_dim24.group(2)) if _dim24 else None,
+                                   "warnings": int(_dim24.group(3)) if _dim24 else None, "violations": int(_dim24.group(4)) if _dim24 else None, "line": _dil24},
+             "openIssuesExit0": _ok24d,
+             "issue622Open": "issue622" in _oi24_names, "issue623Open": "issue623" in _oi24_names, "issue624Open": "issue624" in _oi24_names,
+             "openIssueCount": len(_oi24_names)},
+    "renumbered": {"issue622Declared": bool(re.search(r"part issue622 : Issue", _iss)), "issue623Declared": bool(re.search(r"part issue623 : Issue", _iss)),
+                   "fable5DeclaresNo620or621": not re.search(r"part issue62[01] : Issue", _iss),
+                   "opus5Declares620and621": bool(re.search(r"part issue620 : Issue", read(os.path.join(REPO, ".tracking", "issues-claudeOpus5.sysml")) or "")) and bool(re.search(r"part issue621 : Issue", read(os.path.join(REPO, ".tracking", "issues-claudeOpus5.sysml")) or ""))},
+    "issue624": _issue_facts("624", _R24),
+    "issue623": _issue_facts("623", "dcARepeatedSingleFlagIsRefused"),
+    "resolver": _resolver20(_R24),
+    "sprint746": _sprint46,
+    "backlogItems": len(_bl00_actions),
+}, "the held acceptance, what the Decision names, class 5 and its predicate in source, the guard live, the renumbered pair, the finding, the resolver",
+     _HELD46_HOW + " today: identity.rs the class-5 comment, the `allocated` map, the `is_allocated_name` check and both violation phrases, the "
+     "predicate with its three prefixes and digits-only test, the doc line naming issue620Disp1, the class-2 phrase unchanged; the pair test "
+     "in the crate's lib.rs; "
+     "issue_write.rs the allocator comment naming class 5 and the whole-tree scan; guards.md the row's class-5 clause. live: `keel show open-issues .` "
+     "names read from the JSON rows (issue622/623/624 open or not); renumbered = `part issue62N : Issue` declarations in each actor's file. "
+     "landedCommit = `git log -S'fn is_allocated_name' -1` over identity.rs.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
