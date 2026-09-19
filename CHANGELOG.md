@@ -75,3 +75,65 @@ The pin, the wrapper, and the library — the portability release (D0250/D0251/D
 - A project whose `engine-version.toml` names another version now refuses writes and gates under
   this binary — run the pinned version, or `keel migrate` (which re-stamps and announces the
   escalation). Pre-D0190 trees with no declaration are unaffected.
+
+## v0.5.0 — 2026-09-18
+
+The release downstream adopters asked for: `keel migrate` lands in a project that is not this one.
+256 commits since v0.4.1; 164 Decisions added, 252 Issues resolved (`keel show commit-delta --range v0.4.1..v0.5.0`).
+
+### Downstream adoption (GH#68, GH#86-90; D0519-D0522)
+- `keel migrate` no longer reverts itself in an adopting project: a resync is not a self-modification
+  of the owner's items (D0441/D0519) and the run writes the evidence its own post-apply gate reads.
+- Guard `source-reference`, outside the self-build, holds the adopter to its OWN living docs and sets
+  the shipped engine docs aside, saying how many (D0520). A manifest's `charteredBy` resolves in
+  `.engine/decisions/` and `.engine/reference/decisions/`, the directory the resync deploys to (D0520).
+  The resync never seeds `parser-coverage-baseline.toml` into a project that has none (D0520).
+- A write emits only what the tree's own schema declares: a `VerdictKind` member the adopter's
+  `element.sysml` lacks is a refusal naming the member, the vintage and `keel migrate` — nothing is
+  written (D0521).
+- A record `migrate` tolerates at the door is tolerated through the run: the post-apply gate discounts
+  it and the rollback's `git clean` preserves it (D0522).
+
+### CLI surface — BREAKING (D0449-D0453, D0458)
+- Five families folded under one verb each; the old top-level names are REMOVED, not aliased:
+  `render <diagram|report|decision-card>`, `show <orient|whats-next|status|…>` (eleven lenses),
+  `record <decision|issue|task|story|statement|result|gate-result|sprint|review>` (nine authoring verbs),
+  `gate …` / `audit …` (twelve gating verbs), `github <pull|ingest|…>`. 34 top-level verbs remain.
+  Every command is a `CliCommand` fact in `.engine/cli/commands.sysml`; `--help` renders from it.
+- `keel accept <d> --words "<verbatim>"` records a human's chat acceptance as their own words in a
+  declared pair; a read-back miss or short words WARN in the note rather than refuse (D0375/D0423).
+  `keel reject` is the rejection's CLI path (D0393/D0470); `keel judge-set` records a human's verdict on
+  a set of proposed results, one record per item (D0443).
+- A Decision whose text names `process-change`/`safety-change` is held proposed under standing consent
+  even without the marker line (D0439). `#Supersede` retires a whole target; `#SupersedeClause`
+  reverses one clause (D0398). Every id written from today is an RFC 4122 v4 UUID (D0430).
+
+### Landing and verification
+- `keel land` runs the touched integration-test set before the first push (D0421) under cargo-nextest
+  (D0475), computed per workspace member and its dependents (D0481), skipping binaries observed green
+  at the current content (D0474); it names the CI conclusion of the base it pushes onto (D0420).
+- `keel verify [--probe POS,NEG | --probe-from FILE] [--wait]`: the pre-commit ladder in cost order,
+  stopping at the first red, one receipt (D0476/D0497/D0500). `keel suite` writes a receipt and gates
+  nothing (D0356). One touched run per tree at a time (D0493).
+- The enforced guards run across a thread pool in declared order (D0368); a green gate answers from a
+  receipt keyed per guard on the inputs it reads (D0371/D0482). Every guard warning is one of two
+  stated classes: actionable, or counted history (D0413).
+- `keel advance <process> [--to <step>]` works for any adopted process and is refused while an earlier
+  bound step is red (D0436); a `ProcessStep` declares `checkedBy` — a guard, a declared rule, or
+  `gate:<phase>` (D0434/D0435).
+
+### Release integrity
+- Every release asset ships with its SHA-256 and one `SHA256SUMS` the build verified (D0385); a
+  `Release` names its tag as a field and guard `release-recorded` binds on it (D0400). `keelw`
+  verifies the committed entry in `keel-wrapper.toml`; the 0.5.0 entries are copied from this
+  release's published `SHA256SUMS`.
+
+### Internals
+- `keel-cli` decomposed into workspace members along computed dependency layers (D0479-D0513);
+  the layering is a guard (D0483). On a self-build tree the hooks run a stable copy at `.keel/bin`
+  they refresh themselves (D0391); the post-commit land runs from its own image (D0422).
+- Ceremony is delegated: a verifier subagent runs the gate set and writes a receipt; a recorder writes
+  through `keel record` only and its report is refused otherwise (D0425/D0473/D0492/D0516).
+
+### API contract
+- `KEEL_API_VERSION` stays 2.0.0: no `/api/*` read shape changed in this range.
