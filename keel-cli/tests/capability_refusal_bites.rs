@@ -92,9 +92,10 @@ fn the_command_inventory_matches_the_dispatch() {
 /// held equal to the thing it describes.
 #[test]
 fn the_lens_inventory_matches_the_router() {
-    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
-        .expect("main.rs is readable");
-    let start = src.find("fn cmd_show(args: &[String]) -> i32 {").expect("the router exists");
+    let head = "fn cmd_show(args: &[String]) -> i32 {";
+    let sources = keel_fs::test_support::verb_sources();
+    let (_, src) = keel_fs::test_support::source_holding(&sources, head);
+    let start = src.find(head).expect("the router exists");
     let block = &src[start..start + src[start..].find("\n}\n").expect("the router closes")];
     let mut routed: Vec<String> = Vec::new();
     for line in block.lines().filter(|l| l.trim_start().starts_with("Some(\"")) {
@@ -137,10 +138,10 @@ fn the_lens_inventory_matches_the_router() {
 /// so the drift the 679 retro named cannot recur silently here.
 #[test]
 fn the_record_sub_verbs_match_the_fact() {
-    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
-        .expect("main.rs is readable");
+    let sources = keel_fs::test_support::verb_sources();
     let mut routed: Vec<String> = Vec::new();
     for head in ["fn record_authoring_subverb(args: &[String]) -> Option<i32> {", "fn cmd_record(args: &[String]) -> i32 {"] {
+        let (_, src) = keel_fs::test_support::source_holding(&sources, head);
         let start = src.find(head).expect("the router exists");
         let block = &src[start..start + src[start..].find("\n}\n").expect("the router closes")];
         for line in block.lines().map(str::trim_start).filter(|l| (l.starts_with("Some(\"") || l.starts_with('"')) && l.contains("=>")) {
@@ -174,13 +175,13 @@ fn the_record_sub_verbs_match_the_fact() {
 /// declare, so a routed word missing from `--help` or a documented word that prints the usage fails here.
 #[test]
 fn the_gate_audit_and_github_sub_verbs_match_their_facts() {
-    let src = std::fs::read_to_string(keel_fs::test_support::repo_path("keel-cli/src/main.rs"))
-        .expect("main.rs is readable");
+    let sources = keel_fs::test_support::verb_sources();
     for (router, head, floor) in [
         ("gate", "fn gate_subverb(args: &[String]) -> Option<i32> {", 7),
         ("audit", "fn audit_subverb(args: &[String]) -> Option<i32> {", 3),
         ("github", "fn github_subverb(args: &[String]) -> Option<i32> {", 5),
     ] {
+        let (_, src) = keel_fs::test_support::source_holding(&sources, head);
         let start = src.find(head).expect("the router exists");
         let block = &src[start..start + src[start..].find("\n}\n").expect("the router closes")];
         let mut routed: Vec<String> = block

@@ -3203,24 +3203,21 @@ fn sanitize_name(v: &str) -> String {
 
 #[cfg(test)]
 mod write_path_registry_tests {
-    use keel_fs::test_support::repo_root;
+    use keel_fs::test_support::verb_sources;
     use super::{write_path_refusal, WRITE_PATH_REFUSALS};
 
     /// Every `refuses` token is in the source that owns it: a `WriteError::X` is a variant this module
-    /// declares and returns; a bare name is a `fn` in main.rs whose body calls `ledger_refused` with
+    /// declares and returns; a bare name is a `fn` in a verb source whose body calls `ledger_refused` with
     /// exactly this check. A token found nowhere is a row with no refusal behind it (issue449).
     #[test]
     fn every_registered_refusal_has_a_site_in_the_source() {
         let write_src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/write.rs")).expect("write.rs is readable");
-        let main_src = std::fs::read_to_string(repo_root().join("keel-cli").join("src").join("main.rs"))
-            .expect("main.rs is readable");
+        let verbs = verb_sources();
         let mut missing = Vec::new();
         for r in WRITE_PATH_REFUSALS {
             let ok = r.refuses.strip_prefix("WriteError::").map_or_else(
                 || {
-                    let in_fn = main_src.contains(&format!("fn {}(", r.refuses));
-                    let ledgered = main_src.contains(&format!("\"{}\")", r.check));
-                    in_fn && ledgered
+                    verbs.iter().any(|(_, src)| src.contains(&format!("fn {}(", r.refuses)) && src.contains(&format!("\"{}\")", r.check)))
                 },
                 |variant| {
                     let declared = write_src.contains(&format!("    {variant}(")) || write_src.contains(&format!("    {variant},"));
@@ -3235,29 +3232,33 @@ mod write_path_registry_tests {
         assert!(missing.is_empty(), "registered refusals with no site in the source: {missing:?}");
     }
 
-    /// Every `ledger_refused(.., "<verb>", "<check>")` literal pair in main.rs is a registry entry:
+    /// Every `ledger_refused(.., "<verb>", "<check>")` literal pair in a verb source is a registry entry:
     /// a refusal the ledger counts that the registry never declared is a fact with no row (issue449).
     /// Sites whose verb is a variable (`verb`) are covered by the entries naming their function.
+    /// At least one site must be scanned: a scan that finds none is reading the wrong files, not a pass.
     #[test]
-    fn every_ledgered_refusal_in_main_is_registered() {
-        let main_src = std::fs::read_to_string(repo_root().join("keel-cli").join("src").join("main.rs"))
-            .expect("main.rs is readable");
+    fn every_ledgered_refusal_in_the_verb_sources_is_registered() {
         let mut unregistered = Vec::new();
-        for (i, line) in main_src.lines().enumerate() {
-            let Some(rest) = line.trim_start().strip_prefix("ledger_refused(") else { continue };
-            let args: Vec<&str> = rest.trim_end_matches(';').trim_end_matches(')').split(',').map(str::trim).collect();
-            if args.len() != 3 {
-                continue;
-            }
-            let check = args[2].trim_matches('"');
-            if let Some(verb) = args[1].strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
-                if write_path_refusal(verb, check).is_none() {
-                    unregistered.push(format!("main.rs:{}: {verb}:{check}", i + 1));
+        let mut sites = 0usize;
+        for (path, src) in verb_sources() {
+            for (i, line) in src.lines().enumerate() {
+                let Some(rest) = line.trim_start().strip_prefix("ledger_refused(") else { continue };
+                let args: Vec<&str> = rest.trim_end_matches(';').trim_end_matches(')').split(',').map(str::trim).collect();
+                if args.len() != 3 {
+                    continue;
                 }
-            } else if !WRITE_PATH_REFUSALS.iter().any(|r| r.check == check) {
-                unregistered.push(format!("main.rs:{}: <{}>:{check}", i + 1, args[1]));
+                sites += 1;
+                let check = args[2].trim_matches('"');
+                if let Some(verb) = args[1].strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+                    if write_path_refusal(verb, check).is_none() {
+                        unregistered.push(format!("{path}:{}: {verb}:{check}", i + 1));
+                    }
+                } else if !WRITE_PATH_REFUSALS.iter().any(|r| r.check == check) {
+                    unregistered.push(format!("{path}:{}: <{}>:{check}", i + 1, args[1]));
+                }
             }
         }
+        assert!(sites > 0, "no ledger_refused site was scanned: the verb sources moved again");
         assert!(unregistered.is_empty(), "ledgered refusals the registry does not declare: {unregistered:?}");
     }
 

@@ -19,6 +19,8 @@
 
 pub mod fsx;
 pub mod test_support;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod fs_verbs;
 pub use fsx::scratch;
 
 /// The character length of the longest path under `dir`, used by `keel init` to warn before a host

@@ -1103,6 +1103,7 @@ name = "keel-guards"
 version = "0.5.1"
 dependencies = [
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-github",
@@ -1123,6 +1124,7 @@ name = "keel-hooks"
 version = "0.5.1"
 dependencies = [
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-guards",
@@ -1138,6 +1140,9 @@ dependencies = [
 name = "keel-issues"
 version = "0.5.1"
 dependencies = [
+ "keel-actor",
+ "keel-args",
+ "keel-git",
  "keel-json",
  "keel-model",
  "keel-schema",
@@ -1155,6 +1160,7 @@ version = "0.5.1"
 dependencies = [
  "getrandom 0.3.4",
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-json",
@@ -1189,6 +1195,7 @@ version = "0.5.1"
 dependencies = [
  "include_dir",
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-guards",
@@ -1217,8 +1224,10 @@ dependencies = [
  "async-stream",
  "axum",
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
+ "keel-github",
  "keel-guards",
  "keel-issues",
  "keel-json",
@@ -1241,6 +1250,7 @@ name = "keel-suite"
 version = "0.5.1"
 dependencies = [
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-model",
@@ -1254,6 +1264,7 @@ name = "keel-view"
 version = "0.5.1"
 dependencies = [
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-github",
@@ -1273,6 +1284,7 @@ name = "keel-write"
 version = "0.5.1"
 dependencies = [
  "keel-actor",
+ "keel-args",
  "keel-fs",
  "keel-git",
  "keel-json",

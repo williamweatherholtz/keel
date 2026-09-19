@@ -27,6 +27,8 @@ pub mod reverify;
 pub mod claim;
 pub mod claude_surface;
 pub mod ledger;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod write_verbs;
 
 use std::path::Path;
 

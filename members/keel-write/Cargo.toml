@@ -19,6 +19,7 @@ keel-actor = { path = "../keel-actor" }
 keel-schema = { path = "../keel-schema" }
 # The slow-fire attribution the ledger line carries (D0414), with the threshold, since sprint 740.
 keel-perf = { path = "../keel-perf" }
+keel-args = { path = "../keel-args" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

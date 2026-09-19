@@ -14,6 +14,9 @@
 // Tests may use unwrap/expect/panic/indexing/asserts freely.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing))]
 
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod args_verbs;
+
 use std::path::PathBuf;
 
 use keel_git::projects::{find_repo_root, require_project};

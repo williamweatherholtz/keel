@@ -12,5 +12,6 @@ keel-git = { path = "../keel-git" }
 keel-actor = { path = "../keel-actor" }
 keel-model = { path = "../keel-model" }
 keel-perf = { path = "../keel-perf" }
+keel-args = { path = "../keel-args" }
 sha2 = "0.10"
 toml = "0.8"

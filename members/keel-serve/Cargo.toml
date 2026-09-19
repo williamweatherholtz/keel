@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 description = "The console (D0094): the localhost server, the obligation deck, the run launcher, the console registry, the scorecard reports and the attestation sampling - everything that serves the engine to a person, above every member and below keel-cli."
 
+# A verb body reports the binary's engine build (KEEL_BUILD_COMMIT, sprint 750); the script that bakes
+# the commit is keel-cli's, shared, not copied (as keel-process, keel-guards and keel-hooks).
+build = "../../keel-cli/build.rs"
+
 [dependencies]
 keel-perf = { path = "../keel-perf" }
 keel-git = { path = "../keel-git" }
@@ -18,6 +22,8 @@ keel-view = { path = "../keel-view" }
 keel-guards = { path = "../keel-guards" }
 keel-process = { path = "../keel-process" }
 keel-issues = { path = "../keel-issues" }
+keel-args = { path = "../keel-args" }
+keel-github = { path = "../keel-github" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

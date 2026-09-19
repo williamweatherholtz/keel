@@ -184,13 +184,22 @@ const SCAFFOLD_ONLY: &[&str] = &["adoption-profile.toml", "keel-wrapper.toml"];
 fn no_new_engine_surface_writer_is_unrepresented() {
     // Whole-file writes to a committed surface are the class. Machine-local state (`.keel/`) and
     // scaffolding of files that did not exist are NOT: there is nothing of a human's to preserve.
-    let src = std::fs::read_to_string(repo("keel-cli/src/main.rs")).expect("main.rs")
-        + &std::fs::read_to_string(repo("members/keel-write/src/claude_surface.rs")).expect("claude_surface.rs");
+    // The writers left main.rs for the members' verb files in sprint 750; the scan follows them and
+    // refuses to pass over nothing.
+    let mut src = std::fs::read_to_string(repo("members/keel-write/src/claude_surface.rs")).expect("claude_surface.rs");
+    for (_, text) in keel_fs::test_support::verb_sources() {
+        src.push('\n');
+        src.push_str(&text);
+    }
     let mut unrepresented = Vec::new();
+    let mut surface_writes = 0usize;
     for line in src.lines() {
         let t = line.trim();
         if !t.contains("write(") || t.starts_with("//") {
             continue;
+        }
+        if t.contains(".toml\"") || t.contains(".json\"") {
+            surface_writes += 1;
         }
         for surface in [".toml\"", ".json\""] {
             if let Some(i) = t.find(surface) {
@@ -207,6 +216,7 @@ fn no_new_engine_surface_writer_is_unrepresented() {
     }
     unrepresented.sort();
     unrepresented.dedup();
+    assert!(surface_writes > 0, "no `.toml`/`.json` write was scanned - the verb sources moved again");
     assert!(
         unrepresented.is_empty(),
         "a whole-file write to a tracked surface has no no-op invariance case: {unrepresented:?} — \

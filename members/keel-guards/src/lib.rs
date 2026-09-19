@@ -22,6 +22,8 @@ pub mod hardening;
 pub mod history;
 pub mod plan_cover;
 pub mod receipt;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod guards_verbs;
 
 mod identity;
 pub use identity::*;

@@ -25,3 +25,5 @@ pub mod process_cmd;
 pub mod status;
 pub mod sync;
 pub mod workspace;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod process_verbs;

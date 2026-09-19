@@ -9,3 +9,5 @@ pub mod cli_surface;
 pub mod control_defects;
 pub mod embedded;
 pub mod guard_names;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod schema_verbs;

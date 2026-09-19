@@ -54,6 +54,67 @@ pub fn repo_path(rel: &str) -> std::path::PathBuf {
     root_unrecorded().join(norm)
 }
 
+/// The verb sources - where a `cmd_*` body or a `*_subverb` router is defined - as
+/// `(repo-relative path, text)`, each read recorded (D0481): `keel-cli/src/main.rs`,
+/// `keel-parser/src/parser_verbs.rs`, and every `members/<m>/src/<short>_verbs.rs` the tree holds
+/// (the D0479 layout `scripts/extract_verbs.py` writes, sprint 750).
+///
+/// A source-reading test that named `keel-cli/src/main.rs` by path checked a file, not its subject:
+/// sprint 750 moved 126 bodies out of it and three such tests went red while a fourth passed over an
+/// empty scan. A test asks this list for the source that holds its subject ([`source_holding`]) and
+/// follows the next move for free. The set is listed from the tree, not re-parsed from `Cargo.toml`: a
+/// member whose verbs file exists is in it whether or not a manifest names it.
+///
+/// # Panics
+/// Test fixture: panics when `keel-cli/src/main.rs` or `members/` cannot be read.
+#[doc(hidden)]
+#[must_use]
+#[allow(clippy::expect_used)]
+pub fn verb_sources() -> Vec<(String, String)> {
+    let mut rels = vec!["keel-cli/src/main.rs".to_owned(), "keel-parser/src/parser_verbs.rs".to_owned()];
+    let members = std::fs::read_dir(root_unrecorded().join("members")).expect("members/ is listable");
+    for entry in members.flatten() {
+        let Ok(name) = entry.file_name().into_string() else { continue };
+        let Ok(src) = std::fs::read_dir(entry.path().join("src")) else { continue };
+        for file in src.flatten() {
+            let Ok(file_name) = file.file_name().into_string() else { continue };
+            if file_name.ends_with("_verbs.rs") {
+                rels.push(format!("members/{name}/src/{file_name}"));
+            }
+        }
+    }
+    rels.sort();
+    let mut out = Vec::new();
+    for rel in rels {
+        let path = repo_path(&rel);
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            out.push((rel, text));
+        }
+    }
+    assert!(out.iter().any(|(p, _)| p == "keel-cli/src/main.rs"), "keel-cli/src/main.rs is a verb source");
+    out
+}
+
+/// The one verb source whose text contains `needle` (a `fn name(` head, a string literal), as
+/// `(repo-relative path, text)`; panics naming the needle when none does, so a test that lost its
+/// subject fails saying what it looked for rather than `the router exists`.
+///
+/// # Panics
+/// Test fixture: panics when no verb source contains `needle`.
+#[doc(hidden)]
+#[must_use]
+pub fn source_holding<'a>(sources: &'a [(String, String)], needle: &str) -> &'a (String, String) {
+    sources
+        .iter()
+        .find(|(_, text)| text.contains(needle))
+        .unwrap_or_else(|| panic_no_source(needle))
+}
+
+#[allow(clippy::panic)]
+fn panic_no_source(needle: &str) -> ! {
+    panic!("no verb source holds `{needle}`")
+}
+
 #[allow(clippy::expect_used)]
 fn root_unrecorded() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

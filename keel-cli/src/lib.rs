@@ -130,3 +130,22 @@ pub use keel_model::readiness::{compute_orient_state, orient_root, whats_next_ro
 
 // The init path-length walk is keel-fs's (sprint 740, D0479); `keel_cli::walk_longest` keeps resolving.
 pub use keel_fs::walk_longest;
+
+// Every verb body is its member's (D0479, sprint 750): main.rs is argument dispatch, and this is the one
+// list it reads. A verb's home is `python scripts/verb_homes.py --by-member`; the transform was scripts/extract_verbs.py.
+pub mod verbs {
+    pub use keel_args::args_verbs::*;
+    pub use keel_fs::fs_verbs::*;
+    pub use keel_git::git_verbs::*;
+    pub use keel_guards::guards_verbs::*;
+    pub use keel_hooks::hooks_verbs::*;
+    pub use keel_issues::issues_verbs::*;
+    pub use keel_model::model_verbs::*;
+    pub use keel_parser::parser_verbs::*;
+    pub use keel_process::process_verbs::*;
+    pub use keel_schema::schema_verbs::*;
+    pub use keel_serve::serve_verbs::*;
+    pub use keel_suite::suite_verbs::*;
+    pub use keel_view::view_verbs::*;
+    pub use keel_write::write_verbs::*;
+}

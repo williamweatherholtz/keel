@@ -11,4 +11,7 @@ keel-json = { path = "../keel-json" }
 keel-schema = { path = "../keel-schema" }
 keel-model = { path = "../keel-model" }
 keel-write = { path = "../keel-write" }
+keel-actor = { path = "../keel-actor" }
+keel-args = { path = "../keel-args" }
+keel-git = { path = "../keel-git" }
 serde_json = "1"

@@ -19,6 +19,8 @@ pub mod github_ingest;
 pub mod intake_write;
 pub mod issue_write;
 pub mod views;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod issues_verbs;
 
 /// `keel record task` adds a `DoD` `Test` to a declared action - an item verb, reachable here by name. The
 /// write itself stays keel-write's: it reads eight of write.rs's private insertion helpers, which

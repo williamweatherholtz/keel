@@ -19,6 +19,8 @@
 
 pub mod proactive;
 pub mod shellcheck;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod hooks_verbs;
 
 use std::path::{Path, PathBuf};
 

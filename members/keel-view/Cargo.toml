@@ -17,6 +17,7 @@ keel-schema = { path = "../keel-schema" }
 keel-github = { path = "../keel-github" }
 keel-model = { path = "../keel-model" }
 keel-write = { path = "../keel-write" }
+keel-args = { path = "../keel-args" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

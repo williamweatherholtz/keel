@@ -18,3 +18,5 @@ pub mod suite;
 pub mod touched;
 pub mod verify;
 pub mod wsgraph;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod suite_verbs;

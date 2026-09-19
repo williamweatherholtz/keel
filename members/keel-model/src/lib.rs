@@ -41,3 +41,5 @@ pub mod onboard;
 pub mod validate;
 pub mod resolvers;
 pub mod readiness;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod model_verbs;

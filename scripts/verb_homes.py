@@ -41,8 +41,8 @@ import tempfile
 import tomllib
 from collections import defaultdict
 
-STRING = re.compile(r'"(?:\\.|[^"\\])*"')
-BLOCK_COMMENT = re.compile(r"/\*.*?\*/")
+# `{name}` or `{name:spec}` in a string literal: an implicit format argument, a reference to `name`
+CAPTURE = re.compile(r"(?<!\{)\{([A-Za-z_]\w*)(?=[:}])")
 ITEM_HEAD = re.compile(r"^(?:pub(?:\([a-z]+\))?\s+)?(fn|mod|struct|enum|const|static|impl|type|trait)\s+([A-Za-z_][A-Za-z0-9_]*)")
 CLI_REF = re.compile(r"\b(?:crate|keel_cli)::([A-Za-z_][A-Za-z0-9_]*)(?:::([A-Za-z_][A-Za-z0-9_]*))?")
 MEMBER_REF = re.compile(r"\b(keel_[a-z_]+)::")
@@ -61,14 +61,69 @@ def repo_root(start: str | None = None) -> str:
 
 
 def strip(text: str) -> str:
-    """Comments and string literals blanked (same width), so names inside them are not read."""
-    out = []
-    for line in text.split("\n"):
-        no_str = STRING.sub(lambda m: " " * len(m.group(0)), line)
-        i = no_str.find("//")
-        cut = no_str if i < 0 else no_str[:i]
-        out.append(BLOCK_COMMENT.sub(lambda m: " " * len(m.group(0)), cut))
-    return "\n".join(out)
+    """Comments and string literals blanked (same width, newlines kept), so names inside them are not read.
+
+    A character walk, not a line regex: a `const` whose string spans lines (`ACTIVATION_HEADER`) hid the
+    word `process` from the old line-at-a-time pass, and the transform then imported `std::process`
+    into a member that never calls it (sprint 750, deny(unused_imports)). Handles `"..."` with escapes,
+    `r#"..."#` raw strings, `b"..."`, char literals (a lifetime `'a` is left alone), `//` and nested `/* */`.
+    A format capture inside a string literal (`"{ACTIVATION_HEADER}"`, `"{n:>4}"`) IS a reference to a
+    name in scope, so `{ident` survives the blanking of its string.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+
+    def blank(j: int, k: int, string: bool = False) -> None:
+        seg = text[j:k]
+        keep = set()
+        if string:
+            for m in CAPTURE.finditer(seg):
+                keep.update(range(m.start(), m.end()))
+        out.append("".join("\n" if c == "\n" else c if p in keep else " " for p, c in enumerate(seg)))
+
+    while i < n:
+        c = text[i]
+        two = text[i:i + 2]
+        if two == "//":
+            k = text.find("\n", i)
+            k = n if k < 0 else k
+            blank(i, k)
+            i = k
+        elif two == "/*":
+            depth, k = 1, i + 2
+            while k < n and depth:
+                if text[k:k + 2] == "/*":
+                    depth, k = depth + 1, k + 2
+                elif text[k:k + 2] == "*/":
+                    depth, k = depth - 1, k + 2
+                else:
+                    k += 1
+            blank(i, k)
+            i = k
+        elif c == '"' or (c == "b" and two == 'b"'):
+            k = i + (2 if c == "b" else 1)
+            while k < n and text[k] != '"':
+                k += 2 if text[k] == "\\" else 1
+            k = min(k + 1, n)
+            out.append(text[i:i + (2 if c == "b" else 1)])
+            blank(i + (2 if c == "b" else 1), k, string=True)
+            i = k
+        elif (c == "r" or two == "br") and re.match(r"b?r#*\"", text[i:i + 10]):
+            m = re.match(r"(b?r)(#*)\"", text[i:])
+            close = '"' + m.group(2)
+            k = text.find(close, i + m.end())
+            k = n if k < 0 else k + len(close)
+            out.append(text[i:i + m.end()])
+            blank(i + m.end(), k, string=True)
+            i = k
+        elif c == "'" and re.match(r"'(?:\\.[^']*|[^'\\])'", text[i:i + 12]):
+            m = re.match(r"'(?:\\.[^']*|[^'\\])'", text[i:i + 12])
+            out.append("'" + " " * (m.end() - 2) + "'")
+            i += m.end()
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
 
 
 class Workspace:
@@ -380,7 +435,10 @@ def probe() -> int:
     ws, rows = analyse(root)
     check_("this tree: keel-cli is the one binary", ws.bin == "keel-cli", ws.bin)
     check_("this tree: every member manifest is read", len(ws.deps) >= 17, f"{len(ws.deps)} members")
-    check_("this tree: main.rs yields items", len(rows) > 50, f"{len(rows)} items")
+    # After sprint 750 main.rs keeps main, cmd_show and its tests; the floor is that the parse is
+    # live, not a count tied to the file's former size (that floor went red the day the verbs moved).
+    check_("this tree: main.rs yields items", len(rows) > 0, f"{len(rows)} items")
+    check_("this tree: no body is the binary's alone", failures(ws, rows) == [], str(failures(ws, rows)))
     print(f"verb_homes probe: {fails} failure(s)")
     return 1 if fails else 0
 

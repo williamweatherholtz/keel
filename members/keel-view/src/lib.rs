@@ -33,3 +33,5 @@ pub mod pm;
 pub mod priority;
 pub mod verification;
 pub mod view;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod view_verbs;

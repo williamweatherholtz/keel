@@ -17,6 +17,8 @@ pub mod error;
 pub mod registry;
 pub mod spec_compat;
 pub mod token;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod parser_verbs;
 mod lexer;
 mod parser;
 

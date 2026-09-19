@@ -225,10 +225,10 @@ package ProjectCodeRegistry {
     }
     part ceHookDispatch : CodeElement {
         :>> id = "7252ae36-0cf4-4a80-811f-1606a4148e43";
-        :>> title = "main.rs cmd_hook - the in-loop enforcement dispatch (6 events + watchdog + fire-ledger)";
+        :>> title = "keel-hooks cmd_hook - the in-loop enforcement dispatch (6 events + watchdog + fire-ledger)";
         :>> createdAt = "2026-08-22"; :>> createdBy = "claudeFable5";
         :>> kind = "function";
-        :>> filePath = "keel-cli/src/main.rs";
+        :>> filePath = "members/keel-hooks/src/lib.rs";
         :>> riskClass = RiskClass::correctness;
         :>> invariantSafety = InvariantSafety::checked;
         :>> stpaRole = StpaRole::controller;

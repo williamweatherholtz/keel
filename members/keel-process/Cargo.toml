@@ -20,6 +20,7 @@ keel-write = { path = "../keel-write" }
 keel-view = { path = "../keel-view" }
 keel-guards = { path = "../keel-guards" }
 keel-suite = { path = "../keel-suite" }
+keel-args = { path = "../keel-args" }
 serde_json = "1"
 toml = "0.8"
 include_dir = "0.7"

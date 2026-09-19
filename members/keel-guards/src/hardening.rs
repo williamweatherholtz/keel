@@ -1172,32 +1172,39 @@ mod tests {
     /// matched/compared against known keywords (a flag then falls through to the unknown-keyword error).
     /// The first version of this test counted every read and reported 11 violations, most of them
     /// keyword dispatches - blunt, but it found four genuine ones I had missed.
+    ///
+    /// Scans every verb source (sprint 750 moved the `cmd_*` bodies out of main.rs into the members),
+    /// and requires at least one read to have been seen: a scan that finds none is aimed at the wrong files.
     #[test]
     fn every_positional_read_is_flag_guarded() {
-        let main = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/main.rs")).expect("main.rs is readable");
         let mut offenders = Vec::new();
-        for (i, line) in main.lines().enumerate() {
-            let trimmed = line.trim_start();
-            // A doc comment MENTIONING the pattern is not a read of it. Missing this made the test
-            // report its own explanatory comment as a violation.
-            if !line.contains("args.first()") || trimmed.starts_with("//") {
-                continue;
-            }
-            let guarded = line.contains("starts_with('-')")
-                || line.contains("let Some(first) = args.first()") // the helper itself
-                || line.contains("match args.first()")
-                || line.contains("== Some(")
-                || line.contains("!= Some(");
-            // `cmd_activation` and `cmd_hook` guard on a PRECEDING line, so accept a nearby guard too.
-            let nearby = main
-                .lines()
-                .skip(i.saturating_sub(6))
-                .take(7)
-                .any(|l| l.contains("starts_with('-')"));
-            if !guarded && !nearby {
-                offenders.push(format!("{}: {}", i + 1, line.trim()));
+        let mut reads = 0usize;
+        for (path, src) in keel_fs::test_support::verb_sources() {
+            for (i, line) in src.lines().enumerate() {
+                let trimmed = line.trim_start();
+                // A doc comment MENTIONING the pattern is not a read of it. Missing this made the test
+                // report its own explanatory comment as a violation.
+                if !line.contains("args.first()") || trimmed.starts_with("//") {
+                    continue;
+                }
+                reads += 1;
+                let guarded = line.contains("starts_with('-')")
+                    || line.contains("let Some(first) = args.first()") // the helper itself
+                    || line.contains("match args.first()")
+                    || line.contains("== Some(")
+                    || line.contains("!= Some(");
+                // `cmd_activation` and `cmd_hook` guard on a PRECEDING line, so accept a nearby guard too.
+                let nearby = src
+                    .lines()
+                    .skip(i.saturating_sub(6))
+                    .take(7)
+                    .any(|l| l.contains("starts_with('-')"));
+                if !guarded && !nearby {
+                    offenders.push(format!("{path}:{}: {}", i + 1, line.trim()));
+                }
             }
         }
+        assert!(reads > 0, "no positional read was scanned - the verb sources moved again");
         assert!(
             offenders.is_empty(),
             "positional read(s) that would accept a flag as a path or name: {offenders:#?}"
@@ -1210,18 +1217,22 @@ mod tests {
     /// January. Latent - no corpus item ever carried it - but guard 36 exists precisely to catch evidence
     /// citing a date it could not have had, and this was the write path fabricating one. Mentioning the
     /// literal in a comment or an error message is fine; USING it as a fallback is not.
+    ///
+    /// Scans every verb source: the write paths left main.rs for the members in sprint 750.
     #[test]
     fn no_write_path_defaults_a_provenance_date() {
-        let main = std::fs::read_to_string(crate::test_repo_root().join("keel-cli/src/main.rs")).expect("main.rs is readable");
-        let offenders: Vec<String> = main
-            .lines()
-            .enumerate()
-            .filter(|(_, l)| {
-                let s = l.trim_start();
-                !s.starts_with("//")
-                    && (s.contains("unwrap_or_else(|| \"20") || s.contains("unwrap_or(\"20"))
+        let sources = keel_fs::test_support::verb_sources();
+        assert!(sources.iter().any(|(p, _)| p.ends_with("write_verbs.rs")), "the scan reaches the write member's verbs");
+        let offenders: Vec<String> = sources
+            .iter()
+            .flat_map(|(path, src)| {
+                src.lines().enumerate().filter_map(move |(i, l)| {
+                    let s = l.trim_start();
+                    let hit = !s.starts_with("//")
+                        && (s.contains("unwrap_or_else(|| \"20") || s.contains("unwrap_or(\"20"));
+                    hit.then(|| format!("{path}:{}: {}", i + 1, l.trim()))
+                })
             })
-            .map(|(i, l)| format!("{}: {}", i + 1, l.trim()))
             .collect();
         assert!(
             offenders.is_empty(),

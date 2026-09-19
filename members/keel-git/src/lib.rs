@@ -7,3 +7,5 @@ pub mod gitx;
 pub mod eol;
 // Project discovery (D0234 / issue281), below every verb's argument parsing (sprint 740, D0479).
 pub mod projects;
+// The verbs this member owns, out of main.rs (D0479, sprint 750).
+pub mod git_verbs;
