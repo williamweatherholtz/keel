@@ -223,17 +223,30 @@ pub fn cli_reference(root: &Path) -> GuardReport {
 /// own source, which that project does not hold: `keel init` then `gate guard all` reddened every one
 /// of the 23 scaffold-and-gate tests on this guard's first touched run. Such a root scans nothing and
 /// passes - the claim is made where the source is, the self-build, and a project cannot hold it.
+///
+/// A ROOT WITH A `Cargo.toml` THAT IS NOT THE SELF-BUILD holds its own corpus and the engine's shipped
+/// docs: an adopter with a Rust workspace was red on citations of `members/keel-process/src/migrate.rs`
+/// that only this repository can hold (GH#88, issue612). Outside the self-build a living doc whose
+/// path under `.engine/` the embedded engine ships is set aside - not read, not counted - and one
+/// warning says how many; the adopter's own claims (`CLAUDE.md`, a project-added file under
+/// `.engine/`) are read as before. A claim the engine ships is held where it is made (D0520).
 #[must_use]
 pub fn source_reference(root: &Path) -> GuardReport {
     if !root.join("Cargo.toml").is_file() {
         return GuardReport { name: "source-reference", scanned: 0, warnings: Vec::new(), violations: Vec::new() };
     }
     let corpus = member_rust_sources(root);
+    let self_build = keel_model::corpus::is_self_build(root);
     let mut scanned = 0usize;
+    let mut set_aside = 0usize;
     let mut violations = Vec::new();
     for path in &living_doc_files(root) {
-        let Ok(text) = keel_model::corpus::read_to_string(path) else { continue };
         let rel = relpath(root, path);
+        if !self_build && is_shipped_engine_doc(&rel) {
+            set_aside += 1;
+            continue;
+        }
+        let Ok(text) = keel_model::corpus::read_to_string(path) else { continue };
         let lines: Vec<&str> = text.lines().collect();
         for (i, line) in lines.iter().enumerate() {
             for c in source_citations(line) {
@@ -246,7 +259,18 @@ pub fn source_reference(root: &Path) -> GuardReport {
             }
         }
     }
-    GuardReport { name: "source-reference", scanned, warnings: Vec::new(), violations }
+    let mut warnings = Vec::new();
+    if set_aside > 0 {
+        warnings.push(format!("{set_aside} shipped living doc(s) set aside - the engine's claims, held in the self-build (D0520)"));
+    }
+    GuardReport { name: "source-reference", scanned, warnings, violations }
+}
+
+/// Whether a root-relative living-doc path (`.engine/skills/x/SKILL.md`, either separator) is one the
+/// embedded engine ships. `CLAUDE.md` and a project-added file under `.engine/` are not.
+fn is_shipped_engine_doc(rel: &str) -> bool {
+    let under = rel.replace('\\', "/");
+    under.strip_prefix(".engine/").is_some_and(|inner| keel_schema::embedded::ENGINE_DIR.get_file(inner).is_some())
 }
 
 /// One `<file>.rs:N[-M]` citation on a doc line, with its byte span.
@@ -1051,6 +1075,38 @@ mod source_reference_tests {
         std::fs::remove_file(root.join("Cargo.toml")).expect("rm");
         let without = source_reference(&root);
         assert_eq!((without.scanned, without.violations.len()), (0, 0), "{:?}", without.violations);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// D0388 pair for issue612 (GH#88), chosen before the tree was read. An adopter with a Rust
+    /// workspace holds the shipped project-migration skill, which cites keel's own `migrate.rs`, and
+    /// its own `.engine/docs/own.md`, which cites a stale line of its own member. KNOWN-POSITIVE: the
+    /// shipped doc is set aside with one warning; the adopter's stale claim is the only violation.
+    /// KNOWN-NEGATIVE: the same root with `keel-cli/Cargo.toml` is the self-build and reads both.
+    #[test]
+    fn outside_the_self_build_a_shipped_doc_is_set_aside_and_the_adopters_own_claim_is_read() {
+        let root = workspace("keel-srcref-adopter");
+        let skill = keel_schema::embedded::engine_text("skills/project-migration/SKILL.md").expect("the engine ships the skill");
+        assert!(skill.contains("members/keel-process/src/migrate.rs:"), "the fixture relies on the shipped skill citing migrate.rs");
+        std::fs::create_dir_all(root.join(".engine/skills/project-migration")).expect("mkdir");
+        std::fs::write(root.join(".engine/skills/project-migration/SKILL.md"), skill).expect("write");
+        std::fs::create_dir_all(root.join(".engine/docs")).expect("mkdir");
+        std::fs::write(root.join(".engine/docs/own.md"), "our `check_preconditions` (`members/keel-a/src/migrate.rs:1-2`) is stale here\n").expect("write");
+
+        let adopter = source_reference(&root);
+        assert_eq!(adopter.violations.len(), 1, "{:#?}", adopter.violations);
+        assert!(adopter.violations[0].starts_with(".engine/docs/own.md:1: cites `members/keel-a/src/migrate.rs:1-2`"), "{}", adopter.violations[0]);
+        assert_eq!(adopter.warnings, vec!["1 shipped living doc(s) set aside - the engine's claims, held in the self-build (D0520)".to_string()]);
+        assert_eq!(adopter.scanned, 1, "only the adopter's own citation is counted");
+
+        std::fs::create_dir_all(root.join("keel-cli")).expect("mkdir");
+        std::fs::write(root.join("keel-cli/Cargo.toml"), "[package]\nname = \"keel-cli\"\n").expect("write");
+        let self_build = source_reference(&root);
+        let shipped_cites: usize = skill.lines().map(|l| source_citations(l).len()).sum();
+        assert_eq!(shipped_cites, 1, "the shipped skill cites migrate.rs once today");
+        assert_eq!(self_build.violations.len(), 1 + shipped_cites, "{:#?}", self_build.violations);
+        assert!(self_build.warnings.is_empty(), "{:?}", self_build.warnings);
+        assert_eq!(self_build.scanned, 1 + shipped_cites, "{}", self_build.scanned);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

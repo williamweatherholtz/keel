@@ -2095,4 +2095,92 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcTouchedRunNamesABuildThatNeverRan to issue608;
+
+    part issue610 : Issue {
+        :>> id = "db050171-19c6-427b-bf74-f514c790fe21";
+        :>> title = "The resync seeds parser-coverage-baseline.toml with the engine census (skipped = 7) into a first-time adopter, so its own ratchet reds the migration (GH#90)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#90 (st162; untrusted source, plan then act on the human direction st168, D0264), verified in this tree on 2026-09-18. step_engine_resync in members/keel-process/src/migrate.rs guards a project-owned contract against OVERWRITE (is_project_owned_contract && dst.exists()) but not against ADDITION, so a first-time adopter receives contracts/parser-coverage-baseline.toml carrying skipped = 7, the engine census of its own legacy successions, as that project ratchet. Guard parser-coverage totals .tracking/ and .engine/ together, so an adopter holding one skipped statement of its own reads 1 + 7 > 7 the instant migrate lands the file - red inside the run, so migrate reverts its own output and the adopter has no act that makes it green (three reverted 0.4.1 attempts recorded in one downstream project). Governed by D0520.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcRatchetOverTheProjectsCorpusIsNeverSeeded to issue610;
+
+    part issue611 : Issue {
+        :>> id = "d2f80d20-f148-49cc-aa58-ddf680a990b7";
+        :>> title = "charter_resolves reads .engine/decisions/ only while the resync deploys engine Decisions to .engine/reference/decisions/, so the shipped charteredBy resolves in no adopting tree (GH#89)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#89 (st163; untrusted source, D0264), verified in this tree on 2026-09-18. keel_model::onboard::charter_resolves (members/keel-model/src/onboard.rs:72 at HEAD) resolves a manifest charteredBy against .engine/decisions/ alone; the resync deploys engine Decisions to .engine/reference/decisions/ (dry run: add reference/decisions/0226-keel-charters-its-own-process-set.sysml), so the shipped charteredBy = d0226 resolves in no adopting tree and guard activation-manifest (members/keel-guards/src/enforcement.rs:1168) is red inside migrate. The two integration tests (charter_must_resolve.rs, activation_round_trip_loses_nothing.rs) exercise the authoring layout only, which is why neither caught it. Governed by D0520.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcCharterResolvesInBothDecisionDirectories to issue611;
+
+    part issue612 : Issue {
+        :>> id = "e6fc15e7-3a77-499d-a6f6-8e6ae5794eab";
+        :>> title = "Guard source-reference holds an adopter to the engine's own shipped citations of members/keel-process/src/migrate.rs, red on any Rust adopter and 0 scanned on a scaffold (GH#88)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#88 (st164; untrusted source, D0264), verified in this tree on 2026-09-18. Guard source-reference (members/keel-guards/src/surface.rs:227, sprint 743, issue591) scopes itself by one test - Cargo.toml at the root (:228) - and then reads every living doc under .engine/ (living_doc_files :485), shipped or authored. The resync deploys .engine/processes/project-migration.sysml and .engine/skills/project-migration/SKILL.md citing members/keel-process/src/migrate.rs, a file only this repository holds, so any adopter with a Rust workspace is red inside migrate on the engine own citations; a scaffold passes with 0 scanned only because it has no corpus, which is not a pass. Governed by D0520.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcSourceReferenceReadsTheAdoptersOwnClaims to issue612;
+
+    part issue613 : Issue {
+        :>> id = "8f93728a-f658-41f2-a121-9823d759a8d0";
+        :>> title = "migrate tolerates an engine-authored obligation at the door, fails its own gate on it, and its rollback deletes the record (GH#87)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#87 (st165; untrusted source, D0264), verified in this tree on 2026-09-18. Two halves of one command disagree about one file: check_preconditions (members/keel-process/src/migrate.rs) tolerates a NEW .tracking/obligations/*.sysml as additive and separable (is_tolerable_obligation, issue324), then project_gate runs gate guard all over the whole tree and guard issues fails on that same untriaged engine-authored red-yield obligation (D0176/K7), which the staleness migrate would cure keeps producing; restore then runs git clean -fdq -- .tracking and deletes the never-committed record, so the next attempt reports guard issues PASS because the evidence is gone and keel show status names an obligation id that resolves to nothing. Governed by D0522.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcToleratedRecordsSurviveTheRun to issue613;
+
+    part issue614 : Issue {
+        :>> id = "a9737852-8a2b-412d-ab1b-d09ca5e8f595";
+        :>> title = "record gate-result writes VerdictKind::proposed into a tree whose release-vintage schema lacks the member, and gate validate then rejects the tree (GH#86)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "From GH#86 (st166; untrusted source, D0264), verified in this tree on 2026-09-18. proposed_tier (members/keel-write/src/write.rs:625) returns the binary constant PROPOSED for an AI-examined pass (D0312 B) and neither it nor its callers (:814 DoD result, :1270 gate result) read the tree schema. .engine/schema/core/element.sysml:27 gained the proposed member at 24dbcfb3 (2026-09-10); tag v0.4.1 is b171cd7f (2026-09-06), so a tree scaffolded from the release lacks it while a binary built from main emits it: record gate-result reports success, gate validate then rejects the tree, and every sprint ceremony downstream is blocked. Governed by D0521.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcAWriteRefusesTheMemberTheTreesSchemaLacks to issue614;
+
+    part issue615 : Issue {
+        :>> id = "3a219bbc-d606-45c6-bfbc-6e3e2fbc5c7c";
+        :>> title = "No test runs the guard set over an adopter-shaped tree, so a guard red on every adopter is green here by construction (retro 745, GH#88)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Retro finding, sprint 745 (GH#88 / issue612). Guard source-reference reddened every Rust adopter for as long as it existed (sprint 743 to sprint 745) because its population included engine-shipped living docs and nothing in this repository ever ran the guard set over a tree shaped like an adopter's: every scaffold-and-gate test here (members/keel-guards/src/surface.rs source_reference_tests, members/keel-process/src/migrate.rs tests) is the self-build's shape - keel-cli/Cargo.toml present, the members tree present - so a guard that holds shipped content to this-repo conditions is green here by construction and red downstream by construction. The defect class is not one guard: any guard whose population is drawn from .engine/ content the resync deploys can recur it. The control is a test that deploys the embedded engine into a non-self-build root and asserts every guard green there, keyed on the embedded content, so the next shipped doc or contract that reddens an adopter fails this repo's own suite first.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcAFreshAdopterTreeIsGreenUnderEveryGuard to issue615;
+
+    part issue616 : Issue {
+        :>> id = "0d4ca6da-a2ef-4ddb-bbd6-bb560de76ef4";
+        :>> title = "WriteError::SchemaLacksMember is a refusal no registry, census or ledger row names (retro 745)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Retro finding, sprint 745. The write path gained a refusal this sprint - WriteError::SchemaLacksMember (members/keel-write/src/write.rs:56, raised at :676 when a result would land VerdictKind::proposed in a tree whose element.sysml declares no such member; issue614, D0521) - and it is not a row in WRITE_PATH_REFUSALS (:748-762), so it is not a row in the census (WRITE_PATH_CHECKS, members/keel-view/src/view/census.rs:143), is not ledgered by ledger_refused, and does not appear in keel show controls, control-census or enforcement-report. The registry's own test (every_live_row_has_a_refusal_and_every_refusal_a_row) holds the census to the registry and the registry to the census; nothing holds the registry to the set of refusals the code can actually raise, so a new WriteError variant lands unregistered by default and the fire-ledger writes `unregistered:` for it. Two things are owed: the rows for this refusal, and the retro's question of whether a registry test should enumerate WriteError's refusing variants.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcSchemaLacksMemberRefusalIsLedgered to issue616;
+
+    part issue617 : Issue {
+        :>> id = "6d0a53e0-3969-4aa1-8ab5-0db2acaa8575";
+        :>> title = "keel onboard tells a first-time adopter to restore an activation.toml from a history that has none (retro 745, GH#89)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Retro finding, sprint 745 (GH#89 / issue611). keel onboard's UNRESOLVED CHARTER line (members/keel-model/src/onboard.rs:158) ends with 're-run the project-onboarding skill or restore your own activation.toml from history'. The advice was written for issue380's tree, which HAD its own activation.toml before a v0.3.1 migrate overwrote it. Every downstream tree that hit GH#89 was a first-time adopter: its only activation.toml was the one the resync had just deployed, so 'restore from history' named an action with nothing behind it, and the reporter's words (st165) say they tried. GH#89's fix (charter_resolves reading both decision directories) makes the line rare, not unreachable - a project whose charteredBy names a Decision it deleted still lands here. The line is a computed surface (D0093) and should compute which tree it is printed in rather than assume issue380's.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcUnresolvedCharterAdviceFitsAFirstTimeAdopter to issue617;
 }

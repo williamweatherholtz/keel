@@ -63,19 +63,34 @@ pub fn chartered_by(root: &Path) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-/// Does `charter` (`dNNNN`) name a Decision file in THIS project's `.engine/decisions/`?
+/// Does `charter` (`dNNNN`) name a Decision file THIS project holds?
 ///
 /// issue380 / GH#56: a v0.3.1 `migrate` wrote the engine's own `activation.toml` over a project's, and
 /// `onboard` then printed `CHARTERED by d0226` - a Decision that project did not hold. A provenance claim
 /// the tree cannot back is stated as such, never as fact.
+///
+/// GH#89: both places a project can hold one are read. In THIS repository the engine's decisions are
+/// authored at `.engine/decisions/`, but the `engine-resync` step deploys them into an adopting project
+/// at `.engine/reference/decisions/`, where that project's own `.engine/decisions/` holds its own. Reading
+/// only the authoring path made the shipped `charteredBy = "d0226"` unresolvable in every adopting tree,
+/// so `migrate` failed `activation-manifest` on its own output and rolled back - unreachable by any action
+/// the adopter could take, because migrate is what writes the manifest in the first place. A charter that
+/// names nothing in either directory still fails, which is the property issue380 asked for.
 #[must_use]
 pub fn charter_resolves(root: &Path, charter: &str) -> bool {
     let Some(num) = charter.strip_prefix('d').filter(|n| n.len() == 4 && n.chars().all(|c| c.is_ascii_digit())) else {
         return false;
     };
     let prefix = format!("{num}-");
-    std::fs::read_dir(root.join(".engine").join("decisions"))
-        .is_ok_and(|rd| rd.flatten().any(|e| e.file_name().to_string_lossy().starts_with(&prefix) && e.path().extension().is_some_and(|x| x == "sysml")))
+    let engine = root.join(".engine");
+    [engine.join("decisions"), engine.join("reference").join("decisions")].iter().any(|dir| {
+        std::fs::read_dir(dir).is_ok_and(|rd| {
+            rd.flatten().any(|e| {
+                e.file_name().to_string_lossy().starts_with(&prefix)
+                    && e.path().extension().is_some_and(|x| x == "sysml")
+            })
+        })
+    })
 }
 
 /// Every declared process with its applicability and current state, computed.
@@ -166,7 +181,7 @@ pub fn cmd(args: &[String]) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{applicability, chartered_by, cmd};
+    use super::{applicability, charter_resolves, chartered_by, cmd};
 
     #[test]
     fn applicability_is_declared_beside_every_process() {
@@ -195,6 +210,31 @@ mod tests {
         std::fs::create_dir_all(root.join(".engine").join("processes")).unwrap();
         assert_eq!(chartered_by(&root), None);
         assert_eq!(cmd(&[root.to_string_lossy().to_string()]), 0, "reporting an unchartered project is not an error");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// D0388 pair for issue611 (GH#89), chosen before the tree was read. The resync deploys the
+    /// engine's Decisions to `.engine/reference/decisions/`; the manifest's shipped `charteredBy =
+    /// d0226` resolved against `.engine/decisions/` alone. KNOWN-POSITIVE: a fixture holding only
+    /// `.engine/reference/decisions/0226-x.sysml` resolves d0226. KNOWN-NEGATIVE: the same fixture
+    /// asked for d9999 does not resolve (issue380), and the authoring layout still resolves as before.
+    #[test]
+    fn a_charter_resolves_in_the_deployed_directory_as_in_the_authoring_one() {
+        let root = keel_fs::scratch("keel-onboard-charter-dirs");
+        let _ = std::fs::remove_dir_all(&root);
+        let reference = root.join(".engine").join("reference").join("decisions");
+        std::fs::create_dir_all(&reference).unwrap();
+        std::fs::write(reference.join("0226-x.sysml"), "package D0226 {}\n").unwrap();
+        assert!(charter_resolves(&root, "d0226"), "the deployed layout resolves the shipped charter");
+        assert!(!charter_resolves(&root, "d9999"), "a charter naming nothing in either directory still fails (issue380)");
+        assert!(!charter_resolves(&root, "0226"), "the charter is a `dNNNN` token");
+
+        let authoring = root.join(".engine").join("decisions");
+        std::fs::create_dir_all(&authoring).unwrap();
+        std::fs::write(authoring.join("0300-own.sysml"), "package D0300 {}\n").unwrap();
+        assert!(charter_resolves(&root, "d0300"), "the authoring layout resolves as before");
+        std::fs::remove_dir_all(&reference).unwrap();
+        assert!(!charter_resolves(&root, "d0226"), "a file in neither directory does not resolve");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -49,6 +49,11 @@ pub enum WriteError {
     /// [`RETRO_SCAN_EVIDENCE`] - the issue011 scan is owed by the actor who can write the Test, at
     /// the write, not one commit later by the ceremony guard. Carries the gate name.
     RetroScanMissing(String),
+    /// issue614 (GH#86) / D0521: the write would emit an enum member the TREE's schema does not
+    /// declare - `(member, enum, schema file)`. The binary's vocabulary is not the tree's; a
+    /// `VerdictKind::proposed` written into a pre-24dbcfb3 `element.sysml` fails that tree's own
+    /// `gate validate`. `keel migrate` brings the schema forward; until then nothing is written.
+    SchemaLacksMember(String, String, String),
 }
 
 /// The words a retro Test's `procedureText` must carry (any one, case-insensitive) to record the
@@ -84,6 +89,9 @@ impl std::fmt::Display for WriteError {
             }
             Self::RetroScanMissing(gate) => {
                 write!(f, "refusing to write: the retro Test {gate} records no avoidable-issue scan in its procedureText (issue011).\n  A Retro's Test says what was scanned; its procedureText must carry one of: {}.\n  Refused at the write (issue566): the ceremony guard used to find this one commit later, naming the result,\n  and the recorder cannot edit a Test - the actor who authored the sprint record can.", RETRO_SCAN_EVIDENCE.join(" | "))
+            }
+            Self::SchemaLacksMember(member, enum_name, file) => {
+                write!(f, "refusing to write: this result would land `{enum_name}::{member}`, and the tree's own schema declares no such member.\n  {file} declares `enum def {enum_name}` without `{member}`, so the line would fail this tree's `gate validate`.\n  A write emits only what the tree's schema declares (D0521, issue614). Run `keel migrate` to bring the\n  engine forward, then record again. Nothing was written.")
             }
             Self::InjectedToolOutput(field, excerpt) => {
                 write!(f, "refusing to write: --{field} carries what looks like captured TOOL OUTPUT, not authored text.\n  near: {excerpt}\n  A governance record must state what someone actually wrote. This is how it gets in: a BACKTICK\n  inside a double-quoted shell argument is command substitution, so sh RUNS the command named in\n  your prose and substitutes its output into the field (issue255/D0223). Pass the text through a\n  file or a single-quoted heredoc rather than an interpolated shell argument.")
@@ -650,6 +658,47 @@ fn proposed_tier<'a>(path: &Path, pkg: &Package, verification: &str, verdict: &'
     }
 }
 
+/// D0521 / issue614 (GH#86): a write emits only what the TREE's schema declares. `proposed_tier`
+/// answers from the binary's vocabulary; a project at the b171cd7 release vintage declares
+/// `VerdictKind` without `proposed` (added at 24dbcfb3), and the line landed anyway - then that
+/// tree's own `gate validate` rejected it, at the recorder's feet. So before `PROPOSED` lands, the
+/// tree's `.engine/schema/core/element.sysml` is read: absent member, refuse and write nothing. A
+/// root with no `element.sysml` (the write API's fixtures) is not read; any other verdict is
+/// native to every vintage and is not read either.
+fn refuse_member_the_trees_schema_lacks(path: &Path, verdict: &str) -> Result<(), WriteError> {
+    if verdict != PROPOSED {
+        return Ok(());
+    }
+    let Some(root) = model_root_of(path) else { return Ok(()) };
+    let file = root.join(".engine").join("schema").join("core").join("element.sysml");
+    let Ok(text) = std::fs::read_to_string(&file) else { return Ok(()) };
+    match enum_members(&text, "VerdictKind") {
+        Some(members) if !members.iter().any(|m| m == PROPOSED) => Err(WriteError::SchemaLacksMember(
+            PROPOSED.to_owned(),
+            "VerdictKind".to_owned(),
+            ".engine/schema/core/element.sysml".to_owned(),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// The members of `enum def <name> { a; b; }` in a schema text, when it declares one.
+fn enum_members(text: &str, name: &str) -> Option<Vec<String>> {
+    let decl = format!("enum def {name}");
+    let at = text.find(&decl)? + decl.len();
+    let rest = &text[at..];
+    let open = rest.find('{')?;
+    let close = rest[open..].find('}')? + open;
+    Some(
+        rest[open + 1..close]
+            .split(';')
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
 /// The methods whose AI-judged pass is a proposal (D0312 B): examined, not exercised.
 pub const EXAMINED_METHODS: [&str; 3] = ["demo", "analyze", "inspect"];
 
@@ -812,6 +861,7 @@ fn append_result_locked(
     }
     // D0312 B: an AI's pass on an examined method is recorded as a proposal, not a pass.
     let verdict = proposed_tier(path, &pkg, &format!("{task_name}DoD"), verdict, judged_by, evidence);
+    refuse_member_the_trees_schema_lacks(path, verdict)?;
 
     let n = max_result_n(&pkg, task_name) + 1;
     let uuid = gen_uuid();
@@ -1268,6 +1318,7 @@ fn append_gate_result_locked(
     }
     // D0312 B: a ceremony gate an AI inspects or analyses lands as a proposal until a human judges it.
     let verdict = proposed_tier(path, &pkg, gate_name, verdict, judged_by, evidence);
+    refuse_member_the_trees_schema_lacks(path, verdict)?;
 
     let n = max_gate_result_n(&pkg, gate_name) + 1;
     let uuid = gen_uuid();
@@ -2561,6 +2612,44 @@ mod tests {
         assert_eq!(outcome_of(&u), "pass", "a human's gate judgment stands");
         let text = std::fs::read_to_string(&f).expect("read");
         assert_eq!(text.matches("VerdictKind::proposed").count(), 3, "exactly the three AI-examined passes landed proposed:\n{text}");
+    }
+
+    /// D0521 / issue614 (GH#86), the D0388 pair chosen before the tree was read. A project at the
+    /// b171cd7 release vintage declares `VerdictKind` without `proposed`. KNOWN-POSITIVE: an AI demo
+    /// gate pass into that tree is REFUSED naming `proposed` and `keel migrate`, and the file's bytes
+    /// are unchanged. KNOWN-NEGATIVE: the same tree with `proposed` in the enum lands proposed as
+    /// today, and a human judge lands `pass` on the older enum - a native member, never read.
+    #[test]
+    fn a_write_refuses_the_member_the_trees_schema_lacks() {
+        let root = k6_root("vintage");
+        let schema = root.join(".engine").join("schema").join("core");
+        std::fs::create_dir_all(&schema).expect("mkdir");
+        let older = "package Core {\n    enum def ActorKind { human; ai; }\n    enum def VerdictKind { pass; fail; inconclusive; error; }                    // native verification verdict\n    enum def VerificationMethod { inspect; analyze; demo; test; confirmation; critique; }\n}\n";
+        std::fs::write(schema.join("element.sysml"), older).expect("schema");
+        assert_eq!(super::enum_members(older, "VerdictKind").as_deref(), Some(&["pass".to_string(), "fail".to_string(), "inconclusive".to_string(), "error".to_string()][..]));
+        assert_eq!(super::enum_members(older, "Severity"), None);
+        let f = root.join(".tracking").join("delivery").join("v.sysml");
+        let body = "package V {\n    verification gDemo : Test { :>> id = \"e2e00000-0000-4000-8000-00000000f301\"; :>> method = VerificationMethod::demo; :>> procedureText = \"the demo gate\"; }\n}\n";
+        std::fs::write(&f, body).expect("write");
+
+        // positive: AI demo pass into the older vintage -> refused, nothing written
+        let r = super::append_gate_result(&f, "gDemo", "abc1234", "pass", "2026-09-18", "bot", None, None);
+        let Err(e) = r else { panic!("the older vintage must refuse a proposed line: {r:?}") };
+        assert!(matches!(e, WriteError::SchemaLacksMember(..)), "{e:?}");
+        let msg = e.to_string();
+        assert!(msg.contains("VerdictKind::proposed") && msg.contains("keel migrate") && msg.contains("element.sysml"), "{msg}");
+        assert_eq!(std::fs::read_to_string(&f).expect("read"), body, "a refused write leaves the file byte-for-byte");
+
+        // negative: a human's pass is native to every vintage and lands
+        let u = super::append_gate_result(&f, "gDemo", "abc1234", "pass", "2026-09-18", "hum", None, None).expect("lands");
+        let text = std::fs::read_to_string(&f).expect("read");
+        assert!(text.lines().any(|l| l.contains(&u) && l.contains("VerdictKind::pass")), "{text}");
+        // negative: the schema brought forward -> the AI's demo pass lands proposed as today
+        std::fs::write(schema.join("element.sysml"), older.replace("error; }", "error; proposed; }")).expect("schema");
+        let u = super::append_gate_result(&f, "gDemo", "abc1234", "pass", "2026-09-18", "bot", None, None).expect("lands");
+        let text = std::fs::read_to_string(&f).expect("read");
+        assert!(text.lines().any(|l| l.contains(&u) && l.contains("VerdictKind::proposed")), "{text}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// D0444 (dcReplayableDemoStaysAPass), the D0388 pair named in the Decision before the tree was

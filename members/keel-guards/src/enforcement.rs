@@ -1162,11 +1162,14 @@ pub(crate) fn activation_manifest(root: &Path) -> GuardReport {
     // issue380 / GH#56: a `charteredBy` that names no Decision in THIS project's decisions is a
     // provenance claim the tree cannot back - the silent form of an engine resync writing another
     // project's charter. Loud, so the set is re-chartered rather than read as chartered.
+    // GH#89 / issue611: both directories a project can hold a Decision in are read - its own
+    // `.engine/decisions/` and the `.engine/reference/decisions/` the resync deploys - so the
+    // message names both places it looked.
     if let Some(charter) = keel_model::onboard::chartered_by(root) {
         if !keel_model::onboard::charter_resolves(root, &charter) {
+            let n = charter.trim_start_matches('d');
             violations.push(format!(
-                "activation.toml: charteredBy = \"{charter}\" does not resolve - no .engine/decisions/{}-*.sysml in this project, so the process set is NOT chartered here (issue380/GH#56); re-run project-onboarding or restore your own activation.toml",
-                charter.trim_start_matches('d')
+                "activation.toml: charteredBy = \"{charter}\" does not resolve - no .engine/decisions/{n}-*.sysml and no .engine/reference/decisions/{n}-*.sysml in this project, so the process set is NOT chartered here (issue380/GH#56); re-run project-onboarding or restore your own activation.toml"
             ));
         }
     }

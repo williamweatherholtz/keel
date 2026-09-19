@@ -41,13 +41,19 @@ fn charter(root: &Path, decision: &str) {
 #[test]
 fn a_charter_naming_a_decision_the_project_does_not_hold_is_a_violation_and_onboard_says_so() {
     let root = scaffold("dangling");
-    charter(&root, "d0226");
+    // GH#89 / issue611: `keel init` deploys the engine's Decisions to `.engine/reference/decisions/`,
+    // and a charter resolves in either directory, so the shipped d0226 is HELD by a scaffold now. The
+    // dangling charter is one no directory holds; the violation names both places it looked.
+    charter(&root, "d9998");
     let (ok, out) = run(&root, &["gate", "guard", "activation-manifest", "."]);
     assert!(!ok, "a dangling charteredBy fails the guard: {out}");
-    assert!(out.contains("charteredBy = \"d0226\" does not resolve") && out.contains("0226-*.sysml"), "the violation names the Decision and where it was looked for: {out}");
+    assert!(
+        out.contains("charteredBy = \"d9998\" does not resolve") && out.contains(".engine/decisions/9998-*.sysml") && out.contains(".engine/reference/decisions/9998-*.sysml"),
+        "the violation names the Decision and both directories it was looked for in: {out}"
+    );
     let (_, onboard) = run(&root, &["onboard", "."]);
-    assert!(onboard.contains("UNRESOLVED CHARTER d0226"), "onboard states the claim it cannot back: {onboard}");
-    assert!(!onboard.contains("CHARTERED by d0226"), "and never prints it as fact: {onboard}");
+    assert!(onboard.contains("UNRESOLVED CHARTER d9998"), "onboard states the claim it cannot back: {onboard}");
+    assert!(!onboard.contains("CHARTERED by d9998"), "and never prints it as fact: {onboard}");
     let (_, json) = run(&root, &["onboard", ".", "--json"]);
     assert!(json.contains("\"chartered\":false") && json.contains("\"charterResolves\":false"), "{json}");
     let _ = std::fs::remove_dir_all(&root);

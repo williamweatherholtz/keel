@@ -126,6 +126,16 @@ fn is_project_owned_contract(mapped: &Path) -> bool {
         && mapped.file_name().and_then(|f| f.to_str()).is_some_and(|f| PROJECT_OWNED.contains(&f))
 }
 
+/// Project-owned contracts whose body is a COUNT over the project's own corpus (GH#90).
+///
+/// A shipped default is a starting state for a policy, but for a ratchet it is a claim about a
+/// corpus the engine has not seen. These are added by the project when it adopts the ratchet, at
+/// the count it measures, with its reason - never seeded by a resync.
+fn is_ratchet_over_project_corpus(mapped: &Path) -> bool {
+    mapped.parent().is_some_and(|p| p.ends_with("contracts"))
+        && mapped.file_name().and_then(|f| f.to_str()) == Some("parser-coverage-baseline.toml")
+}
+
 /// `declaredAt = "<date>"` rewritten to `today`; every other line untouched.
 fn stamp_declared_at(text: &str, today: &str) -> String {
     let mut out: Vec<String> = text
@@ -566,6 +576,21 @@ fn step_engine_resync(root: &Path, engine: &Dir) -> StepPlan {
         if is_project_owned_contract(&mapped) && dst.exists() {
             return;
         }
+        // AND A RATCHET OVER THE PROJECT'S OWN CORPUS IS NEVER SEEDED BY THE RESYNC (GH#90). The
+        // check above stops the resync OVERWRITING a project-owned contract; it does not stop it
+        // ADDING one. For every other project-owned contract the shipped default is a sane starting
+        // state, but `parser-coverage-baseline.toml` carries a COUNT, and the engine's count is the
+        // engine's own legacy census (7 successions in its workflow files). Written into a
+        // first-time adopter it becomes that project's ratchet while describing a corpus that is not
+        // theirs: the guard totals `.tracking/` and `.engine/` together, so an adopter holding even
+        // one skipped statement of its own goes red at `1 + 7 > 7` the instant migrate lands the
+        // file - and red inside the run, so migrate reverts its own output with no action the
+        // adopter can take. Absence is already a stated, passing state (D0136), and the contract's
+        // own comment asks that the number be adopted deliberately with its reason recorded - which
+        // is a thing only the project can do, at the count the project actually has.
+        if is_ratchet_over_project_corpus(&mapped) && !dst.exists() {
+            return;
+        }
         let Ok(shipped_text) = std::str::from_utf8(f.contents()) else { return };
         // issue291: compare the TRANSFORMED content, so this step IS the migration for a project
         // inited before the rename existed - and a no-op for one inited after it.
@@ -870,6 +895,63 @@ fn report_tolerated(tolerated: &[String]) {
     }
 }
 
+// ── tolerated through the run (D0522 / issue613, GH#87) ───────────────────────────────────────
+//
+// The door tolerated a record and the run then held it against the tree twice: the post-apply gate
+// failed `guard issues` on the same untriaged record, and `restore`'s `git clean` deleted the
+// never-committed file on the way out. One command, two definitions of separable. The tolerated
+// paths now flow from `check_preconditions` to the gate (their parts are discounted) and to
+// `restore` (their paths are excluded from the clean).
+
+/// The root-relative paths behind the tolerated porcelain lines.
+fn tolerated_paths(tolerated: &[String]) -> Vec<String> {
+    tolerated.iter().filter_map(|l| porcelain_parts(l).map(|(_, p)| p.replace('\\', "/"))).collect()
+}
+
+/// The part names a record declares (`part <name> : Issue`): the subjects a guard names when it
+/// fails on that record.
+fn declared_parts(text: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|l| {
+            let rest = l.trim().strip_prefix("part ")?;
+            let name = rest.split(|c: char| c.is_whitespace() || c == ':').next()?;
+            (!name.is_empty()).then(|| name.to_string())
+        })
+        .collect()
+}
+
+/// Every part declared across the tolerated records.
+fn tolerated_parts(root: &Path, paths: &[String]) -> Vec<String> {
+    paths.iter().filter_map(|p| std::fs::read_to_string(root.join(p)).ok()).flat_map(|t| declared_parts(&t)).collect()
+}
+
+/// Judge a red guard run against the tolerated parts. `Ok(discounted)` when at least one failing
+/// line names a tolerated part and every other failing line is a guard header or the runner's
+/// summary (`[guard:...] FAIL`, `[guard] FAILED`) - the run is green with those lines discounted.
+/// `Err(red)` names the lines that stay red: a violation on any other subject fails the run as today.
+fn discount_tolerated(output: &str, parts: &[String]) -> Result<Vec<String>, Vec<String>> {
+    let failing = gate_failure_lines(output);
+    let (discounted, rest): (Vec<String>, Vec<String>) = failing.into_iter().partition(|l| parts.iter().any(|p| l.contains(p.as_str())));
+    let red: Vec<String> = rest.into_iter().filter(|l| !l.trim_start().starts_with("[guard")).collect();
+    if discounted.is_empty() || !red.is_empty() {
+        Err(red)
+    } else {
+        Ok(discounted)
+    }
+}
+
+/// `git clean` over the run's directories, keeping every tolerated path (`-e` is an exclude
+/// pattern in addition to the ignore rules). Empty `keep` is today's argument list exactly.
+fn clean_args(keep: &[String]) -> Vec<String> {
+    let mut args = vec!["clean".to_string(), "-fdq".to_string()];
+    for k in keep {
+        args.push("-e".to_string());
+        args.push(k.clone());
+    }
+    args.extend(["--", ".engine", ".tracking", ".claude"].map(str::to_string));
+    args
+}
+
 /// Preconditions. `dry_run` relaxes only the tree-cleanliness check — a dry run writes nothing.
 ///
 /// `Ok` carries the uncommitted paths that were TOLERATED (see `is_tolerable_obligation`), so the
@@ -953,9 +1035,10 @@ fn head_sha(root: &Path) -> Option<String> {
 ///
 /// Safe precisely BECAUSE migrate refuses a dirty tree: everything under those directories was
 /// committed before the run, so resetting them to the pre-migration commit cannot destroy work.
-/// `checkout` restores modified and deleted files; `clean` removes ones the run created.
-fn restore(root: &Path, sha: &str) -> Result<(), String> {
-    let run = |args: &[&str]| -> Result<(), String> {
+/// `checkout` restores modified and deleted files; `clean` removes ones the run created - except the
+/// tolerated records in `keep`, which the door admitted and the run never wrote (D0522).
+fn restore(root: &Path, sha: &str, keep: &[String]) -> Result<(), String> {
+    let run = |args: &[String]| -> Result<(), String> {
         let out = keel_git::gitx::git()
             .arg("-C")
             .arg(root)
@@ -968,21 +1051,22 @@ fn restore(root: &Path, sha: &str) -> Result<(), String> {
             Err(format!("git {args:?}: {}", String::from_utf8_lossy(&out.stderr).trim()))
         }
     };
-    run(&["checkout", sha, "--", ".engine", ".tracking", ".claude"])?;
-    run(&["clean", "-fdq", "--", ".engine", ".tracking", ".claude"])?;
+    let words = |w: &[&str]| w.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+    run(&words(&["checkout", sha, "--", ".engine", ".tracking", ".claude"]))?;
+    run(&clean_args(keep))?;
     // `checkout <sha> -- <paths>` also STAGES the restored content; unstage so the tree looks
     // untouched rather than merely having the right bytes.
-    run(&["reset", "-q", "--", ".engine", ".tracking", ".claude"])
+    run(&words(&["reset", "-q", "--", ".engine", ".tracking", ".claude"]))
 }
 
 /// Roll back a detected failure, and say plainly whether the rollback itself worked.
-fn rollback_after_failure(root: &Path, sha: Option<&String>, written: usize) -> i32 {
+fn rollback_after_failure(root: &Path, sha: Option<&String>, written: usize, keep: &[String]) -> i32 {
     let Some(sha) = sha else {
         eprintln!("  {written} file(s) were already written and NO pre-migration commit was recorded,");
         eprintln!("  so this tree is PARTIALLY MIGRATED and cannot be restored automatically.");
         return 1;
     };
-    match restore(root, sha) {
+    match restore(root, sha, keep) {
         Ok(()) => {
             let _ = std::fs::remove_file(marker_path(root));
             eprintln!("  ROLLED BACK: {written} written file(s) discarded; .engine/, .tracking/ and .claude/ restored to {sha}.");
@@ -1000,12 +1084,17 @@ fn rollback_after_failure(root: &Path, sha: Option<&String>, written: usize) -> 
 /// If a previous run was interrupted, restore before doing anything else. Returns a note to print.
 fn recover_interrupted(root: &Path) -> Option<String> {
     let marker = marker_path(root);
-    let sha = std::fs::read_to_string(&marker).ok()?.trim().to_string();
+    let text = std::fs::read_to_string(&marker).ok()?;
+    // Line one is the pre-migration commit; any further lines are the tolerated paths the
+    // interrupted run admitted at its door, kept through this restore too (D0522).
+    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    let sha = lines.next().unwrap_or_default().to_string();
+    let keep: Vec<String> = lines.map(str::to_string).collect();
     if sha.is_empty() {
         let _ = std::fs::remove_file(&marker);
         return None;
     }
-    let note = match restore(root, &sha) {
+    let note = match restore(root, &sha, &keep) {
         Ok(()) => format!(
             "recovered: a previous migration did not finish. .engine/ and .tracking/ restored to {sha} before planning."
         ),
@@ -1020,10 +1109,15 @@ fn recover_interrupted(root: &Path) -> Option<String> {
 /// Record the pre-migration commit BEFORE the first byte is written. An interruption after this
 /// point is detectable on the next run, which is the only recovery a killed process can have — so a
 /// failure to arm it REFUSES the apply rather than proceeding unrecoverably.
-fn arm_marker(root: &Path, pre_sha: Option<&String>) -> Result<(), i32> {
+fn arm_marker(root: &Path, pre_sha: Option<&String>, keep: &[String]) -> Result<(), i32> {
     let Some(sha) = pre_sha else { return Ok(()) };
     let _ = std::fs::create_dir_all(root.join(".keel"));
-    if let Err(e) = std::fs::write(marker_path(root), sha) {
+    let mut text = sha.clone();
+    for k in keep {
+        text.push('\n');
+        text.push_str(k);
+    }
+    if let Err(e) = std::fs::write(marker_path(root), text) {
         eprintln!("keel migrate: cannot write the in-progress marker ({e}) — refusing to apply.");
         eprintln!("  Without it an interrupted run could not be detected, and this command's whole");
         eprintln!("  reversibility guarantee rests on that detection.");
@@ -1083,12 +1177,12 @@ fn report_written(p: &MigrationPlan, root: &Path) {
 /// The same shape as the resync record: a post-condition the run's own gate demands, which only the
 /// run can satisfy. A failure here is the migration's failure and rolls back with it — `Some(code)`
 /// is that rollback's exit code, `None` means the surface is current.
-fn resync_surface(root: &Path, pre_sha: Option<&String>, written: usize) -> Option<i32> {
+fn resync_surface(root: &Path, pre_sha: Option<&String>, written: usize, keep: &[String]) -> Option<i32> {
     let Err(e) = keel_write::claude_surface::sync_claude(root, false) else { return None };
     eprintln!("keel migrate: wrote {written} file(s), but the .claude/ surface could not be regenerated: {e}");
     eprintln!("  The surface is deployed from the .engine/skills/ this run moved, so a tree with one vintage's");
     eprintln!("  engine and the other's surface is exactly the half-migrated state that must not survive.");
-    Some(rollback_after_failure(root, pre_sha, written))
+    Some(rollback_after_failure(root, pre_sha, written, keep))
 }
 
 fn apply_files(p: &MigrationPlan) -> Result<usize, (usize, PathBuf, std::io::Error)> {
@@ -1181,6 +1275,7 @@ pub fn cmd_with(root: &Path, engine: &Dir, dry_run: bool, verify: bool) -> i32 {
     println!("keel migrate — {}", root.display());
     println!("  binary engine: keel {} (build {})", env!("CARGO_PKG_VERSION"), env!("KEEL_BUILD_COMMIT"));
     report_tolerated(&tolerated);
+    let keep = tolerated_paths(&tolerated);
     if active.is_empty() {
         println!("  detected vintage: CURRENT — no step applies. Nothing to do.");
         return 0;
@@ -1229,18 +1324,18 @@ pub fn cmd_with(root: &Path, engine: &Dir, dry_run: bool, verify: bool) -> i32 {
         return 0;
     }
 
-    if let Err(code) = arm_marker(root, pre_sha.as_ref()) {
+    if let Err(code) = arm_marker(root, pre_sha.as_ref(), &keep) {
         return code;
     }
     let written = match apply_files(&p) {
         Ok(n) => n,
         Err((n, path, e)) => {
             eprintln!("keel migrate: FAILED writing {}: {e}", rel(root, &path));
-            return rollback_after_failure(root, pre_sha.as_ref(), n);
+            return rollback_after_failure(root, pre_sha.as_ref(), n, &keep);
         }
     };
 
-    if let Some(code) = resync_surface(root, pre_sha.as_ref(), written) { return code }
+    if let Some(code) = resync_surface(root, pre_sha.as_ref(), written, &keep) { return code }
 
     // Reconcile against the plan by RE-PLANNING. Every step is content-detected, so a correct run
     // leaves nothing matching; a non-empty re-plan means a transform did not do what it reported.
@@ -1252,7 +1347,7 @@ pub fn cmd_with(root: &Path, engine: &Dir, dry_run: bool, verify: bool) -> i32 {
         // Rolled back rather than left for inspection (srMigrationIsReversible): "migrated but not
         // verified" is precisely the state that must not survive a run. Previously this advised a
         // `git diff` and left the tree written.
-        return rollback_after_failure(root, pre_sha.as_ref(), written);
+        return rollback_after_failure(root, pre_sha.as_ref(), written, &keep);
     }
     // D0190: a completed migration re-stamps the declared engine version. D0251 ESCALATED what the
     // stamp means: it is no longer a parity-warning input but a BINDING pin — a binary whose version
@@ -1270,7 +1365,7 @@ pub fn cmd_with(root: &Path, engine: &Dir, dry_run: bool, verify: bool) -> i32 {
     if let Err(e) = restamp_pin(root, &stamp) {
         eprintln!("keel migrate: migration complete but the version re-stamp failed ({e}) - the parity warning will keep firing until engine-version.toml is updated.");
     }
-    finish_applied(root, &p, pre_sha.as_ref(), written, verify)
+    finish_applied(root, &p, pre_sha.as_ref(), written, verify, &keep)
 }
 
 /// VERIFIED OR REVERTED (D0336; srUpdateIsVerifiedOrReverted). The re-plan proves the transform did
@@ -1280,9 +1375,9 @@ pub fn cmd_with(root: &Path, engine: &Dir, dry_run: bool, verify: bool) -> i32 {
 /// output verbatim. There is no third outcome: the tree is verified-green or it is byte-for-byte what
 /// it was. NOT gated on "empty plan": an empty plan returned before the re-stamp and never reaches
 /// here, and a real upgrade always plans at least the resync. `verify = false` writes and says UNVERIFIED.
-fn finish_applied(root: &Path, p: &MigrationPlan, pre_sha: Option<&String>, written: usize, verify: bool) -> i32 {
+fn finish_applied(root: &Path, p: &MigrationPlan, pre_sha: Option<&String>, written: usize, verify: bool, keep: &[String]) -> i32 {
     if verify {
-        match project_gate(root) {
+        match project_gate(root, &tolerated_parts(root, keep)) {
             Ok(()) => {
                 let _ = std::fs::remove_file(marker_path(root));
                 println!("  wrote {written} file(s). Re-plan is empty and the project's own gate is GREEN under {}: the update is RETAINED.", env!("CARGO_PKG_VERSION"));
@@ -1300,7 +1395,7 @@ fn finish_applied(root: &Path, p: &MigrationPlan, pre_sha: Option<&String>, writ
                 }
                 record_attempt(root, "reverted", &gate, &gate_failure_lines(&output).join("\n"));
                 eprintln!("  REVERTING: verified-green or byte-for-byte as before - there is no third state (srUpdateIsVerifiedOrReverted).");
-                let code = rollback_after_failure(root, pre_sha, written);
+                let code = rollback_after_failure(root, pre_sha, written, keep);
                 eprintln!("  RECORDED in .keel/update-attempts.toml (`keel show status` shows it): version {}, gate {gate}. A re-run will say this version was reverted here.", env!("CARGO_PKG_VERSION"));
                 code
             }
@@ -1344,13 +1439,26 @@ fn gate_failure_lines(output: &str) -> Vec<String> {
     out
 }
 
-fn project_gate(root: &Path) -> Result<(), (String, String)> {
+///
+/// A red `guard` whose every failing line names a part of a tolerated record is DISCOUNTED and
+/// printed as such (D0522): the door admitted that record as separable, so the gate does not hold
+/// the run to it. Any other failing line is the run's red, as before.
+fn project_gate(root: &Path, tolerated_parts: &[String]) -> Result<(), (String, String)> {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("keel"));
     let r = root.to_string_lossy().to_string();
     for (gate, args) in [("validate", vec!["gate", "validate", r.as_str()]), ("guard", vec!["gate", "guard", "all", r.as_str()]), ("check-engine", vec!["gate", "check-engine", r.as_str()])] {
         let out = std::process::Command::new(&exe).args(&args).output().map_err(|e| (gate.to_string(), format!("could not run keel {gate}: {e}")))?;
         if !out.status.success() {
             let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            if gate == "guard" && !tolerated_parts.is_empty() {
+                if let Ok(discounted) = discount_tolerated(&text, tolerated_parts) {
+                    println!("  guard: {} failing line(s) DISCOUNTED - each names a record tolerated at the door (D0522):", discounted.len());
+                    for line in &discounted {
+                        println!("    {}", line.trim());
+                    }
+                    continue;
+                }
+            }
             return Err((gate.to_string(), text));
         }
     }
@@ -1441,9 +1549,9 @@ pub fn parse_attempts(text: &str) -> Vec<UpdateAttempt> {
 #[cfg(test)]
 mod tests {
     use super::{
-        drop_processstep_order, is_engine_dev_only, remap_engine_path, retype_instances, step_process_as_action,
-        step_processstep_order, step_release_as_occurrence, step_removed_types, step_resync_record, strip_order_assignment, types_as,
-        without_string_literals, FileEdit, Path, StepPlan, Working,
+        clean_args, declared_parts, discount_tolerated, drop_processstep_order, is_engine_dev_only, remap_engine_path, retype_instances,
+        step_engine_resync, step_process_as_action, step_processstep_order, step_release_as_occurrence, step_removed_types, step_resync_record,
+        strip_order_assignment, tolerated_paths, types_as, without_string_literals, FileEdit, Path, StepPlan, Working,
     };
 
     /// D0388 probe pair for the resync record, chosen before the real tree was read.
@@ -1646,6 +1754,63 @@ mod tests {
         assert_eq!(step_processstep_order(&dir, &mut w2).edits(), 0);
         assert_eq!(step_release_as_occurrence(&dir, &mut w2).edits(), 0);
 
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// D0388 pair for issue613 (GH#87), chosen before the tree was read. The door tolerated a new
+    /// obligation record; the run then failed `guard issues` on it and `git clean` deleted it.
+    /// KNOWN-POSITIVE: a guard output whose only failing lines are the `[guard:issues] FAIL` header and
+    /// `ERROR obligationabc: untriaged` is green with the discount named; the clean arguments carry
+    /// the record as a `-e` exclusion. KNOWN-NEGATIVE: one more `ERROR issue999: untriaged` stays red;
+    /// an empty tolerated list yields today's clean arguments exactly.
+    #[test]
+    fn a_record_tolerated_at_the_door_is_discounted_by_the_gate_and_kept_by_the_clean() {
+        let record = "package Obligations {\n    part obligationabc : Issue {\n        :>> id = \"x\";\n    }\n}\n";
+        let parts = declared_parts(record);
+        assert_eq!(parts, vec!["obligationabc".to_string()]);
+
+        let green = "[guard:ownership] PASS — 3 scanned, 0 warning(s), 0 violation(s)\n  ERROR obligationabc: untriaged — no #Resolves edge (D0077; link a resolving action or Decision)\n[guard:issues] FAIL — 12 scanned, 0 warning(s), 1 violation(s)\n[guard] FAILED — 0 warning(s) across 0 guard(s)\n";
+        let discounted = discount_tolerated(green, &parts).expect("every failing line is the tolerated record's or a header");
+        assert_eq!(discounted.len(), 1, "{discounted:?}");
+        assert!(discounted[0].contains("obligationabc: untriaged"), "{discounted:?}");
+
+        let red = format!("{green}  ERROR issue999: untriaged — no #Resolves edge (D0077)\n");
+        let stays = discount_tolerated(&red, &parts).expect_err("a violation on another subject is the run's red");
+        assert_eq!(stays.len(), 1, "{stays:?}");
+        assert!(stays[0].contains("issue999"), "{stays:?}");
+        assert!(discount_tolerated(green, &[]).is_err(), "nothing tolerated, nothing discounted");
+
+        let keep = tolerated_paths(&["?? .tracking/obligations/red-yield-abc.sysml".to_string()]);
+        assert_eq!(keep, vec![".tracking/obligations/red-yield-abc.sysml".to_string()]);
+        let args = clean_args(&keep);
+        assert_eq!(args, ["clean", "-fdq", "-e", ".tracking/obligations/red-yield-abc.sysml", "--", ".engine", ".tracking", ".claude"].map(str::to_string).to_vec());
+        assert_eq!(clean_args(&[]), ["clean", "-fdq", "--", ".engine", ".tracking", ".claude"].map(str::to_string).to_vec());
+    }
+
+    /// D0388 pair for issue610 (GH#90), chosen before the tree was read. The resync ADDED the engine's
+    /// own parser-coverage count into a first-time adopter as that project's ratchet. KNOWN-POSITIVE:
+    /// a project with no `contracts/parser-coverage-baseline.toml` plans no such file.
+    /// KNOWN-NEGATIVE: a project-authored one keeps its bytes, and `activation.toml` - a project-owned
+    /// contract the resync still seeds - is planned when absent.
+    #[test]
+    fn a_ratchet_over_the_projects_corpus_is_never_seeded_and_an_authored_one_is_kept() {
+        let dir = std::env::temp_dir().join(format!("keel-migrate-ratchet-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".engine").join("contracts")).unwrap();
+        let engine = &keel_schema::embedded::ENGINE_DIR;
+        assert!(engine.get_file("contracts/parser-coverage-baseline.toml").is_some(), "the engine ships the ratchet");
+        assert!(engine.get_file("contracts/activation.toml").is_some(), "the engine ships the activation manifest");
+
+        let plan = step_engine_resync(&dir, engine);
+        let planned = |name: &str| plan.files.iter().any(|f| f.path.ends_with(Path::new("contracts").join(name)));
+        assert!(!planned("parser-coverage-baseline.toml"), "the engine's count is not this project's ratchet");
+        assert!(planned("activation.toml"), "a project-owned contract with a sane default is still seeded");
+
+        let own = "# adopted at our own count\n[baseline]\nskipped = 3\n";
+        std::fs::write(dir.join(".engine/contracts/parser-coverage-baseline.toml"), own).unwrap();
+        let again = step_engine_resync(&dir, engine);
+        assert!(!again.files.iter().any(|f| f.path.ends_with(Path::new("contracts").join("parser-coverage-baseline.toml"))), "an authored ratchet is the project's");
+        assert_eq!(std::fs::read_to_string(dir.join(".engine/contracts/parser-coverage-baseline.toml")).unwrap(), own);
         std::fs::remove_dir_all(&dir).ok();
     }
 }
