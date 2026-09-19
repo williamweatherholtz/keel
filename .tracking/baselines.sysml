@@ -168,7 +168,7 @@ package ProjectBaselines {
         :>> title = "v0.5.0 - keel migrate lands in a project that is not this one";
         :>> createdAt = "2026-09-18";
         :>> createdBy = "claudeFable5";
-        :>> commit = "PENDING";  // set to the TAGGED commit once the tag lands (issue311: recording precedes tagging by one commit)
+        :>> commit = "4a0abc85";  // the TAGGED commit (v0.5.0 at 4a0abc85; issue311: recording preceded tagging by one commit)
         :>> tag = "v0.5.0";
         :>> purpose = "The release downstream adopters asked for (GH#68, GH#86-90; D0519-D0522). A resync is not a self-modification of the owner's items and writes the evidence its own gate reads; a gate that runs in an adopting project holds the adopter to its own claims and sets the shipped engine docs aside; a manifest's charter resolves in either decisions directory; the parser-coverage ratchet is never seeded into a project that has none; a write emits only what the tree's own schema declares and refuses, naming keel migrate, when a member is absent; a record tolerated at the door survives the run. Beside it, the CLI surface the adopters will call: five verb families folded under render, show, record, gate/audit and github with the old names removed (D0449-D0453), a human's chat acceptance recorded as their own words (D0375/D0423), the touched test set run before every first push (D0421/D0475), and every release asset checksummed by the run that built it (D0385). The human's direction: migration should be smooth; make downstream projects whole.";
     }

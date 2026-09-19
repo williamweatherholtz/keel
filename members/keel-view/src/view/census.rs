@@ -240,6 +240,20 @@ const WRITE_PATH_CHECKS: &[(&str, Subject, &str, &str, &[&str])] = &[
         &["retro-scan", "retro Test", "no avoidable-issue scan", "RETRO_SCAN_EVIDENCE"],
     ),
     (
+        "append-result:schema-member",
+        Subject::Ai,
+        "active",
+        "an AI-examined pass that would land `VerdictKind::proposed` into a tree whose schema/core/element.sysml declares no such member: the act refused is the agent writing a verdict the adopter's parser cannot read, at the write, naming `keel migrate` (D0521/issue614 - GH#86; a row since issue616)",
+        &["schema-member", "SchemaLacksMember", "VerdictKind::proposed", "schema lacks", "older vintage"],
+    ),
+    (
+        "append-gate-result:schema-member",
+        Subject::Ai,
+        "active",
+        "the same refusal on a ceremony gate result: an AI demo/test gate pass into a pre-D0312 vintage would land `proposed`, which that tree's VerdictKind lacks (D0521/issue614; a row since issue616)",
+        &["gate schema-member", "gate result older vintage", "proposed gate into vintage"],
+    ),
+    (
         "record:tool-output-prose",
         Subject::Ai,
         "active",

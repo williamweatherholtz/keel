@@ -83,7 +83,7 @@ fn known_positive_the_embedded_text_passes_the_lock_with_no_decision() {
     let (ok, text) = guard_at_terminal(&root);
     assert!(ok, "a locked file carrying the engine's own text is the engine arriving, not an edit:\n{text}");
     assert!(
-        text.contains("engine resync") && text.contains(SKILL),
+        text.contains("engine-written") && text.contains(SKILL),
         "the exemption is announced, naming the path, so the suspension is visible:\n{text}"
     );
     assert!(text.contains("(read: working tree)"), "the read is named:\n{text}");
@@ -97,7 +97,7 @@ fn known_negative_one_appended_line_is_back_under_the_lock() {
     let (ok, text) = guard_at_terminal(&root);
     assert!(!ok, "an edited locked file is refused whatever it started as:\n{text}");
     assert!(text.contains(SKILL) && text.contains("NO co-committed process-change Decision"), "names the file:\n{text}");
-    assert!(!text.contains("engine resync"), "no exemption is claimed for an edited file:\n{text}");
+    assert!(!text.contains("engine-written"), "no exemption is claimed for an edited file:\n{text}");
     cleanup(&root);
 }
 

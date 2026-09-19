@@ -110,9 +110,9 @@ pub fn is_locked_path(p: &str) -> bool {
     is_process_def(p) || is_enforcement_surface(p)
 }
 
-/// Pure core: a staged process-def change must be co-committed with a marked Decision.
-/// Is this locked path's text under `read` the engine's OWN published text - an engine RESYNC
-/// (D0441 / issue475), not a self-modification?
+/// Is this locked path's text under `read` exactly what the engine embedded in this binary WRITES -
+/// an engine RESYNC (D0441 / issue475) or its verb RESPELL (D0523 / issue620) - not a
+/// self-modification?
 ///
 /// `keel migrate` writes `.engine/` from the engine embedded in the binary (D0275), and skills,
 /// contracts and rules under it are locked paths - so every resync wrote locked files no Decision
@@ -120,23 +120,44 @@ pub fn is_locked_path(p: &str) -> bool {
 /// commit; under D0440's working-tree read it fell inside migrate's own D0336 gate and reverted the
 /// update (six fixture tests, 2026-09-10). Decided by CONTENT, never by the pin: a locked file whose
 /// text equals the embedded file at the same relative path (line endings normalised) is the engine
-/// arriving; one edited byte puts it back under the lock. Two exclusions: the self-build, where the
-/// embedded engine IS the tree and a rebuild after the edit would launder any change (`keel migrate`
-/// refuses the self-build for the same reason); and a deleted file, which has no text to compare.
-pub(crate) fn is_engine_resync(root: &Path, path: &str, read: ChangeRead) -> bool {
+/// arriving; one edited byte puts it back under the lock. The respell is the same shape one step on:
+/// migrate's `verb-respell` rewrites the retired `keel <verb>` references in a locked file the resync
+/// does not write - a project-owned contract's comments, a project-added process - and the first
+/// adopter run of it went red HERE, on the two contracts it had just made true (D0523). A file whose
+/// text equals the respell of its own HEAD text carries nothing but the engine's fold; one edited
+/// byte beyond that puts it back under the lock. Two exclusions: the self-build, where the embedded
+/// engine IS the tree and a rebuild after the edit would launder any change (`keel migrate` refuses
+/// the self-build for the same reason); and a deleted file, which has no text to compare.
+pub(crate) fn is_engine_written(root: &Path, path: &str, read: ChangeRead) -> bool {
     if keel_model::corpus::is_self_build(root) {
         return false;
     }
     let Some(rel) = path.replace('\\', "/").strip_prefix(".engine/").map(str::to_owned) else { return false };
-    let Some(shipped) = keel_schema::embedded::engine_text(&rel) else { return false };
+    let ours = changed_text(root, path, read);
+    if ours.is_empty() {
+        return false;
+    }
+    let same = |expected: &str| expected.replace("\r\n", "\n") == ours.replace("\r\n", "\n");
+    let before = git_stdout(root, &["show", &format!("HEAD:{path}")]);
     // What the resync would write onto THIS project: a sectioned contract keeps the project's own
     // sections (issue349), so the expected text is the merge over the file as it was at HEAD.
-    let before = git_stdout(root, &["show", &format!("HEAD:{path}")]);
-    let Some(expected) = keel_schema::embedded::resync_text(Path::new(&rel), shipped, (!before.is_empty()).then_some(before.as_str())) else {
-        return false;
-    };
-    let ours = changed_text(root, path, read);
-    !ours.is_empty() && expected.replace("\r\n", "\n") == ours.replace("\r\n", "\n")
+    if let Some(shipped) = keel_schema::embedded::engine_text(&rel) {
+        if let Some(expected) = keel_schema::embedded::resync_text(Path::new(&rel), shipped, (!before.is_empty()).then_some(before.as_str())) {
+            if same(&expected) {
+                return true;
+            }
+        }
+    }
+    // What the respell would write: HEAD's text with each retired reference at today's spelling.
+    if !before.is_empty() {
+        let markdown = rel.to_ascii_lowercase().ends_with(".md");
+        if let Some((expected, _)) = crate::surface::respell_cli_references(&before, markdown) {
+            if same(&expected) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub(crate) fn keystone_violations(changed: &[String], decision_texts: &[(String, String)], charters: &[(String, String)]) -> Vec<String> {
@@ -184,7 +205,7 @@ pub fn process_change(root: &Path) -> GuardReport {
     let read = ChangeRead::current();
     let (resynced, changed): (Vec<String>, Vec<String>) = changed_paths(root, "MDR", read)
         .into_iter()
-        .partition(|p| is_locked_path(p) && is_engine_resync(root, p, read));
+        .partition(|p| is_locked_path(p) && is_engine_written(root, p, read));
     // TWO LISTS, and conflating them was a regression this very guard caught on its author within
     // the minute: what TRIGGERS the lock is a locked file being modified or deleted, but the
     // co-committed Decision that AUTHORISES it is almost always a NEW file — so searching for it in
@@ -208,7 +229,7 @@ pub fn process_change(root: &Path) -> GuardReport {
     }
     if !resynced.is_empty() {
         warnings.push(format!(
-            "engine resync: {} locked file(s) carry the text of the engine embedded in this binary and are outside the lock (D0441) - the engine arriving, not a control edited: {}",
+            "engine-written: {} locked file(s) carry exactly the text the engine embedded in this binary writes - its resync (D0441) or its verb respell (D0523) - and are outside the lock: the engine arriving, not a control edited: {}",
             resynced.len(),
             resynced.join(", ")
         ));
@@ -1168,8 +1189,11 @@ pub(crate) fn activation_manifest(root: &Path) -> GuardReport {
     if let Some(charter) = keel_model::onboard::chartered_by(root) {
         if !keel_model::onboard::charter_resolves(root, &charter) {
             let n = charter.trim_start_matches('d');
+            // issue617: the advice is computed for the tree it is printed in - "restore" only where
+            // git holds a version to restore; a first-time adopter is told what it can do instead.
             violations.push(format!(
-                "activation.toml: charteredBy = \"{charter}\" does not resolve - no .engine/decisions/{n}-*.sysml and no .engine/reference/decisions/{n}-*.sysml in this project, so the process set is NOT chartered here (issue380/GH#56); re-run project-onboarding or restore your own activation.toml"
+                "activation.toml: charteredBy = \"{charter}\" does not resolve - no .engine/decisions/{n}-*.sysml and no .engine/reference/decisions/{n}-*.sysml in this project, so the process set is NOT chartered here (issue380/GH#56); {}",
+                keel_model::onboard::unresolved_charter_advice(root)
             ));
         }
     }
@@ -1385,6 +1409,69 @@ mod stpa_currency_tests {
     fn a_project_with_no_run_hears_nothing() {
         let computed = structure(&[("cmdRecord", "agent", "model")]);
         assert!(currency_warnings(0, &HashSet::new(), &computed).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod engine_written_tests {
+    use super::is_engine_written;
+    use crate::ChangeRead;
+    use std::path::Path;
+
+    struct Repo(std::path::PathBuf);
+    impl Drop for Repo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = keel_git::gitx::git().arg("-C").arg(dir).args(args).output().is_ok_and(|o| o.status.success());
+        assert!(ok, "git {args:?}");
+    }
+
+    const POLICY: &str = ".engine/contracts/attestation-policy.toml";
+    const HEAD_TEXT: &str = "# This file is the policy; `keel guard attestation-authority` reads it.\n[policy]\nmode = \"strict\"\n";
+
+    /// A committed project-owned contract whose comment names a retired verb.
+    fn committed() -> Repo {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let repo = Repo(std::env::temp_dir().join(format!("keel-engine-written-{}-{n}", std::process::id())));
+        let _ = std::fs::remove_dir_all(&repo.0);
+        std::fs::create_dir_all(repo.0.join(".engine/contracts")).expect("mkdir");
+        std::fs::write(repo.0.join(POLICY), HEAD_TEXT).expect("write");
+        git(&repo.0, &["init", "-q"]);
+        git(&repo.0, &["config", "user.email", "p@e.invalid"]);
+        git(&repo.0, &["config", "user.name", "probe"]);
+        git(&repo.0, &["add", "-A"]);
+        git(&repo.0, &["-c", "commit.gpgsign=false", "commit", "-q", "-m", "at 0.4.1"]);
+        repo
+    }
+
+    /// D0388 pair for the D0523 clause, chosen before the tree was read.
+    /// KNOWN-POSITIVE: a locked contract whose working text is exactly the respell of its HEAD text
+    /// (`keel guard` -> `keel gate guard`) is engine-written, outside the lock.
+    /// KNOWN-NEGATIVE: the respell plus one more edited line is back under the lock; an edit that is
+    /// not the respell at all is under it too; the unchanged file is not engine-written (nothing to
+    /// exempt).
+    #[test]
+    fn a_respelled_locked_contract_is_the_engine_arriving_and_one_more_byte_is_not() {
+        let repo = committed();
+        let read = ChangeRead::WorkingTree;
+        let respelled = HEAD_TEXT.replace("`keel guard attestation-authority`", "`keel gate guard attestation-authority`");
+        assert_ne!(respelled, HEAD_TEXT);
+        std::fs::write(repo.0.join(POLICY), &respelled).expect("write");
+        assert!(is_engine_written(&repo.0, POLICY, read), "the respell of HEAD is the engine's fold arriving");
+
+        std::fs::write(repo.0.join(POLICY), format!("{respelled}strict_for = [\"ai\"]\n")).expect("write");
+        assert!(!is_engine_written(&repo.0, POLICY, read), "one edited line beyond the fold is a control edited");
+
+        std::fs::write(repo.0.join(POLICY), HEAD_TEXT.replace("strict", "lax")).expect("write");
+        assert!(!is_engine_written(&repo.0, POLICY, read), "an edit that is not the respell is under the lock");
+
+        std::fs::write(repo.0.join(POLICY), HEAD_TEXT).expect("write");
+        assert!(!is_engine_written(&repo.0, POLICY, read), "unchanged: the respell has something to say and the file does not say it");
     }
 }
 

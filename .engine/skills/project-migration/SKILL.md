@@ -7,7 +7,7 @@ engine moved, the project did not choose it, and the project has to land somewhe
 ## Why this one is different from every other keel discipline
 
 The engine cannot migrate itself. `check_preconditions` refuses any tree holding `keel-cli/Cargo.toml`
-as a self-build (`members/keel-process/src/migrate.rs:965-968`), so this is the single surface the self-build never exercises.
+as a self-build (`members/keel-process/src/migrate.rs:1025-1028`), so this is the single surface the self-build never exercises.
 The defect density follows exactly: **seven defects in this path — issue301, issue310, issue314,
 issue323, issue324, issue326, issue327 — and not one was found by a test.** Three were found by one
 downstream session in a single day. Four still have no test.
@@ -23,9 +23,10 @@ report** — that rule is general in keel and load-bearing here.
 2. **Check what is REMOVED.** Additions are safe; renames and removals break whatever named the old
    thing.
 3. **Apply.** `keel migrate .` — let it refuse, let it roll back, never hand-repair a partial run.
-3b. **Verified or reverted (D0336).** `keel migrate` runs the project's own gate after applying - validate, every enforced guard, check-engine - under the new binary. Green retains and moves the pin; any red reverts .engine/ and .tracking/ to the pre-update commit, prints the gate's output verbatim and records the attempt (`.keel/update-attempts.toml`; `keel show status` shows it; a re-run names it). There is no half-updated state to reconcile. `--no-verify` is the deliberate exception and says UNVERIFIED.
+3a. **The project's own words are migrated too (D0523).** After the resync, the `verb-respell` step rewrites every retired `keel <verb>` reference in the living docs the resync does not write - the project's `CLAUDE.md` as an older `keel init` scaffolded it, the comments of its project-owned contracts, a file it added under `.engine/` - to the spelling this binary dispatches (`orient` -> `keel show orient`, `add-task` -> `keel record task`, `report` -> `keel render report`), one reported edit per file. A lens or a sub-verb is computed from the CLI facts; a renamed verb is a row of `.engine/contracts/verb-renames.toml`, read from the binary. A reference with no spelling stays as written and `cli-reference` names the line. `CLAUDE.md` is therefore in the run's scope: uncommitted, it refuses the run; on a rollback it is restored with `.engine/`, `.tracking/` and `.claude/`.
+3b. **Verified or reverted (D0336).** `keel migrate` runs the project's own gate after applying - validate, every enforced guard, check-engine - under the new binary. Green retains and moves the pin; any red reverts .engine/, .tracking/, .claude/ and CLAUDE.md to the pre-update commit, prints the gate's output verbatim and records the attempt (`.keel/update-attempts.toml`; `keel show status` shows it; a re-run names it). There is no half-updated state to reconcile. `--no-verify` is the deliberate exception and says UNVERIFIED.
 
-4. **Reconcile.** Prove the project's own choices survived: pin, adoption, project-owned contracts, its own `[unit]` sections in `unit-extras.toml` (merged, never overwritten; a colliding section blocks by name, D0317),
+4. **Reconcile.** Prove the project's own choices survived: pin, adoption, project-owned contracts (their comments respelled, their sections and values as they were), its own `[unit]` sections in `unit-extras.toml` (merged, never overwritten; a colliding section blocks by name, D0317),
    customised files. Then gate.
 5. **Prove it remotely.** A local green is one machine and one binary. Read the project's own CI.
 6. **Report upstream.** The engine is blind here; your report is the only channel.

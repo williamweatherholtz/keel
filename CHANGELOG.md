@@ -76,6 +76,30 @@ The pin, the wrapper, and the library — the portability release (D0250/D0251/D
   this binary — run the pinned version, or `keel migrate` (which re-stamps and announces the
   escalation). Pre-D0190 trees with no declaration are unaffected.
 
+## v0.5.1 — 2026-09-18
+
+The downloaded 0.5.0, run over a tree `keel init` 0.4.1 had scaffolded, still rolled itself back - on
+the adopter's own words. This release makes that run land (sprint 746; GH#86-90 answered).
+
+### Downstream adoption (D0523; issue615-617, issue620)
+- **A verb fold travels with `keel migrate`** (D0523). The new `verb-respell` step rewrites every
+  retired `keel <verb>` reference in the living docs the resync does not write - the project's
+  `CLAUDE.md` as the 0.4.1 `keel init` template wrote it, the comments of its project-owned contracts,
+  a file it added under `.engine/` - to the spelling this binary dispatches (`keel orient` ->
+  `keel show orient`, `keel add-task` -> `keel record task`, `keel report` -> `keel render report`),
+  one reported edit per file, idempotent. A renamed verb's spelling is one shipped fact,
+  `.engine/contracts/verb-renames.toml`, read from the binary by both the step and guard
+  `cli-reference`'s `today it is` clause. `CLAUDE.md` joins the run's scope: an uncommitted one
+  refuses the run; a rollback restores it with `.engine/`, `.tracking/` and `.claude/`. The
+  process-change lock treats a locked contract whose text is exactly the respell of its HEAD text as
+  the engine arriving (the D0441 shape one step on); one byte beyond the fold is back under the lock.
+- The guard set now runs over an adopter-shaped tree in test, so a guard red on every adopter can no
+  longer be green here by construction (issue615, GH#88).
+- `WriteError::SchemaLacksMember` is a named refusal: it has a registry row, a census row and a
+  ledger line (issue616).
+- `keel onboard` no longer tells a first-time adopter to restore an `activation.toml` from a history
+  that has none (issue617, GH#89).
+
 ## v0.5.0 — 2026-09-18
 
 The release downstream adopters asked for: `keel migrate` lands in a project that is not this one.

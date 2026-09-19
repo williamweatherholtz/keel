@@ -2205,4 +2205,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcReleaseGuardFixturesPinTheBinaryVersion to issue619;
+
+    part issue620 : Issue {
+        :>> id = "59b5dcb4-5122-4938-a954-adc1363be6cf";
+        :>> title = "A 0.4.1 adopter's own CLAUDE.md and project-owned contracts keep the folded verb spellings, so the 0.5.0 migrate fails cli-reference inside the run and rolls itself back";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found on the v0.5.0 release cut, in the downloaded windows asset run over /c/kt/adopt050 - a tree `keel init` 0.4.1 scaffolded, with a Cargo workspace and one member, committed. `keel migrate` applied the resync and then ROLLED BACK: `[guard:cli-reference] FAIL - 424 scanned, 16 violation(s)`. Every violation names a file the run does not write: CLAUDE.md lines 19, 20, 31, 39, 40, 54, 65, 79, 80, 81 (`keel orient`, `keel whats-next`, `keel validate`, `keel guard`, `keel add-task`, `keel append-result`, `keel report` - the spellings 0.4.1's scaffold template carried), .engine/contracts/attestation-policy.toml:6 (`keel guard attestation-authority`) and .engine/contracts/github-actors.toml:13 (`keel github-decider`) - the two contracts is_project_owned_contract (members/keel-process/src/migrate.rs:112) keeps from the resync, whose shipped comments moved on without them. Root cause: the five verb folds (lens router, render, authoring D0451, gating D0449, channel D0450) each shipped a committed transform over THIS repository's call sites and a stricter guard, and nothing carried the fold into an adopter's own files - CLAUDE.md is outside the run entirely (restore at migrate.rs:1055 covers .engine .tracking .claude), and a project-owned contract is by design never rewritten. So the guard the fold made stricter fails the adopter inside the run, on text the engine itself wrote at 0.4.1, and the run reverts with no action the adopter can take short of hand-editing the files the guard names. The released 0.5.0 binary carries this; every 0.4.1 adopter with a scaffolded CLAUDE.md will hit it. This is the class the human named in st167/st168: migrate is blocked in many projects; migration should be smooth.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcVerbFoldsTravelWithMigrate to issue620;
+
+    part issue621 : Issue {
+        :>> id = "2be93068-ac8c-4fee-9ea6-6f9eaf569851";
+        :>> title = "A single-valued flag repeated on the command line keeps one value and drops the rest silently (--derived-from twice lost an edge)";
+        :>> createdAt = "2026-09-18";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Recording d0523 with --derived-from st167 --derived-from st168: only the st167 edge was authored; the report said so (`#DerivedFrom d0523 -> st167 authored with it`) and the second flag vanished. Read against keel-cli/src/main.rs:1975: list() reads req(name) once and splits on commas, so a repeated flag keeps one value and drops the rest without a word. A Decision recorded from chat can lose the provenance edge that says whose words it derives from (D0236) and nothing refuses. The comma form is documented; the repeated form is a natural spelling that must be refused, not half-honoured.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcARepeatedSingleFlagIsRefused to issue621;
 }

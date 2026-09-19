@@ -1,0 +1,41 @@
+# verb-renames — the spelling this binary dispatches for each top-level verb a fold RENAMED (D0523).
+#
+# ONE FACT, TWO READERS. Guard cli-reference (issue528) names it in its `today it is` clause, and the
+# `verb-respell` step of `keel migrate` writes it into the living docs the resync does not touch - a
+# project's CLAUDE.md as an older `keel init` scaffolded it, and the comments of its project-owned
+# contracts. Both read the BINARY'S embedded copy, never the tree's: the tree being migrated is the
+# older vintage by definition, and its copy of this file cannot know the folds that came after it.
+#
+# WHAT IS NOT LISTED. A retired verb that survives as a lens (`orient` -> `show orient`) or as a
+# sub-verb of one router UNDER ITS OWN NAME (`validate` -> `gate validate`, `reverify` -> `record
+# reverify`) is computed from .engine/cli/commands.sysml (D0271/D0451) and needs no row here; listing
+# it would be a second home for one fact (D0105). This table holds only the renames the facts cannot
+# give: the old name and the new differ.
+#
+# A future fold that renames a verb adds its row in the same commit as the removal; the fold's own
+# committed transform over this repository's call sites (.engine/tools/migrations/) stays as it is.
+# Engine-owned: resynced.
+[renames]
+# D0451 authoring family -> `keel record <fact>`
+"add-task" = "record task"
+"new" = "record"    # `new sprint N slug` -> `record sprint N slug`: the fact name rides along
+"append-result" = "record result"
+"append-gate-result" = "record gate-result"
+"apply-review" = "record review"
+"record-measurement" = "record measurement"
+"snapshot-indicators" = "record indicator-snapshot"
+# D0450 channel family -> `keel github <sub-verb>`
+"github-pull" = "github pull"
+"github-ingest" = "github ingest"
+"github-decider" = "github decider"
+"github-gesture" = "github gesture"
+"github-decision-id" = "github decision-id"
+# render family -> `keel render <what>`
+"diagram" = "render model"
+"report" = "render report"
+"decision-card" = "render decision-card"
+# D0449 gating family: only the three audit verbs are renames - validate, check, check-engine, guard,
+# rules, assured and adoption-check fold into `gate` under their own names and are computed
+"audit-history" = "audit history"
+"audit-adherence" = "audit adherence"
+"audit-ci-runs" = "audit ci-runs"

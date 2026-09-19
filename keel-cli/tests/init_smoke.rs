@@ -258,3 +258,65 @@ fn recording_an_obligation_keeps_the_tree_valid() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// The guard lines of a `gate guard all` run that did not PASS - `[guard:<name>] FAIL ...`.
+fn red_guard_lines(stdout: &str) -> Vec<String> {
+    stdout.lines().filter(|l| l.starts_with("[guard:") && !l.contains("PASS")).map(str::to_owned).collect()
+}
+
+/// dcAFreshAdopterTreeIsGreenUnderEveryGuard (issue615, GH#88). Every scaffold-and-gate test in this
+/// repository until now was the self-build's shape - `keel-cli/Cargo.toml` present, the members tree
+/// present - so a guard that holds engine-shipped content to this-repo conditions was green here by
+/// construction and red on every adopter by construction (guard source-reference, sprints 743-745).
+/// This tree is an ADOPTER's: the `keel init` scaffold (the embedded engine, deployed) plus a root
+/// `Cargo.toml` and one Rust workspace member, and no `keel-cli/Cargo.toml`. Any `.engine/` change
+/// re-runs this binary (its touched stem is `init`), so a shipped doc or contract that would redden
+/// an adopter fails here first.
+///
+/// The D0388 pair, chosen before the tree was read. KNOWN-POSITIVE: the fixture as deployed today is
+/// green under every guard. KNOWN-NEGATIVE: the same fixture with a living doc of its own under
+/// `.engine/docs/own.md` citing a members path that does not resolve is red under exactly one guard,
+/// `source-reference` - the adopter's own docs ARE its population; the shipped ones are not.
+#[test]
+fn an_adopter_shaped_scaffold_is_green_under_every_guard() {
+    let dir = unique_dir();
+    let _cleanup = TmpProject(dir.clone());
+    let proj = dir.to_str().unwrap();
+
+    let out = keel().args(["init", proj]).output().expect("run keel init");
+    assert!(out.status.success(), "init failed: {}", String::from_utf8_lossy(&out.stderr));
+
+    // the adopter's Rust workspace: a root manifest and one member, and NOT the self-build
+    std::fs::write(dir.join("Cargo.toml"), "[workspace]\nmembers = [\"members/widget\"]\nresolver = \"2\"\n").unwrap();
+    std::fs::create_dir_all(dir.join("members").join("widget").join("src")).unwrap();
+    std::fs::write(
+        dir.join("members").join("widget").join("Cargo.toml"),
+        "[package]\nname = \"widget\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("members").join("widget").join("src").join("lib.rs"), "pub fn spin() -> u32 {\n    3\n}\n").unwrap();
+    assert!(!dir.join("keel-cli").join("Cargo.toml").exists(), "the fixture must not be the self-build's shape");
+
+    // positive: green under every guard
+    let out = keel().args(["gate", "guard", "all", proj]).output().expect("run keel gate guard all");
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let red = red_guard_lines(&stdout);
+    assert!(
+        out.status.success() && red.is_empty(),
+        "an adopter-shaped tree must be green under every guard; red: {red:?}\n{stdout}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    // negative: the adopter's OWN living doc cites a source line its tree does not hold
+    std::fs::write(
+        dir.join(".engine").join("docs").join("own.md"),
+        "# own\n\nThe spin is `members/widget/src/spin.rs:3` (a file this tree does not hold).\n",
+    )
+    .unwrap();
+    let out = keel().args(["gate", "guard", "all", proj]).output().expect("run keel gate guard all");
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let red = red_guard_lines(&stdout);
+    assert!(!out.status.success(), "a dangling citation in the adopter's own doc must redden the run:\n{stdout}");
+    assert_eq!(red.len(), 1, "exactly one guard red: {red:?}\n{stdout}");
+    assert!(red[0].contains("source-reference") && stdout.contains("spin.rs:3"), "the red guard is source-reference, naming the citation: {red:?}\n{stdout}");
+}

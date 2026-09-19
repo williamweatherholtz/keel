@@ -506,7 +506,8 @@ pub fn source_citation_defect(root: &Path, corpus: &[String], c: &SourceCitation
 /// The `.md` / `.sysml` / `.toml` files of the living doc surface: `.engine/{processes,skills,docs,
 /// contracts,workflows,rules}` and `CLAUDE.md`. Shared by tool-reference, cli-reference and
 /// source-reference so the three guards mean the same thing by "living".
-pub(crate) fn living_doc_files(root: &Path) -> Vec<std::path::PathBuf> {
+#[must_use]
+pub fn living_doc_files(root: &Path) -> Vec<std::path::PathBuf> {
     fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
         let Ok(rd) = std::fs::read_dir(dir) else { return };
         for e in rd.flatten() {
@@ -570,22 +571,62 @@ pub(crate) fn router_sub_verbs(verb: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The renames the CLI facts cannot give - `add-task` -> `record task` - from the BINARY'S embedded
+/// `contracts/verb-renames.toml` (D0523), never the tree's copy: a tree under migration is the older
+/// vintage, and its copy cannot know the folds that came after it. Empty when the contract is absent
+/// or unreadable - the computed spellings still answer.
+fn renamed_verbs() -> Vec<(String, String)> {
+    let Some(f) = keel_schema::embedded::ENGINE_DIR.get_file("contracts/verb-renames.toml") else { return Vec::new() };
+    let Some(text) = f.contents_utf8() else { return Vec::new() };
+    let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new() };
+    doc.get("renames")
+        .and_then(toml::Value::as_table)
+        .map(|t| t.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect())
+        .unwrap_or_default()
+}
+
+/// The spelling this binary dispatches for a retired top-level verb, without the `keel ` - one fact
+/// with two readers (D0523): the guard's `today it is` clause and migrate's `verb-respell` step. A
+/// lens is `show <verb>`; a verb exactly one router declares under its own name is `<router> <verb>`;
+/// a verb a fold RENAMED is its row in the shipped table. `None` when nothing carries it today, or
+/// when several routers declare the name and the choice is the author's.
+#[must_use]
+pub fn cli_respelling(verb: &str) -> Option<String> {
+    if keel_schema::cli_surface::has_command(verb) {
+        return None; // dispatched as written: `show` is also a sub-verb of `process`, and is not respelled to it
+    }
+    if keel_schema::cli_surface::has_lens(verb) {
+        return Some(format!("show {verb}"));
+    }
+    let routers: Vec<&str> = keel_schema::cli_facts::command_facts()
+        .filter(|f| keel_schema::cli_facts::sub_verbs_of(f.invocation).iter().any(|s| s == verb))
+        .map(|f| f.name)
+        .collect();
+    if let [one] = routers.as_slice() {
+        return Some(format!("{one} {verb}"));
+    }
+    if !routers.is_empty() {
+        return None;
+    }
+    renamed_verbs().into_iter().find(|(old, _)| old == verb).map(|(_, new)| new)
+}
+
 /// Why a reference is a defect, or `None` when the binary dispatches it. The text names the spelling
-/// that exists today when the retired verb survives as a sub-verb or a lens.
+/// that exists today when the retired verb survives as a sub-verb, a lens, or a renamed fact.
 #[must_use]
 pub fn cli_reference_defect(r: &CliReference) -> Option<String> {
     let now = |verb: &str| -> String {
-        if keel_schema::cli_surface::has_lens(verb) {
-            return format!("; today it is `keel show {verb}`");
+        if let Some(spelling) = cli_respelling(verb) {
+            return format!("; today it is `keel {spelling}`");
         }
         let routers: Vec<&str> = keel_schema::cli_facts::command_facts()
             .filter(|f| keel_schema::cli_facts::sub_verbs_of(f.invocation).iter().any(|s| s == verb))
             .map(|f| f.name)
             .collect();
-        match routers.as_slice() {
-            [] => String::new(),
-            [one] => format!("; today it is `keel {one} {verb}`"),
-            many => format!("; today it is a sub-verb of {}", many.join(", ")),
+        if routers.len() > 1 {
+            format!("; today it is a sub-verb of {}", routers.join(", "))
+        } else {
+            String::new()
         }
     };
     if !keel_schema::cli_surface::has_command(&r.verb) {
@@ -615,6 +656,41 @@ pub fn cli_reference_defect(r: &CliReference) -> Option<String> {
 /// on fence tracking; a `.sysml` or `.toml` file has no fences, only backtick spans in strings and comments.
 #[must_use]
 pub fn cli_references(text: &str, markdown: bool) -> Vec<(usize, CliReference)> {
+    cli_reference_sites(text, markdown).into_iter().map(|(line, _, r)| (line, r)).collect()
+}
+
+/// `text` with every reference the guard would fail rewritten to the spelling that exists, and one
+/// line per rewrite (`N: keel <old> -> keel <new>`); `None` when nothing is rewritten. Only the plain
+/// retired-verb shape is respelled - `keel show <not-a-lens>` has no spelling to give, and a verb
+/// with no spelling stays as written so the guard still names it. Idempotent by construction: the
+/// rewritten reference names a verb the binary dispatches, so it is never a defect again (D0523).
+#[must_use]
+pub fn respell_cli_references(text: &str, markdown: bool) -> Option<(String, Vec<String>)> {
+    let sites = cli_reference_sites(text, markdown);
+    if sites.is_empty() {
+        return None;
+    }
+    let mut notes = Vec::new();
+    let mut lines: Vec<String> = text.split_inclusive('\n').map(str::to_string).collect();
+    // right to left within a line, so an earlier site's offset survives a later site's rewrite
+    for (line_no, at, r) in sites.into_iter().rev() {
+        if keel_schema::cli_surface::has_command(&r.verb) || cli_reference_defect(&r).is_none() {
+            continue;
+        }
+        let Some(spelling) = cli_respelling(&r.verb) else { continue };
+        let Some(line) = lines.get_mut(line_no - 1) else { continue };
+        line.replace_range(at..at + r.verb.len(), &spelling);
+        notes.push(format!("{line_no}: keel {} -> keel {spelling}", r.verb));
+    }
+    if notes.is_empty() {
+        return None;
+    }
+    notes.reverse();
+    Some((lines.concat(), notes))
+}
+
+/// Every command reference with its 1-based line and the byte offset of the VERB within that line.
+fn cli_reference_sites(text: &str, markdown: bool) -> Vec<(usize, usize, CliReference)> {
     let mut out = Vec::new();
     let mut fenced = false;
     for (i, line) in text.lines().enumerate() {
@@ -631,6 +707,7 @@ pub fn cli_references(text: &str, markdown: bool) -> Vec<(usize, CliReference)> 
             if ws == 0 {
                 continue;
             }
+            let verb_at = after_bin + ws;
             let rest = &rest[ws..];
             let verb_len = rest.find(|c: char| !(c.is_ascii_lowercase() || c == '-')).unwrap_or(rest.len());
             if verb_len == 0 || !rest.starts_with(|c: char| c.is_ascii_lowercase()) {
@@ -652,7 +729,7 @@ pub fn cli_references(text: &str, markdown: bool) -> Vec<(usize, CliReference)> 
             let in_code = fenced || spans.iter().any(|(a, b)| *a < at && at < *b);
             let command_shaped = spaced && next.as_deref().is_some_and(|n| n.starts_with('-') || n == ".");
             if in_code || command_shaped {
-                out.push((i + 1, CliReference { verb: verb.to_string(), next }));
+                out.push((i + 1, verb_at, CliReference { verb: verb.to_string(), next }));
             }
         }
     }
@@ -956,6 +1033,49 @@ mod cli_reference_tests {
         assert!(d.contains("today it is `keel show knowledge`"), "{d}");
         let d = cli_reference_defect(&refs("keel workspace")).expect("never a verb");
         assert!(d.ends_with("usage dump"), "{d}");
+    }
+
+    /// D0388 pair for D0523/issue620, chosen before the tree was read. KNOWN-POSITIVE: a CLAUDE.md as
+    /// `keel init` 0.4.1 scaffolded it - `keel orient` (a lens), `keel validate` (a same-named
+    /// sub-verb), `keel add-task` and `keel report` (renamed facts, from the shipped table) - in code
+    /// spans and a command-shaped prose phrase, plus a contract comment naming `keel guard
+    /// attestation-authority` - is rewritten to the four spellings, one note per site, and the
+    /// rewritten text has no defect left. KNOWN-NEGATIVE: the current spellings plan nothing and the
+    /// text is returned untouched; a retired verb with no spelling (`keel workspace`) stays as written
+    /// so the guard still names it; prose that merely mentions a verb is not a site and is left alone.
+    #[test]
+    fn a_scaffolded_doc_is_respelled_to_what_the_binary_dispatches_and_the_current_spelling_is_left_alone() {
+        use super::{cli_respelling, respell_cli_references};
+        assert_eq!(cli_respelling("orient").as_deref(), Some("show orient"), "a lens");
+        assert_eq!(cli_respelling("validate").as_deref(), Some("gate validate"), "a same-named sub-verb");
+        assert_eq!(cli_respelling("add-task").as_deref(), Some("record task"), "a renamed fact, from the shipped table");
+        assert_eq!(cli_respelling("github-decider").as_deref(), Some("github decider"));
+        assert_eq!(cli_respelling("report").as_deref(), Some("render report"));
+        assert_eq!(cli_respelling("workspace"), None, "never a verb: nothing to give");
+        assert_eq!(cli_respelling("show"), None, "a verb the binary dispatches is not respelled");
+
+        let claude = "# How to work here\n\n```\nkeel orient .\nkeel validate . && keel guard .\n```\n\nRun `keel add-task --file F` then `keel report assurance`; the engine's `keel gate --fast` stays.\nIn prose, keel orient is the first thing (no flag: not a site).\nkeel workspace --all\n";
+        let (out, notes) = respell_cli_references(claude, true).expect("something to respell");
+        assert!(out.contains("keel show orient .\nkeel gate validate . && keel gate guard .\n"), "{out}");
+        assert!(out.contains("`keel record task --file F` then `keel render report assurance`; the engine's `keel gate --fast` stays."), "{out}");
+        assert!(out.contains("In prose, keel orient is the first thing"), "prose is not a site: {out}");
+        assert!(out.contains("keel workspace --all"), "no spelling to give - left for the guard to name: {out}");
+        assert_eq!(notes.len(), 5, "{notes:?}");
+        assert_eq!(notes[0], "4: keel orient -> keel show orient");
+        assert!(notes.iter().any(|n| n == "5: keel validate -> keel gate validate") && notes.iter().any(|n| n == "5: keel guard -> keel gate guard"), "{notes:?}");
+        assert!(notes.iter().any(|n| n == "8: keel add-task -> keel record task") && notes.iter().any(|n| n == "8: keel report -> keel render report"), "{notes:?}");
+        let left: Vec<String> = cli_references(&out, true).into_iter().filter_map(|(n, r)| cli_reference_defect(&r).map(|d| format!("{n}: keel {}{d}", r.verb))).collect();
+        assert_eq!(left.len(), 1, "only the verb with no spelling is still a defect: {left:?}");
+        assert!(left[0].starts_with("10: keel workspace"), "{left:?}");
+        assert!(respell_cli_references(&out, true).is_none(), "a second pass plans nothing");
+
+        let toml = "# check yours with `keel guard attestation-authority` (D0146)\n[findingDisposition]\nhuman = true\n";
+        let (out, notes) = respell_cli_references(toml, false).expect("a contract comment is a site");
+        assert_eq!(out, "# check yours with `keel gate guard attestation-authority` (D0146)\n[findingDisposition]\nhuman = true\n");
+        assert_eq!(notes, vec!["1: keel guard -> keel gate guard".to_string()]);
+
+        assert!(respell_cli_references("run `keel show orient .` and `keel gate guard all .`\n", true).is_none(), "the current spelling is left alone");
+        assert!(respell_cli_references("nothing here\n", true).is_none());
     }
 }
 

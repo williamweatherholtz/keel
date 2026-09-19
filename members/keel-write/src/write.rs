@@ -759,6 +759,11 @@ pub const WRITE_PATH_REFUSALS: &[WritePathRefusal] = &[
     WritePathRefusal { verb: "append-result", check: "ran-receipt", refuses: "WriteError::ReceiptOwed" },
     WritePathRefusal { verb: "append-gate-result", check: "ran-receipt", refuses: "WriteError::ReceiptOwed" },
     WritePathRefusal { verb: "append-gate-result", check: "retro-scan", refuses: "WriteError::RetroScanMissing" },
+    // D0521/issue614: a PROPOSED verdict into a tree whose VerdictKind lacks `proposed` is refused at
+    // the write; issue616 - the refusal landed without a row here or in the census, so its fires
+    // were ledgered `unregistered:`.
+    WritePathRefusal { verb: "append-result", check: "schema-member", refuses: "WriteError::SchemaLacksMember" },
+    WritePathRefusal { verb: "append-gate-result", check: "schema-member", refuses: "WriteError::SchemaLacksMember" },
     WritePathRefusal { verb: "record", check: "tool-output-prose", refuses: "WriteError::InjectedToolOutput" },
 ];
 

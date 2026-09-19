@@ -63,6 +63,50 @@ pub fn chartered_by(root: &Path) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// The advice an UNRESOLVED CHARTER line ends with, computed for the tree it is printed in.
+///
+/// issue617 (GH#89): the line used to end "restore your own activation.toml from history" for every
+/// tree. That was issue380's shape - a project whose own manifest a v0.3.1 `migrate` had overwritten,
+/// so git held the version to restore. Every first-time adopter that hit GH#89 held only the manifest
+/// the resync had just deployed, and the advice named an action with nothing behind it; the reporter
+/// tried (st165). A surface is computed, never assumed (D0093): git is asked whether it holds a
+/// version of the manifest that DIFFERS from the one in the tree - an earlier commit beyond the last,
+/// or a last commit the working file has moved from. Only then is "restore" said; otherwise the tree
+/// is told the two things it can actually do, and the word "history" does not appear.
+#[must_use]
+pub fn unresolved_charter_advice(root: &Path) -> String {
+    if activation_has_a_restorable_version(root) {
+        "re-run the project-onboarding skill or restore your own activation.toml from history".to_string()
+    } else {
+        "run the project-onboarding skill, or set charteredBy to a Decision this tree holds (a .engine/decisions/NNNN-*.sysml); this tree's only activation.toml is the one deployed, so there is no earlier one to restore".to_string()
+    }
+}
+
+/// Whether git holds a version of `.engine/contracts/activation.toml` other than the working file:
+/// two or more commits touch it, or the working file differs from the last commit's. A tree that is
+/// not a repository, or has never committed the manifest, holds none.
+fn activation_has_a_restorable_version(root: &Path) -> bool {
+    const MANIFEST: &str = ".engine/contracts/activation.toml";
+    let Ok(log) = keel_git::gitx::git().arg("-C").arg(root).args(["log", "--format=%H", "--", MANIFEST]).output() else { return false };
+    if !log.status.success() {
+        return false;
+    }
+    let commits = String::from_utf8_lossy(&log.stdout).lines().filter(|l| !l.trim().is_empty()).count();
+    if commits == 0 {
+        return false;
+    }
+    if commits >= 2 {
+        return true;
+    }
+    // one commit: restorable only if the working file has moved from it (exit 1 = differs)
+    keel_git::gitx::git()
+        .arg("-C")
+        .arg(root)
+        .args(["diff", "--quiet", "HEAD", "--", MANIFEST])
+        .output()
+        .is_ok_and(|o| o.status.code() == Some(1))
+}
+
 /// Does `charter` (`dNNNN`) name a Decision file THIS project holds?
 ///
 /// issue380 / GH#56: a v0.3.1 `migrate` wrote the engine's own `activation.toml` over a project's, and
@@ -155,7 +199,11 @@ pub fn cmd(args: &[String]) -> i32 {
         if charter_resolves(&root, d) {
             println!("process set: CHARTERED by {d} ({} process(es) declared)", rows.len());
         } else {
-            println!("process set: UNRESOLVED CHARTER {d} - activation.toml names a Decision this project does not hold, so the set is NOT chartered here ({} process(es) declared). issue380/GH#56: an engine resync can write another project's charter; re-run the project-onboarding skill or restore your own activation.toml from history.", rows.len());
+            println!(
+                "process set: UNRESOLVED CHARTER {d} - activation.toml names a Decision this project does not hold, so the set is NOT chartered here ({} process(es) declared). issue380/GH#56: an engine resync can write another project's charter; {}.",
+                rows.len(),
+                unresolved_charter_advice(&root)
+            );
         }
     } else {
         println!("process set: NOT CHARTERED - nobody has recorded WHY these processes and not others.");
@@ -181,7 +229,67 @@ pub fn cmd(args: &[String]) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{applicability, charter_resolves, chartered_by, cmd};
+    use super::{applicability, charter_resolves, chartered_by, cmd, unresolved_charter_advice};
+
+    fn git(root: &std::path::Path, args: &[&str]) {
+        let o = keel_git::gitx::git().arg("-C").arg(root).args(["-c", "user.email=t@x", "-c", "user.name=t"]).args(args).output().expect("git runs");
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    }
+
+    fn manifest_repo(tag: &str, body: &str) -> std::path::PathBuf {
+        let root = keel_fs::scratch(&format!("keel-onboard-advice-{tag}"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("contracts")).unwrap();
+        git(&root, &["init", "-q", "."]);
+        std::fs::write(root.join(".engine").join("contracts").join("activation.toml"), body).unwrap();
+        root
+    }
+
+    /// D0388 pair for issue617 (GH#89), chosen before the tree was read. KNOWN-POSITIVE: a repo with
+    /// one prior commit of activation.toml whose working file a resync then overwrote prints the
+    /// restore advice. KNOWN-NEGATIVE: a repo whose only activation.toml is uncommitted - the
+    /// first-time adopter - prints the onboarding advice and never the word "history"; and a repo
+    /// whose one committed version IS the working file has nothing earlier to restore either.
+    #[test]
+    fn the_unresolved_charter_advice_names_restore_only_where_git_holds_a_version_to_restore() {
+        let own = "charteredBy = \"d0001\"\nprocesses = []\n";
+        let deployed = "charteredBy = \"d0226\"\nprocesses = []\n";
+
+        // positive: their own manifest is in history, the resync's is in the tree
+        let root = manifest_repo("overwritten", own);
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "own manifest"]);
+        std::fs::write(root.join(".engine").join("contracts").join("activation.toml"), deployed).unwrap();
+        let advice = unresolved_charter_advice(&root);
+        assert!(advice.contains("restore") && advice.contains("history"), "an overwritten manifest is restorable: {advice}");
+        let _ = std::fs::remove_dir_all(&root);
+
+        // negative: the first-time adopter - the deployed manifest is the only one, uncommitted
+        let root = manifest_repo("first-time", deployed);
+        let advice = unresolved_charter_advice(&root);
+        assert!(advice.contains("project-onboarding") && advice.contains("charteredBy"), "the two things a first-time adopter can do: {advice}");
+        assert!(!advice.contains("history"), "never told to restore from a history that has nothing: {advice}");
+
+        // negative: the deployed manifest committed once and unchanged - the only version is this one
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "deployed manifest"]);
+        let advice = unresolved_charter_advice(&root);
+        assert!(!advice.contains("history"), "one commit that IS the working file restores nothing: {advice}");
+
+        // and a second, different commit makes it restorable again
+        std::fs::write(root.join(".engine").join("contracts").join("activation.toml"), own).unwrap();
+        git(&root, &["add", "-A"]);
+        git(&root, &["commit", "-q", "-m", "own manifest"]);
+        assert!(unresolved_charter_advice(&root).contains("history"), "two committed versions: the earlier one is restorable");
+        let _ = std::fs::remove_dir_all(&root);
+
+        // no repository at all
+        let root = keel_fs::scratch("keel-onboard-advice-norepo");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("contracts")).unwrap();
+        assert!(!unresolved_charter_advice(&root).contains("history"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn applicability_is_declared_beside_every_process() {

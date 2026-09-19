@@ -665,6 +665,63 @@ fn step_engine_resync(root: &Path, engine: &Dir) -> StepPlan {
     plan
 }
 
+/// Step 1c — the project's OWN living docs are respelled to the verbs this binary dispatches
+/// (D0523, issue620).
+///
+/// Five verb folds each shipped a committed transform over THIS repository's call sites and a
+/// stricter `cli-reference` guard; nothing carried the fold into a downstream project's own text. So
+/// the downloaded 0.5.0, run over a tree `keel init` 0.4.1 had scaffolded, applied its resync and
+/// then failed its own gate on sixteen references in files the run never writes - the adopter's
+/// CLAUDE.md as the 0.4.1 template wrote it (`keel orient`, `keel add-task`, `keel report`) and the
+/// comments of the two project-owned contracts `is_project_owned_contract` rightly keeps from the
+/// resync - and rolled itself back, on words the engine itself had written at 0.4.1.
+///
+/// THE POPULATION IS THE GUARD'S, MINUS EVERY FILE THE RESYNC IS THE AUTHORITY FOR. `living_doc_files`
+/// is the set the guard reads (CLAUDE.md and `.engine/{processes,skills,docs,contracts,workflows,
+/// rules}`); a path the embedded engine ships and the resync may write is at its shipped content
+/// after this plan and is not read here - not only the files the resync stages THIS run: a shipped
+/// file at its shipped bytes is planned by neither step, and one this step rewrote would drift from
+/// them for the re-plan's resync to revert, forever (the first run of this step did exactly that on
+/// the engine's own `verb-renames.toml` comment). What remains is the project's: CLAUDE.md, a
+/// project-owned contract the resync never overwrites, a file it added under `.engine/`. In each,
+/// exactly the references the guard would fail AND a spelling exists for are rewritten
+/// (`respell_cli_references`: code spans and command-shaped phrases, never a prose mention), so the
+/// step is green precisely where the guard would be; a reference with no spelling stays as written
+/// and the guard still names it. Idempotent: a rewritten reference names a verb the binary
+/// dispatches, so a second run plans nothing.
+fn step_verb_respell(root: &Path, engine: &Dir, w: &mut Working) -> StepPlan {
+    let mut plan = StepPlan::empty("verb-respell", "Respell retired `keel <verb>` references in the project's own living docs to the spelling this binary dispatches");
+    let norm = |p: &Path| p.to_string_lossy().replace('\\', "/");
+    let dst_engine = root.join(".engine");
+    // The resync's own ownership predicate, path for path (`step_engine_resync`).
+    let mut engine_owned: BTreeSet<String> = BTreeSet::new();
+    collect_embedded(engine, &mut |f| {
+        let rel = f.path();
+        if is_engine_dev_only(rel) {
+            return;
+        }
+        let mapped = remap_engine_path(rel);
+        let dst = dst_engine.join(&mapped);
+        if is_project_owned_contract(&mapped) && dst.exists() {
+            return;
+        }
+        engine_owned.insert(norm(&dst));
+    });
+    for path in keel_guards::living_doc_files(root) {
+        if engine_owned.contains(&norm(&path)) {
+            continue;
+        }
+        let Some(text) = w.read(&path) else { continue };
+        let markdown = path.extension().is_some_and(|x| x.eq_ignore_ascii_case("md"));
+        let Some((out, notes)) = keel_guards::respell_cli_references(&text, markdown) else { continue };
+        let shown = rel(root, &path);
+        let detail = notes.iter().map(|n| format!("{shown}:{n}")).collect();
+        w.stage(&path, out.clone());
+        plan.files.push(FileEdit { path, new_content: out, edits: notes.len(), detail });
+    }
+    plan
+}
+
 fn collect_embedded(dir: &Dir, f: &mut impl FnMut(&include_dir::File)) {
     for file in dir.files() {
         f(file);
@@ -797,7 +854,10 @@ pub fn plan(root: &Path, engine: &Dir) -> MigrationPlan {
     // The record accounts for the resync, so it is computed from that step and lands in the same
     // change — the gate that reads it runs over the whole applied plan, never over one step.
     let record = step_resync_record(root, &resync);
-    let mut steps = vec![resync, record];
+    // The respell reads the guard's population minus what the resync owns, so it is computed from
+    // the same embedded engine — and before the record steps, whose overlay it shares (D0523).
+    let respell = step_verb_respell(root, engine, &mut w);
+    let mut steps = vec![resync, record, respell];
     steps.push(step_process_as_action(root, &mut w));
     steps.push(step_processstep_order(root, &mut w));
     steps.push(step_release_as_occurrence(root, &mut w));
@@ -979,8 +1039,9 @@ pub fn check_preconditions(root: &Path, dry_run: bool) -> Result<Vec<String>, Re
         // `.claude` is in scope because the migration REGENERATES the surface (it is deployed from
         // the `.engine/skills/` the resync moves) and rolls it back with everything else. A
         // directory this run rewrites and restores has to be clean going in, or the restore would
-        // discard an edit the run never made.
-        .args(["status", "--porcelain", "-uall", "--", ".tracking", ".engine", ".claude"])
+        // discard an edit the run never made. CLAUDE.md is in scope because the `verb-respell` step
+        // rewrites it (D0523) - the same argument, one file wide.
+        .args(["status", "--porcelain", "-uall", "--", ".tracking", ".engine", ".claude", "CLAUDE.md"])
         .output();
     let Ok(out) = out else { return Err(Refusal::NotAGitRepo) };
     if !out.status.success() {
@@ -1030,14 +1091,26 @@ fn head_sha(root: &Path) -> Option<String> {
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Restore `.engine/`, `.tracking/` and `.claude/` to `sha`, discarding anything the interrupted
-/// run wrote.
+/// Restore `.engine/`, `.tracking/`, `.claude/` - and `CLAUDE.md` when `sha` holds it - to `sha`,
+/// discarding anything the interrupted run wrote.
 ///
 /// Safe precisely BECAUSE migrate refuses a dirty tree: everything under those directories was
 /// committed before the run, so resetting them to the pre-migration commit cannot destroy work.
 /// `checkout` restores modified and deleted files; `clean` removes ones the run created - except the
-/// tolerated records in `keep`, which the door admitted and the run never wrote (D0522).
+/// tolerated records in `keep`, which the door admitted and the run never wrote (D0522). CLAUDE.md
+/// (D0523) is only ever REWRITTEN by the run, never created, so it is restored when the pre-run
+/// commit holds it and is not `clean`ed: a file the commit lacks is one the run did not write.
 fn restore(root: &Path, sha: &str, keep: &[String]) -> Result<(), String> {
+    let holds_claude_md = keel_git::gitx::git()
+        .arg("-C")
+        .arg(root)
+        .args(["ls-tree", "--name-only", sha, "--", "CLAUDE.md"])
+        .output()
+        .is_ok_and(|o| o.status.success() && !o.stdout.is_empty());
+    let mut scope = vec![".engine", ".tracking", ".claude"];
+    if holds_claude_md {
+        scope.push("CLAUDE.md");
+    }
     let run = |args: &[String]| -> Result<(), String> {
         let out = keel_git::gitx::git()
             .arg("-C")
@@ -1052,11 +1125,12 @@ fn restore(root: &Path, sha: &str, keep: &[String]) -> Result<(), String> {
         }
     };
     let words = |w: &[&str]| w.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-    run(&words(&["checkout", sha, "--", ".engine", ".tracking", ".claude"]))?;
+    let with_scope = |head: &[&str]| words(&[head, &["--"], &scope].concat());
+    run(&with_scope(&["checkout", sha]))?;
     run(&clean_args(keep))?;
     // `checkout <sha> -- <paths>` also STAGES the restored content; unstage so the tree looks
     // untouched rather than merely having the right bytes.
-    run(&words(&["reset", "-q", "--", ".engine", ".tracking", ".claude"]))
+    run(&with_scope(&["reset", "-q"]))
 }
 
 /// Roll back a detected failure, and say plainly whether the rollback itself worked.
@@ -1069,13 +1143,13 @@ fn rollback_after_failure(root: &Path, sha: Option<&String>, written: usize, kee
     match restore(root, sha, keep) {
         Ok(()) => {
             let _ = std::fs::remove_file(marker_path(root));
-            eprintln!("  ROLLED BACK: {written} written file(s) discarded; .engine/, .tracking/ and .claude/ restored to {sha}.");
+            eprintln!("  ROLLED BACK: {written} written file(s) discarded; .engine/, .tracking/, .claude/ and CLAUDE.md restored to {sha}.");
             eprintln!("  The tree is as it was before this run. Nothing is half-migrated.");
             1
         }
         Err(e) => {
             eprintln!("  ROLLBACK FAILED ({e}) — this tree IS partially migrated after {written} file(s).");
-            eprintln!("  Restore by hand: git checkout {sha} -- .engine .tracking .claude && git clean -fd -- .engine .tracking .claude");
+            eprintln!("  Restore by hand: git checkout {sha} -- .engine .tracking .claude CLAUDE.md && git clean -fd -- .engine .tracking .claude");
             1
         }
     }
@@ -1753,6 +1827,72 @@ mod tests {
         assert_eq!(step_process_as_action(&dir, &mut w2).edits(), 0, "a second run is a no-op");
         assert_eq!(step_processstep_order(&dir, &mut w2).edits(), 0);
         assert_eq!(step_release_as_occurrence(&dir, &mut w2).edits(), 0);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// D0388 pair for issue620 (D0523), chosen before the tree was read. The downloaded 0.5.0 rolled
+    /// itself back on sixteen `cli-reference` violations in files the run never writes.
+    ///
+    /// KNOWN-POSITIVE: a fixture CLAUDE.md naming `keel orient`, `keel add-task` and `keel report`,
+    /// and a project-owned contract whose comment names `keel guard attestation-authority`, plan one
+    /// `FileEdit` each; the planned content names `keel show orient`, `keel record task`,
+    /// `keel render report` and `keel gate guard attestation-authority`; the plan's detail names each
+    /// rewrite by file and line. KNOWN-NEGATIVE: a file the embedded engine ships (`docs/guards.md`)
+    /// is the resync's and is not read, even holding `keel orient` off its shipped bytes; the fixture
+    /// already at the current spellings plans zero edits and is byte-identical; a second run over the
+    /// applied plan plans nothing.
+    #[test]
+    fn the_projects_own_living_docs_are_respelled_and_the_resyncs_files_are_not() {
+        let engine = &keel_schema::embedded::ENGINE_DIR;
+        let dir = std::env::temp_dir().join(format!("keel-respell-test-{}", std::process::id()));
+        let contracts = dir.join(".engine").join("contracts");
+        let docs = dir.join(".engine").join("docs");
+        std::fs::create_dir_all(&contracts).unwrap();
+        std::fs::create_dir_all(&docs).unwrap();
+        let claude = dir.join("CLAUDE.md");
+        let old_claude = "# how to work here\n\n```\nkeel orient .\nkeel add-task --title x\n```\n\nRun `keel report assurance` weekly; `keel gate validate .` before every commit.\n";
+        std::fs::write(&claude, old_claude).unwrap();
+        let policy = contracts.join("attestation-policy.toml");
+        std::fs::write(&policy, "# Read by `keel guard attestation-authority` (D0312).\n[policy]\nmode = \"strict\"\n").unwrap();
+        // A file the embedded engine ships: the resync's authority, so never read here - even off
+        // its shipped bytes, where the resync (not this step) plans the write.
+        assert!(engine.get_file("docs/guards.md").is_some(), "the negative names a file the engine ships");
+        let shipped = docs.join("guards.md");
+        std::fs::write(&shipped, "run `keel orient .`\n").unwrap();
+
+        let mut w = Working::new();
+        let step = super::step_verb_respell(&dir, engine, &mut w);
+        assert_eq!(step.id, "verb-respell");
+        let mut touched: Vec<String> = step.files.iter().map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        touched.sort();
+        assert_eq!(touched, ["CLAUDE.md", "attestation-policy.toml"], "one edit per file the guard reads and the resync does not write");
+        let new_claude = &step.files.iter().find(|f| f.path == claude).unwrap().new_content;
+        for want in ["keel show orient .", "keel record task --title x", "keel render report assurance", "keel gate validate ."] {
+            assert!(new_claude.contains(want), "expected `{want}` in:\n{new_claude}");
+        }
+        assert!(!new_claude.contains("keel orient") && !new_claude.contains("keel add-task") && !new_claude.contains("keel report "), "{new_claude}");
+        let new_policy = &step.files.iter().find(|f| f.path == policy).unwrap().new_content;
+        assert!(new_policy.contains("`keel gate guard attestation-authority`"), "{new_policy}");
+        assert!(step.files.iter().all(|f| f.edits == f.detail.len() && f.edits > 0), "{:?}", step.files.iter().map(|f| (&f.edits, &f.detail)).collect::<Vec<_>>());
+        assert!(step.files.iter().any(|f| f.detail.iter().any(|d| d.starts_with("CLAUDE.md:4: keel orient -> keel show orient"))), "{:?}", step.files.iter().map(|f| &f.detail).collect::<Vec<_>>());
+        assert_eq!(std::fs::read_to_string(&shipped).unwrap(), "run `keel orient .`\n", "the resync's file was not read");
+
+        // Apply as `cmd` does, then a second run plans nothing.
+        for f in &step.files {
+            std::fs::write(&f.path, &f.new_content).unwrap();
+        }
+        let mut w2 = Working::new();
+        let again = super::step_verb_respell(&dir, engine, &mut w2);
+        assert_eq!(again.edits(), 0, "idempotent: {:?}", again.files.iter().map(|f| &f.detail).collect::<Vec<_>>());
+        assert!(std::fs::read_to_string(&claude).unwrap().contains("keel show orient ."));
+
+        // The negative on its own: a tree already at the current spellings is untouched, byte for byte.
+        let current = "run `keel show orient .`, then `keel record task --title x` and `keel render report assurance`.\n";
+        std::fs::write(&claude, current).unwrap();
+        let mut w3 = Working::new();
+        assert_eq!(super::step_verb_respell(&dir, engine, &mut w3).edits(), 0);
+        assert_eq!(std::fs::read_to_string(&claude).unwrap(), current);
 
         std::fs::remove_dir_all(&dir).ok();
     }
