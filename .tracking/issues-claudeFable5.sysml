@@ -2315,4 +2315,290 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcVerifierTreeWrittenSeesEveryPath to issue631;
+
+    part issue633 : Issue {
+        :>> id = "80806357-e777-4534-af53-be8ad86f2ed6";
+        :>> title = "github pull reads one page of thirty and currency passes no limit, so fourteen open issues were never ingested while every pass reported green";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel github pull issues ONE request, repos/{repo}/issues?state=open&per_page={limit}, with limit defaulting to 30 and no page walk (members/keel-issues/src/github_ingest.rs:202-204), and keel currency builds its pull_args with no --limit (members/keel-process/src/currency.rs:69), so the unattended pass (currency.yml:50) reads at most the thirty newest open issues. Measured 2026-09-19: 44 open issues; GH#9, #29, #31, #32 and ten more had never been ingested until a manual pull with --limit 100, although every currency run since 2026-08-31 reported the pull pass green. A pull that silently stops short is worse than one that fails: the intake looks current and is not (the D0338 currency claim is false at the boundary). Resolver: the pull walks every page and its report states pages fetched, issues seen and Statements written.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGithubPullWalksEveryPage to issue633;
+
+    part issue634 : Issue {
+        :>> id = "928ba42f-46cf-4d22-9b68-b59ee62f717c";
+        :>> title = "keel init overwrites an existing .gitignore instead of appending to it";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel init on a project with existing content writes .gitignore whole (keel-cli/src/main.rs:3019 writes the file rather than appending), so an adopter's own ignore rules are lost on adoption. Reported downstream as GH#83 (st158).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcInitAppendsToGitignore to issue634;
+
+    part issue635 : Issue {
+        :>> id = "6991d627-24d4-4e28-9961-a92a067177f4";
+        :>> title = "keel accept appends a second <id>Accept event to a Decision that already declares one, so a hand-authored Decision cannot be accepted";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-write/src/write.rs:2005-2038 accept_decision_locked appends the <id>Accept verification unconditionally. A project Decision file authored by hand in the shape the docs show already carries the event; accepting it produces a duplicate declaration and a red validate. Reported downstream as GH#71 (st121, re-ingested as st138).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcAcceptFindsTheExistingEvent to issue635;
+
+    part issue636 : Issue {
+        :>> id = "c9878db2-73a0-4204-97c6-907ee70b257b";
+        :>> title = "keel validate refuses a SysML v2 file at its first named dependency because the parser requires `from` immediately after the keyword";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-model/src/parser.rs:738-753 parse_bare_dependency demands `from` as the next token, so a kernel-valid `dependency name from A to B;` fails validate. Reported downstream as GH#72 (st125, re-ingested as st137).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcValidateReadsANamedDependency to issue636;
+
+    part issue637 : Issue {
+        :>> id = "05da3caa-6742-4d36-bc1c-ea76557331d7";
+        :>> title = "keel land --help runs the landing and pushes the current branch because land reads its first argument as the repo path";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/src/main.rs:4322 hands land the bare repo_arg and members/keel-args/src/lib.rs:255-259 treats any first argument as the root, so `--help` is a root named `--help` that falls back to the cwd and the landing runs. A help request that pushes is the D0129 class (an irreversible act on a mis-parse). Reported downstream as GH#73 (st124, re-ingested as st136).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcLandRefusesAnUnknownArgument to issue637;
+
+    part issue638 : Issue {
+        :>> id = "7a1371dc-8205-4232-9569-300641446019";
+        :>> title = "A claim commit can carry ride-along edits because keel claim does not commit and keel land does not check the claim commit's contents";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-write/src/claim.rs:36 cmd writes the claim and commits nothing; members/keel-process/src/sync.rs:140 cmd_land has no check that a commit touching a claim file touches nothing else. The reporter's proposal (make the claim commit structurally unable to carry a ride-along) is the fix. GH#74 (st123, re-ingested as st135).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcAClaimCommitCarriesOnlyTheClaim to issue638;
+
+    part issue639 : Issue {
+        :>> id = "86e1a7ec-bfee-43a0-8402-ce82dd29bde1";
+        :>> title = "keel record decision reports its required flags in two stages and answers --help with the first-stage refusal";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/src/main.rs:1937-1952 checks one group of flags, refuses, and only on a second run checks the rest; `--help` reaches the same refusal (observed live in this session). GH#75 (st134).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcRecordDecisionNamesEveryMissingFlagAtOnce to issue639;
+
+    part issue640 : Issue {
+        :>> id = "be7a2a9b-e7cf-4dfc-923f-1aefeb664781";
+        :>> title = "The activation manifest's charteredBy key has no writer, so keel onboard reports NOT CHARTERED until the author hand-edits .engine/contracts";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/src/main.rs:3210,3337 (cmd_activation) writes [processes] active and never charteredBy; project-onboarding step 5 requires the key and the generated CLAUDE.md forbids editing .engine by hand. The only path is the one the discipline exists to avoid. GH#77 (st132).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcActivateWritesTheCharter to issue640;
+
+    part issue641 : Issue {
+        :>> id = "9841faf4-d351-434e-9857-11518da3ae70";
+        :>> title = "pre-bash cannot see a backtick inside a keel record argument, the class keel's own docs say recurred five times";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-hooks/src/lib.rs:685-748 bash_classify has no rule for a record verb whose double-quoted argument carries a backtick, so the one injection class the write path refuses after the fact is not refused before the shell substitutes it. GH#79 (st130).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcPreBashSeesABacktickInsideARecordArgument to issue641;
+
+    part issue642 : Issue {
+        :>> id = "576980f1-4def-4edb-ba6d-16714dce04f6";
+        :>> title = "guard hook-config-integrity warns on a correct hook command because it compares the literal $CLAUDE_PROJECT_DIR text instead of the expanded path";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-guards/src/enforcement.rs:1113-1160 hook_config_integrity compares the command string at line 1148 without expanding the variable Claude Code substitutes at run time; the guard reports a wrong verdict on a right configuration. GH#80 (st129).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcHookIntegrityExpandsTheProjectDir to issue642;
+
+    part issue643 : Issue {
+        :>> id = "a83b91fa-e022-4416-a3f1-a7c205506308";
+        :>> title = "Two machines building the same commit stamp different build ids because rev-parse --short has no fixed width";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/build.rs:32 calls `git rev-parse --short` with no width, and git widens the abbreviation as the repository grows, so one commit produces 7 characters on one clone and 8 on another; the D0474 receipt keyed on the stamp then never matches across machines. GH#81 (st128).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcBuildStampsAFixedWidthCommit to issue643;
+
+    part issue644 : Issue {
+        :>> id = "7b0509b8-7a70-452b-bb7c-5886bc365fc6";
+        :>> title = "Marker edges declared inside an action def body are silently dropped by the parser unless they are succession markers";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-model/src/parser.rs:366-374, the action-def-body Hash arm, handles succession markers and skips every other marker form, so 74 #Covers edges in a downstream delivery file validated and were never indexed. GH#60 (st108, re-ingested as st149).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcParserKeepsEveryMarkerInAnActionDef to issue644;
+
+    part issue645 : Issue {
+        :>> id = "5136a665-d370-4293-9332-b25dcdbfad83";
+        :>> title = "keel migrate stages the engine's copy over an engine file the project has extended, deleting the project's own declarations";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-process/src/migrate.rs ~590-640 resyncs engine files by staging the new version; PROJECT_OWNED (:112-126) names the files a project owns whole but nothing recognises a project's additions to an engine-owned file, so 25 project metadata defs were staged away. GH#61 (st107, re-ingested as st148).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcMigrateBlocksOnAProjectExtendedEngineFile to issue645;
+
+    part issue646 : Issue {
+        :>> id = "6ebbf4d3-6935-48bd-89b1-85b75add55d3";
+        :>> title = "An Issue reads as dispositioned by a confirmation Test that no human has judged";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-model/src/queries.rs:273-280 issue_disposition reads the disposition attribute and :306-310 closes the Issue without requiring a TestResult, so a Test declaring acceptRisk closes an Issue on the AI's declaration alone (the D0016 class). GH#62 (st106, re-ingested as st147).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcDispositionNeedsItsResult to issue646;
+
+    part issue647 : Issue {
+        :>> id = "ffae61f1-d88a-4650-9463-791e9beb6847";
+        :>> title = "Verified-or-reverted migration gates before a project's overlay can run, so an overlaid project can never migrate";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "D0336's apply-gate-revert leaves no step where a project's tools/after_migrate.py can restore the pins the apply reset; the first verified run rolled back 484 files on ~87 failures every one of which the overlay repaired. The first defect in the same report is resolved by D0519/issue609. GH#68 (st114, re-ingested as st141).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcMigrateTracksTheOverlayHook to issue647;
+
+    part issue648 : Issue {
+        :>> id = "64829364-b592-476a-be6f-8bdc94d105f5";
+        :>> title = "keel record result cannot address a standalone verification because task_exists_in_pkg only looks inside action defs";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-write/src/write.rs:217-226 task_exists_in_pkg walks action defs only; append_result_locked :823-852 therefore answers unknown for a package-level `verification x : Test`. GH#69 (st113, re-ingested as st140).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRecordResultFindsAStandaloneTest to issue648;
+
+    part issue649 : Issue {
+        :>> id = "89bc66b2-913b-473f-9d51-24eb1b15a5cd";
+        :>> title = "keel land prints landed while an authored file sits unstaged, so the session believes the work is in the tree";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-process/src/sync.rs:203 prints the landed line after the push with no porcelain check; found in Penumbra as its issue125 where a session authored a file, landed, and the file was never committed. GH#9 (st059, re-ingested as st180).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcLandReadsPorcelainBeforeLanded to issue649;
+
+    part issue650 : Issue {
+        :>> id = "b51d69a0-c675-4111-9afc-408e269d6c43";
+        :>> title = "Protected-path enforcement is bound to the tool that writes, so rm and a shell redirect bypass it and .engine/decisions is not a protected target";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-hooks/src/lib.rs:685-696 tracking_target excludes .engine/decisions and the classifier leaves rm unclassified, so the surfaces the hooks exist to protect are protected against one tool only. GH#32 (st054, re-ingested as st177).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcProtectedPathsBindToThePath to issue650;
+
+    part issue651 : Issue {
+        :>> id = "5d021e51-236d-4e88-a1dc-5f45bd7987f4";
+        :>> title = "guard scaffold-placeholder passes while the shipped placeholder actors, Your Name among them, are still declared";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/src/main.rs:64 STARTER_ACTORS ships `Your Name`; members/keel-guards/src/sprints.rs:533 scaffold_placeholder and members/keel-guards/src/identity.rs:124 actors never treat those names as placeholders, so a project can record under a name nobody holds and the guard says nothing. GH#33 (st053, re-ingested as st157).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcScaffoldPlaceholderSeesTheStarterActors to issue651;
+
+    part issue652 : Issue {
+        :>> id = "e7197b3d-c5eb-4753-8483-2b8bea894b49";
+        :>> title = "keel trace reports no edges for items that carry marker-form dependencies, while marker-census counts 111 of them";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-model/src/queries.rs:85-100 traces only the succession dependencies members/keel-model/src/indexer.rs:255-262 records, so every marker edge is invisible to the view the help text promises walks them all. GH#34 (st046, re-ingested as st156).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcTraceWalksMarkerEdges to issue652;
+
+    part issue653 : Issue {
+        :>> id = "51800d45-f710-469c-a742-05165f1886e4";
+        :>> title = "guard decision-scaffolding reports a compound Decision after it has been superseded whole by single-clause Decisions";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-guards/src/decisions.rs:355 compound_decisions has no exemption for a Decision a #Supersede edge has retired, so the D0303-prescribed fix (split it, supersede the compound) leaves the guard red. GH#94 (st170).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcCompoundGuardExemptsASupersededDecision to issue653;
+
+    part issue654 : Issue {
+        :>> id = "63e632a4-6dfb-4c86-95d7-5c9977a8b7e8";
+        :>> title = "keel record decision writes and auto-accepts a compound Decision the guard will then report";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/src/main.rs:1900-1980 never calls clause_count; the write lands, standing consent accepts it, and decision-scaffolding turns red on the next gate. A refusal at the write is the D0047 form of the guard. GH#93 (st171).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRecordDecisionRefusesACompoundClause to issue654;
+
+    part issue655 : Issue {
+        :>> id = "5deb894e-3016-4e3e-bb03-294d57485c4f";
+        :>> title = "keel record review records a human verdict from an agent environment that keel judge-set refuses";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel-cli/src/main.rs:2448 cmd_apply_review has no verdict_channel_refusal; only accept (:3533), reject (:3811) and judge-set (:3935) call it, so the review round-trip is a fourth channel that launders the refused act. GH#92 (st172).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcReviewRoundTripRefusesAnAgentVerdict to issue655;
+
+    part issue656 : Issue {
+        :>> id = "2347ef98-d272-470c-b84d-df5bff881b3c";
+        :>> title = "keel migrate says nothing when the engine removes an enum member the project uses";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-process/src/migrate.rs:274-276 REMOVED_ENUMS lists whole enums only and the scan at :816-835 matches `{en}::`, the enum name, never a member, so a removed member reaches the project as a validate failure after apply. GH#91 (st173).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcMigrateSeesARemovedEnumMember to issue656;
+
+    part issue657 : Issue {
+        :>> id = "e9b8ccb8-3a7a-4c01-986a-9bd01f53ff6c";
+        :>> title = "A UserStory recorded as a need with no Need derived from it is invisible to every lens";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel show intake reports unparsed and unrouted only; a story whose implication is need and which no Need cites is neither, so the elevation D0166 prescribes can be skipped silently. GH#95 (st176).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcIntakeShowsANeedStoryWithoutANeed to issue657;
+
+    part issue658 : Issue {
+        :>> id = "c123f4ec-c2fc-4f8d-bae9-1eb30b689a23";
+        :>> title = "record issue refuses a resolver declared in a project action def outside backlog.sysml, and its message says 'a action'";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "members/keel-model/src/resolvers.rs:9-33 declared_task_names scans .tracking/backlog.sysml and delivery/ only; the refusal wording is the reporter's quote. GH#41 (st050, re-ingested as st150).";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcResolverLookupCoversEveryDef to issue658;
 }

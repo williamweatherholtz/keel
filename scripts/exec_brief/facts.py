@@ -6629,6 +6629,113 @@ fact("anAllocatedNameIsOneNamespaceAcrossPackages", {
      "names read from the JSON rows (issue622/623/624 open or not); renumbered = `part issue62N : Issue` declarations in each actor's file. "
      "landedCommit = `git log -S'fn is_allocated_name' -1` over identity.rs.")
 
+# ================================================================ 55. the fifty-third publish: one surface, five forks
+# D0525 (the brief page captures the verdict - a held process-change fork) and the five architecture forks the downstream
+# batch surfaced (D0527 lenses, D0528 ceremony chain, D0529 marker traversal, D0530 analysis suspicion, D0531 design inputs),
+# beside the accepted routing Decision D0526 that carried the batch. Every Decision is read from its file the way the guard
+# reads it; the batch's Issues, stories and edges from the tracking files; the guards live; nothing typed.
+_in55 = read(os.path.join(REPO, ".tracking", "intake", "intake-2026-09-19.sysml")) or ""
+_iss = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_bl = read(os.path.join(REPO, ".tracking", "backlog.sysml")) or ""
+
+
+def _held55(dname):
+    _t = _dec_file(dname[1:] + "-")
+    _f = _decision_facts(_t, dname)
+    _d = _f["decision"] or ""
+    return {**_f,
+            "fork": bool(re.search(r"\bOPTION [A-Z]\b", _d)),
+            "options": sorted(set(re.findall(r"\bOPTION ([A-Z])\b", _d))),
+            "recommended": (re.search(r"\bOPTION ([A-Z]) \(recommended\)", _d) or [None, None])[1],
+            "costPerOption": len(re.findall(r"\bCOST:", _d)),
+            "research": "RESEARCH:" in _d,
+            "derivedFrom": re.findall(r"#DerivedFrom dependency from " + dname + r" to (st\d+);", _t),
+            "held": _f["status"] == "proposed" and _f["acceptance"] is None,
+            "shortName": (_f["title"] or "").split(":", 1)[0],
+            "storiesRouted": len(re.findall(r"#Implicates dependency from (us\d+) to " + dname + ";", _in55)),
+            "ghIssues": sorted({int(u.rsplit("/", 1)[-1]) for u in re.findall(r'sourceUrl\s*=\s*"([^"]+/issues/\d+)"', "".join(
+                (re.search(r"part " + st + r" : Statement\s*\{(.*?)\n\s*\}", _in_all55, re.S) or [None, ""])[1]
+                for st in re.findall(r"#DerivedFrom dependency from " + dname + r" to (st\d+);", _t)))}),
+            "fileExists": bool(_t)}
+
+
+_in_all55 = "".join(read(os.path.join(REPO, ".tracking", "intake", f)) or "" for f in sorted(os.listdir(os.path.join(REPO, ".tracking", "intake"))) if f.endswith(".sysml"))
+_new_issues55 = [(n, b) for n, b in re.findall(r"part issue(\d+) : Issue\s*\{(.*?)\n\s*\}", _iss, re.S) if 'createdAt = "2026-09-19"' in b]
+_sev55 = {}
+for _n, _b in _new_issues55:
+    _s = (re.search(r"severity\s*=\s*Severity::(\w+)", _b) or [None, "?"])[1]
+    _sev55[_s] = _sev55.get(_s, 0) + 1
+_resolved55 = {n: (re.search(r"#Resolves dependency from (\w+) to issue" + n + ";", _iss) or [None, None])[1] for n, _ in _new_issues55}
+_dod_names55 = {n: bool(r and re.search(r + r"DoD[^\n]*Resolves issue" + n + r"[ .:;]", _bl)) for n, r in _resolved55.items()}
+_stories55 = re.findall(r"part (us\d+) : UserStory", _in55)
+_impl55 = re.findall(r"#Implicates dependency from (us\d+) to (\w+);", _in55)
+_der55 = re.findall(r"#DerivedFrom dependency from (us\d+) to (st\d+);", _in55)
+_gh55 = {int(u.rsplit("/", 1)[-1]) for u in re.findall(r'sourceUrl\s*=\s*"([^"]+/issues/\d+)"', _in_all55)}
+_ok55i, _out55i = run([KEEL, "show", "intake", "."], timeout=120)
+_ij55 = as_json(_out55i) if _ok55i else None
+
+
+def _guard55(name):
+    _rc, _o = run_rc([KEEL, "gate", "guard", name, "--no-receipt", "."], timeout=300)
+    _l = (_o or "").strip().splitlines()[-1] if (_o or "").strip() else ""
+    _m = re.search(r"\[guard:" + re.escape(name) + r"\] (PASS|FAIL) \W+ (\d+) scanned, (\d+) warning\(s\)(?: \+ \d+ counted-history line\(s\))?, (\d+) violation\(s\)", _l)
+    return {"exit0": _rc == 0, "verdict": _m.group(1) if _m else None, "scanned": int(_m.group(2)) if _m else None,
+            "warnings": int(_m.group(3)) if _m else None, "violations": int(_m.group(4)) if _m else None, "line": _l}
+
+
+def _issue_facts55(num, resolver_expected, text):
+    # section 34's _issue_facts over ANOTHER actor's file (issue632 was minted by claudeOpus5 and lives in its file, D0108)
+    _i = re.search(r"part issue" + num + r" : Issue\s*\{(.*?)\n\s*\}", text, re.S)
+    _b = _i.group(1) if _i else ""
+    _res = (re.search(r"#Resolves dependency from (\w+) to issue" + num + ";", text) or [None, None])[1]
+    return {"exists": bool(_i), "severity": (re.search(r"severity\s*=\s*Severity::(\w+)", _b) or [None, None])[1],
+            "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "title": (re.search(r'title\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "resolver": _res, "resolverAsExpected": _res == resolver_expected,
+            "resolverDodNamesIssue": bool(re.search(resolver_expected + r"DoD[^\n]*Resolves issue" + num + r"[ .:;]", _bl))}
+
+
+_ok55o, _out55o = run([KEEL, "show", "open-issues", "."], timeout=120)
+_oj55 = as_json(_out55o) if _ok55o else None
+_oi55 = re.findall(r"\bissue\d+\b", _out55o or "") if _ok55o else []
+_pol55 = read(os.path.join(REPO, ".engine", "contracts", "attestation-policy.toml")) or ""
+_dp55 = read(os.path.join(REPO, ".keel", "decision-page.toml")) or ""
+fact("oneSurfaceFiveForks", {
+    "surface": _held55("d0525"),
+    "routing": {**_held55("d0526"), "accepted": _decision_facts(_dec_file("0526-"), "d0526")["status"] == "accepted",
+                "namesNotAProcessChange": "NOT A PROCESS CHANGE:" in (_decision_facts(_dec_file("0526-"), "d0526")["decision"] or "")},
+    "forks": {d: _held55(d) for d in ("d0527", "d0528", "d0529", "d0530", "d0531")},
+    "batch": {"issuesToday": len(_new_issues55), "severity": _sev55,
+              "everyIssueHasResolver": all(_resolved55.values()), "everyResolverDodNamesIssue": all(_dod_names55.values()),
+              "storiesInTodayFile": len(_stories55), "implicatesEdges": len(_impl55), "derivedFromEdges": len(_der55),
+              "storiesToRouting": len({u for u, t in _impl55 if t == "d0526"}),
+              "storiesToAFork": len({u for u, t in _impl55 if t in ("d0527", "d0528", "d0529", "d0530", "d0531")}),
+              "storiesUnrouted": len([u for u in _stories55 if u not in {x for x, _ in _impl55}]),
+              "ghIssuesIngestedEver": len(_gh55), "ghMin": min(_gh55) if _gh55 else None, "ghMax": max(_gh55) if _gh55 else None,
+              "intakeUnparsed": (_ij55 or {}).get("unparsed"), "intakeUnrouted": (_ij55 or {}).get("unrouted"),
+              "intakeStatements": (_ij55 or {}).get("statements"), "intakeStories": (_ij55 or {}).get("userStories"),
+              "intakeExit0": _ok55i},
+    "live": {"untrustedRouting": _guard55("untrusted-routing"), "issues": _guard55("issues"),
+             "judgmentRequestQuality": _guard55("judgment-request-quality"),
+             "openIssueCount": len(set(_oi55)) if _ok55o else None},
+    "today": {"policyHasDelegatedRecording": "delegatedRecording" in _pol55,
+              "policyDelegatedRecordingLine": _line19(_pol55, "delegatedRecording") if _pol55 else None,
+              "pageTomlIds": re.findall(r'"(d\d{4})"', (re.search(r"^ids\s*=\s*\[([^\]]*)\]", _dp55, re.M) or [None, ""])[1]),
+              "pageTomlUrl": (re.search(r'^url\s*=\s*"([^"]+)"', _dp55, re.M) or [None, None])[1],
+              "issue632": _issue_facts55("632", "dcVerdictChannelIsOneSurface", read(os.path.join(REPO, ".tracking", "issues-claudeOpus5.sysml")) or ""),
+              "issue633": _issue_facts("633", "dcGithubPullWalksEveryPage"),
+              "resolver632": _resolver20("dcVerdictChannelIsOneSurface")},
+}, "the held surface fork, the accepted routing Decision, the five architecture forks, the batch's records, the guards live",
+     _DEC_HOW + " fork = any `OPTION X` token in the decision field; options / recommended / costPerOption / research by regex over the "
+     "same field; derivedFrom = the `#DerivedFrom dependency from dNNNN to stNNN;` lines in the Decision's file; ghIssues = the "
+     "sourceUrl issue numbers of those statements across every intake file; storiesRouted = `#Implicates ... to dNNNN` lines in "
+     ".tracking/intake/intake-2026-09-19.sysml. batch: `part issueNNN : Issue` bodies in issues-claudeFable5.sysml with createdAt "
+     "2026-09-19, their severity, the `#Resolves` edge beside each and the resolver's DoD naming the issue in backlog.sysml; stories, "
+     "#Implicates and #DerivedFrom lines counted in the day's intake file; ghIssuesIngestedEver = distinct sourceUrl issue numbers over "
+     "every intake file; intake* from `" + KEEL + " show intake .` JSON. live: each guard's last line; open issues = distinct issue ids in "
+     "`" + KEEL + " show open-issues .`. today: attestation-policy.toml's delegatedRecording line, .keel/decision-page.toml's ids and url, "
+     "issue632/633 as section 34, the resolver as section 51.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
