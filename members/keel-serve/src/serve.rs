@@ -2340,8 +2340,8 @@ const fn discharge_panel(cmd: &str) -> Option<&'static str> {
         b"orient" | b"authority-queue" => Some("review"),
         // The dispositions panel carries the per-finding disposition controls.
         b"dispositions" => Some("dispositions"),
-        // A sitting review is a human reading a sitting and recording a judgment. NO console control does
-        // that today, so this is None rather than a panel that would only display the work again.
+        // A class no panel discharges is None rather than a panel that would only display the work again.
+        // (sitting-coverage left the act surface under D0510: a sitting review is an analysis the AI judges.)
         _ => None,
     }
 }
@@ -2355,19 +2355,15 @@ fn obligation_count(root: &Path, cmd: &str) -> Option<(i64, Option<String>)> {
     };
     // The COUNT key per command; the JSON itself comes from computed_view, so the counter and the panel
     // can never disagree about which view a renderer names (one dispatch table, not two).
-    // THROUGH THE SHARED STORE, not a private compute: these four views are the same four the console
+    // THROUGH THE SHARED STORE, not a private compute: these views are the same ones the console
     // fetches moments later, so computing them here also serves those requests.
+    // sitting-coverage has no arm since D0510: the sitting review is an analysis the AI judges, so its
+    // viewpoint moved off the act surface and nothing there counts a review as owed by the human.
     let json = store_or_compute(root, cmd, |r| computed_view(r, cmd).unwrap_or_else(|| Err(keel_view::view::ViewError::NotFound(cmd.to_string()))))?;
     match cmd {
         "orient" => num(&json, "pendingAcceptances").map(|n| (n, None)),
         "dispositions" => num(&json, "undispositioned").map(|n| (n, None)),
         "authority-queue" => num(&json, "awaiting").map(|n| (n, None)),
-        // `due`, not `uncovered`: the live obligation is what postdates D0155's grandfather line. The
-        // 313 sittings uncovered when that line landed are accepted-unreviewed by human attestation and
-        // stay visible in the view's own `grandfathered_unreviewed` — they are not a thing to act on, so
-        // they do not belong on the act surface (N-C1: obligations requiring judgment AND NOTHING ELSE).
-        // No caveat: the number is defensible now, and a caveat on a defensible number is noise.
-        "sitting-coverage" => num(&json, "due").map(|n| (n, None)),
         _ => None,
     }
 }

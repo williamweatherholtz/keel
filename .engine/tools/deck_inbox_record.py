@@ -140,7 +140,7 @@ def record(rows: list[dict], base: str, root: Path) -> list[dict]:
             else:
                 ok = poll(
                     lambda: c.get("/api/computed/sitting-coverage").json(),
-                    lambda d: name not in d.get("due_sprints", []))
+                    lambda d: name not in d.get("unpresented_sprints", []))
                 res["outcome"] = "verified" if ok else "UNVERIFIED"
         else:
             res["outcome"] = "REFUSED"

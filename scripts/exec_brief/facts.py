@@ -5413,9 +5413,11 @@ _d0049 = _dec_file("0049-") or ""
 _d0051 = _dec_file("0051-") or ""
 _D49_CLAUSE = "the single HUMAN touchpoint is a per-SITTING sprint review (method=confirmation, batchable across the sitting's sprints)"
 _D51_CLAUSE = "the per-sitting review requires human confirmation ONLY for non-test-verifiable items"
-# the surfaces the Decision names, as the tree holds them today (the Decision is held, so the OLD shape is expected)
+# the surfaces the Decision names, as the tree holds them today: the STANDING viewpoint is sittingReviewVP2, which
+# retires claudeOpus5's sittingReviewVP by a #Supersede edge (D0108); before that edge landed the old part was read
 _vp10 = read(os.path.join(REPO, ".engine", "views", "viewpoint-registry.sysml")) or ""
-_vp10_body = (re.search(r"part sittingReviewVP : Viewpoint \{(.*?)\n\s*\}", _vp10, re.S) or [None, ""])[1]
+_vp10_body = (re.search(r"part sittingReviewVP2 : Viewpoint \{(.*?)\n\s*\}", _vp10, re.S)
+              or re.search(r"part sittingReviewVP : Viewpoint \{(.*?)\n\s*\}", _vp10, re.S) or [None, ""])[1]
 _sk10 = read(os.path.join(REPO, ".engine", "skills", "sprint-review", "SKILL.md")) or ""
 _ok10c, _out10c = run([KEEL, "show", "sitting-coverage", "."])
 try:
@@ -5438,10 +5440,10 @@ fact("sittingReviewIsFinishedByAnalysisNotConfirmation", {
         "skillRecordShapeIsConfirmation": "method = VerificationMethod::confirmation" in _sk10,
         "skillConfirmationMentions": len(re.findall(r"confirmation", _sk10)),
     },
-    "coverage": ({k: _cov10.get(k) for k in ("sprints", "covered", "readReviewed", "batchAcknowledgedOnly", "uncovered", "due", "grandfathered_unreviewed")}
+    "coverage": ({k: _cov10.get(k) for k in ("sprints", "covered", "readReviewed", "batchAcknowledgedOnly", "uncovered", "unpresented", "grandfathered_unreviewed")}
                  | {"sittingReviews": len(_rev10),
                     "sprintsCovered": len({s for r in _rev10 for s in (r.get("covers") or [])}),
-                    "dueEqualsUncoveredMinusGrandfathered": (_cov10.get("due") == _cov10.get("uncovered", 0) - _cov10.get("grandfathered_unreviewed", 0))})
+                    "unpresentedEqualsUncoveredMinusGrandfathered": (_cov10.get("unpresented") == _cov10.get("uncovered", 0) - _cov10.get("grandfathered_unreviewed", 0))})
                 if _cov10 else None,
     "issue597": _issue_facts("597", "dcSittingReviewIsFinishedByAnalysis") if _iss else None,
     "resolverPosition": ({"place": _bl00_actions.index("dcSittingReviewIsFinishedByAnalysis") + 1, "def": _bl00_defs.get("dcSittingReviewIsFinishedByAnalysis")}
@@ -5457,9 +5459,9 @@ fact("sittingReviewIsFinishedByAnalysisNotConfirmation", {
      "with method = confirmation is recorded ... from this Decision on` and `leaves the act surface for the assurance surface` in decision; "
      "`D0232 says a receipt is not testimony`, `The retro is the precedent`, `under D0337` in rationale; `is not rewritten`, `A guard follows` in "
      "consequences); the four edges as `#SupersedeClause`/`#DependsOn dependency from d0510 to X;` lines. reversedClauses: the quoted clause is "
-     "a literal substring of 0049-*.sysml / 0051-*.sysml. today: sittingReviewVP's surface/concernText/renderer fields in "
-     ".engine/views/viewpoint-registry.sysml and two literal phrases + a count of `confirmation` in .engine/skills/sprint-review/SKILL.md - the "
-     "OLD shape, since the Decision is held. coverage: `keel show sitting-coverage .` JSON scalars; sittingReviews = len(sitting_reviews); "
+     "a literal substring of 0049-*.sysml / 0051-*.sysml. today: the standing viewpoint's (sittingReviewVP2, else sittingReviewVP) "
+     "surface/concernText/renderer fields in .engine/views/viewpoint-registry.sysml and two literal phrases + a count of `confirmation` in "
+     ".engine/skills/sprint-review/SKILL.md. coverage: `keel show sitting-coverage .` JSON scalars; sittingReviews = len(sitting_reviews); "
      "sprintsCovered = distinct Stories across their covers; due == uncovered - grandfathered_unreviewed re-derived. issue597 / resolver / "
      "DoD results as the other issue facts read .tracking/issues-claudeFable5.sysml and backlog.sysml; resolverPosition = 1-based place of "
      "the action among the backlog's declared actions (D0052: declaration order is priority); resolverReadyRank = its line in "

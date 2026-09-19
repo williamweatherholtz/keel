@@ -136,7 +136,7 @@ pub const CLI_FACTS: [CliFact; 86] = [
     CliFact { name: "outstanding", family: "lens", effect: "reads", stability: "stable", invocation: "show outstanding [ROOT]", synopsis: "every not-done item, flat" },
     CliFact { name: "recent", family: "lens", effect: "reads", stability: "stable", invocation: "show recent [ROOT]", synopsis: "git-derived activity timeline over .tracking and .engine" },
     CliFact { name: "rootedness", family: "lens", effect: "reads", stability: "stable", invocation: "show rootedness [ROOT]", synopsis: "charter-source burndown: need-rooted, decision-chartered, orphan" },
-    CliFact { name: "sitting-coverage", family: "lens", effect: "reads", stability: "stable", invocation: "show sitting-coverage [ROOT]", synopsis: "per-sitting human review currency" },
+    CliFact { name: "sitting-coverage", family: "lens", effect: "reads", stability: "stable", invocation: "show sitting-coverage [ROOT]", synopsis: "which sprints a sitting review has presented (an analysis, D0510)" },
     CliFact { name: "suspect", family: "lens", effect: "reads", stability: "stable", invocation: "show suspect [ROOT]", synopsis: "done work whose evidence drifted from the tree it was judged against" },
     CliFact { name: "tier-satisfaction", family: "lens", effect: "reads", stability: "stable", invocation: "show tier-satisfaction [ROOT]", synopsis: "per tier, the fraction cleanly satisfied downstream" },
     CliFact { name: "trace", family: "lens", effect: "reads", stability: "stable", invocation: "show trace [ROOT]", synopsis: "every typed edge reaching an item, both directions" },

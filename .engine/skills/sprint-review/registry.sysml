@@ -12,7 +12,7 @@ package SkillsRegistrySprintReview {
     part sprintReview : AISkill {
         :>> id = "f597ch3c-0e45-4b7f-ab80-0e37e4h3g000";
         :>> title = "sprint-review";
-        :>> purpose = "Deploys .engine/processes/review-critique.sysml (D0172). Per-sitting human review (D0049): summarize the sitting's sprints + metrics (velocity/efficiency/accuracy), run the transcript scan that feeds the autonomous retro, and record the human's explicit confirmation of the sitting — the single human gate.";
+        :>> purpose = "Deploys .engine/processes/review-critique.sysml (D0172). Per-sitting review (D0049, finished by analysis under D0510): summarize the sitting's sprints + metrics (velocity/efficiency/accuracy), run the transcript scan that feeds the autonomous retro, and record the presentation as a method = analysis Test the AI judges, with #Covers edges to the sprints presented and the outstanding per-item asks listed by verb (keel accept, keel judge-set, a disposition) — never a confirmation of the sitting.";
         :>> location = ".engine/skills/sprint-review/SKILL.md";
         :>> triggerCondition = "Sprint review gate; asked for velocity, efficiency, estimate accuracy, or process issues.";
         :>> writePolicy = WritePolicy::direct;

@@ -188,8 +188,8 @@ def main(repo: Path) -> int:
 
         # ── 3. a sitting review as the human ───────────────────────────────────────────────────
         sit_before = c.get("/api/computed/sitting-coverage").json()
-        due = sit_before.get("due_sprints", [])
-        check("a sitting review is due", bool(due))
+        due = sit_before.get("unpresented_sprints", [])
+        check("a sprint has no sitting review presented yet", bool(due))
         if due:
             story = due[0]
             r = c.post(
@@ -207,7 +207,7 @@ def main(repo: Path) -> int:
             n_after = len(due)
             for _ in range(20):
                 sit_after = c.get("/api/computed/sitting-coverage").json()
-                n_after = len(sit_after.get("due_sprints", []))
+                n_after = len(sit_after.get("unpresented_sprints", []))
                 if n_after == len(due) - 1:
                     ok = True
                     break

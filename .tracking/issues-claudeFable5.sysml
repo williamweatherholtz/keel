@@ -2282,4 +2282,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcGitHubAnswerRendersFromTheModel to issue628;
+
+    part issue629 : Issue {
+        :>> id = "91fa7ed8-c897-45ba-9585-0f501d29be4c";
+        :>> title = "guard reader declared_tests reads method, title and block end from inside string literals";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found while building guard sitting-review-method (sprint 747, D0510). The reader members/keel-guards/src/sprints.rs declared_tests (line 574 on this tree) takes a Test's block as the raw text from its declaration to the first close brace, sets confirmation from block.contains of the literal VerificationMethod::confirmation (line 591), and reads title by the same raw field search. None of those three reads knows it is inside a string literal. So a Test whose procedureText quotes the confirmation literal - which the sprint-review skill's own phase 4 now invites, since it says a sitting review is analysis and not confirmation - is read as a confirmation review and the guard is red on a Test that is green by its fields; a title field in prose is read as the title; a close brace inside a string ends the block before the method line. No item on this tree trips it today (a replay of the reader over .tracking and .engine found no confirmation literal inside prose), which is why the guard passes; the defect is latent and the first sitting review that names the method it does not use will find it.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGuardReaderSkipsStringLiterals to issue629;
 }

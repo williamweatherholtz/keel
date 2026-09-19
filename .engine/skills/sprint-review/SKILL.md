@@ -1,37 +1,44 @@
 ---
 name: sprint-review
 description: |
-  The per-SITTING human review (D0049) — the single human confirmation touchpoint.
-  After a sitting (one or more sprints), summarize the sitting's content + metrics,
-  run the transcript scan that feeds the autonomous retro, present it to the human,
-  and record their explicit confirmation of the sitting. Use when asked "sprint
-  review," "review the sitting," "what's our velocity," or at the end of a sitting.
+  The per-SITTING review (D0049, finished by analysis under D0510). After a sitting
+  (one or more sprints), summarize the sitting's content + metrics, run the transcript
+  scan that feeds the autonomous retro, present it, and record the presentation as an
+  analysis the AI judges - listing what still asks for the human's word, item by item.
+  Use when asked "sprint review," "review the sitting," "what's our velocity," or at
+  the end of a sitting.
 metadata:
-  version: 0.2.0
-  domain: [agile, sprint-review, sitting, human-confirmation, metrics, process-improvement, SysMLv2]
+  version: 0.3.0
+  domain: [agile, sprint-review, sitting, analysis, metrics, process-improvement, SysMLv2]
   writePolicy: direct
   engine: keel-ai-toolkit
 ---
 
-# sprint-review (per-sitting, human-confirmed)
+# sprint-review (per-sitting, finished by analysis)
 
-The human touchpoint of the ceremony (D0049). Per-sprint closeOut + retro run
+The presentation point of the ceremony (D0049). Per-sprint closeOut + retro run
 autonomously (sprint-closeout / sprint-retro skills); the human does NOT gate each
-sprint. Instead, after a **sitting** (one continuous work session, ≥1 sprint), this
-review presents the sitting's content and records the human's explicit confirmation.
+sprint. After a **sitting** (one continuous work session, ≥1 sprint), this review
+presents the sitting's content and records that it was presented. The human's word is
+asked for on the ITEMS that need it - a Decision, a proposed result, a finding - through
+the verb each one has, never on the sitting as a whole (D0510: a confirmation over a sitting
+is either a duplicate of those per-item records or a reading receipt, and a receipt is not
+testimony, D0232).
 
-Three outputs:
+Four outputs:
 1. **Sitting summary** — the sprints completed this sitting + what shipped.
 2. **Metrics snapshot** — velocity, efficiency, accuracy + trailing trend.
 3. **Improvement queue** — transcript-scan findings (feeds the autonomous retro).
-4. **Human confirmation + coverage** — the human accepts the sitting's content (the one gate),
-   recorded as a `method=confirmation` review whose `#Covers` edges name the sprint `Story` items it
-   attests (D0049/issue040). Coverage is then COMPUTED: `keel show sitting-coverage` reports which
-   delivery sprints have a covering review vs await one (a VIEW, not a gate — never fabricate a
-   review; the confirmation is the human's explicit word, D0016). Record shape:
-   `verification sittingRev<id> : Test { :>> method = VerificationMethod::confirmation; ... }` +
-   a `TestResult` (judgedBy = the human) + `#Covers dependency from sittingRev<id> to <sprintStory>;`
-   for each covered sprint.
+4. **Presentation record + coverage** — the review is a `Test` with `method = analysis`, judged by
+   the AI actor, whose `#Covers` edges name the sprint `Story` items it presented (D0049/issue040)
+   and whose `procedureText` lists the outstanding per-item asks BY VERB: `keel accept <d>` for a
+   held Decision, `keel judge-set` for proposed results, a disposition for a finding. Coverage is
+   then COMPUTED: `keel show sitting-coverage` reports which delivery sprints a review has
+   presented vs not yet (a VIEW, not a gate). Record shape:
+   `verification sittingRev<id> : Test { :>> method = VerificationMethod::analysis; :>> procedureText = "PRESENTED: ... ASKS: keel accept d0NNN; keel judge-set ...; ..." }`
+   + a `TestResult` (judgedBy = the AI actor, `// RAN:` receipt naming the views read) +
+   `#Covers dependency from sittingRev<id> to <sprintStory>;` for each presented sprint. Guard
+   `sitting-review-method` refuses a `method = confirmation` sitting review recorded after D0510.
 
 ## Expert Vocabulary Payload
 
@@ -114,25 +121,28 @@ improvement_items:
 4. **Route high-priority items to retro** for immediate action. Medium/low go into the
    backlog or are held for the next retro.
 
-## Phase 4 — Confirm ONLY non-test-verifiable items (D0051)
+## Phase 4 — Record the presentation; list the asks by verb (D0510)
 
-The single human touchpoint — but it confirms only what tests can't (D0051). Split the
-sitting into two buckets:
+The review finishes as an ANALYSIS the AI judges - nothing about the sitting itself is put
+to the human. Split what the sitting holds into two buckets and record both:
 
-1. **Test-backed work [NO confirmation].** Every `method=test/inspect/analyze` item is
+1. **Test-backed work [recap].** Every `method=test/inspect/analyze` item is
    self-evidencing — its automated run (cargo test, clippy, `keel gate validate`, `keel
-   guard`) IS the evidence. Recap it; do not ask the human to confirm it.
-   A human "yes" on a green test adds nothing.
-2. **Non-test-verifiable items [the only confirmation ask].** Decisions / direction /
-   acceptance calls — which framework, whether to promote X, a ceremony-model change —
-   where the evidence IS the human's word (D0016). Present any that are still OUTSTANDING
-   (not already accepted inline) and ask:
-   > "These decisions need your acceptance: [list]. Accept?"
-   Record the confirmation (`judgedBy = wweatherholtz`) once given; batch per D0019.
+   guard`) IS the evidence (D0051). Recap it under `PRESENTED:`; a human "yes" on a green
+   test adds nothing and is not asked for.
+2. **Judgment-only items [the asks, one verb each].** Read them from the computed views,
+   never from memory: `keel show authority-queue` (held Decisions → `keel accept <d> --words`,
+   or the published brief), `keel show attestation` (`proposed` results → `keel judge-set`),
+   `keel show dispositions` (undispositioned findings → `keel record review`). List each
+   under `ASKS:` with its verb. Every ask already has its own record that binds to that
+   item's text; the review points at them and adds no record of its own over the sitting.
 
-If every item is test-backed and the decisions were accepted inline, state **"nothing to
-confirm — recap only"** and stop. Sprints never wait on this; it is sitting acceptance of
-the irreducible judgment calls, not a gate on tested work.
+Record `verification sittingRev<id> : Test { method = analysis }` with the `#Covers` edges to
+the sprints presented and a passing result judged by the AI actor (`// RAN:` naming the views
+read). When `ASKS:` is empty, write `ASKS: none` - the review is still recorded, because
+`sitting-coverage` counts presentations, and an unrecorded presentation is a sprint no review
+presented. Never record a `method = confirmation` sitting review: guard `sitting-review-method`
+refuses one added after D0510, and the human's acceptance of a held item is `keel accept`.
 
 ## Anti-Patterns
 

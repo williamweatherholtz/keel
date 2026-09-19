@@ -10,6 +10,7 @@
 package EngineViewpoints {
     private import EngineElement::*;     // Element identity
     private import EngineComputed::*;    // Viewpoint type
+    private import EngineRelationships::*; // #Supersede: retire another actor's viewpoint (D0108)
 
     part orientVP : Viewpoint {
         :>> id = "61728394-0a5b-4c6d-1619-405162738410";
@@ -335,4 +336,19 @@ package EngineViewpoints {
         :>> renderer = "keel show sitting-coverage";
         :>> surface = "act";
     }
+    // D0510: a sitting review is an analysis the AI judges, so nothing here is owed by a human and the
+    // lens leaves the act surface. The fact above is claudeOpus5's; it is retired by the edge, never
+    // edited (D0108). `surfaces_json` drops a retired viewpoint, so the act surface stops offering it.
+    part sittingReviewVP2 : Viewpoint {
+        :>> id = "8a55647b-8acf-471e-bd29-46e0c34f940a";
+        :>> title = "sitting-review-presented";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> concernText = "Which sprints has a sitting review presented, and which has no review presented yet (D0049; an analysis the AI judges, D0510)?";
+        :>> audience = "asynchronous supervisor";
+        :>> sources = "sprints and their #Covers-linked review records; sprints with no covering review";
+        :>> renderer = "keel show sitting-coverage";
+        :>> surface = "assurance";
+    }
+    #Supersede dependency from sittingReviewVP2 to sittingReviewVP;
 }

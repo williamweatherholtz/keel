@@ -19,6 +19,7 @@ pub(crate) const FAMILY: Family = Family {
         ("stale-gate-prose", stale_gate_prose),
         ("scaffold-placeholder", scaffold_placeholder), // hard (dcSprintScaffold) — an unfilled skeleton is not a record
         ("sprint-closure", sprint_closure),
+        ("sitting-review-method", sitting_review_method), // hard (D0510/issue597) — a sitting review recorded after D0510 is analysis, never confirmation
     ],
 };
 
@@ -548,6 +549,255 @@ pub fn scaffold_placeholder(root: &Path) -> GuardReport {
         }
     }
     GuardReport { name: "scaffold-placeholder", scanned, warnings: Vec::new(), violations }
+}
+
+// ── sitting-review-method guard (D0510 / issue597: a sitting review is finished by analysis) ──────
+
+/// The Decision whose introduction commit is the boundary: a sitting review recorded from it on is
+/// analysis; the eighty recorded before it (seventy-five human Critiques, three `sittingRev*` Tests
+/// and the record-shape `DoD`) stay as they were written.
+pub(crate) const SITTING_METHOD_DECISION: &str = "d0510";
+
+/// One `verification <name> : Test { ... }` declaration as the guard reads it: where it is, what it is
+/// named and titled, and whether its block says `VerificationMethod::confirmation`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclaredTest {
+    pub(crate) at: String,
+    pub(crate) name: String,
+    pub(crate) title: String,
+    pub(crate) confirmation: bool,
+}
+
+/// A declaration's block and its MASK: `text` up to the first `}` OUTSIDE a string literal, and a copy
+/// of that span with every literal's content blanked (quotes kept, byte offsets preserved). Field
+/// reads go through the mask, so prose that quotes `VerificationMethod::confirmation`, a `title`, or
+/// a close brace is never read as the field it names (issue629 - the first retro that named the
+/// method a sitting review does not use was red on its own sentence).
+fn block_and_mask(text: &str) -> (&str, String) {
+    let mut mask = String::with_capacity(text.len());
+    let (mut in_str, mut escaped) = (false, false);
+    let mut end = text.len();
+    for (i, c) in text.char_indices() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+                mask.push('"');
+                continue;
+            }
+            // One blank per BYTE keeps the mask's offsets equal to the block's.
+            mask.extend(std::iter::repeat_n(' ', c.len_utf8()));
+        } else if c == '}' {
+            end = i;
+            break;
+        } else {
+            if c == '"' {
+                in_str = true;
+            }
+            mask.push(c);
+        }
+    }
+    (&text[..end], mask)
+}
+
+/// Read a quoted `:>> <name> = "value"` field, locating it through the mask so only a field OUTSIDE
+/// every string literal counts; the value is the literal's content, read from the block.
+fn masked_field(block: &str, mask: &str, name: &str) -> Option<String> {
+    let needle = format!(":>> {name} = \"");
+    let at = mask.find(&needle)? + needle.len();
+    let len = mask[at..].find('"')?;
+    Some(block[at..at + len].to_string())
+}
+
+/// Every Test declared in `text` (`rel` names the file), read to the first `}` outside a string
+/// literal after the declaration - the one-line record shape every `record` verb writes; a `title` or
+/// `method` on a later line of a hand-written block is still inside that span.
+pub(crate) fn declared_tests(rel: &str, text: &str) -> Vec<DeclaredTest> {
+    let mut out = Vec::new();
+    // Byte offsets walk the raw lines (`\r\n` included), so the block below starts at the declaration
+    // whatever the file's line ending is.
+    let mut offset = 0usize;
+    for (n, raw) in text.split_inclusive('\n').enumerate() {
+        let start = offset;
+        offset += raw.len();
+        let Some(rest) = raw.trim_start().strip_prefix("verification ") else { continue };
+        let Some(name) = rest.split_whitespace().next().filter(|w| w.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) else { continue };
+        let Some(colon) = rest.find(':') else { continue };
+        if !rest[colon + 1..].trim_start().starts_with("Test") {
+            continue;
+        }
+        // The block: from this line to the first `}` outside a string literal at or after it.
+        let (block, mask) = block_and_mask(&text[start..]);
+        out.push(DeclaredTest {
+            at: format!("{rel}:{}", n + 1),
+            name: name.to_string(),
+            title: masked_field(block, &mask, "title").unwrap_or_default(),
+            confirmation: mask.contains("VerificationMethod::confirmation"),
+        });
+    }
+    out
+}
+
+/// Is this Test a sitting review by name (`sittingRev...`, any case) or by title (`sitting review`,
+/// which `Per-sitting review` contains)?
+pub(crate) fn is_sitting_review(t: &DeclaredTest) -> bool {
+    t.name.to_ascii_lowercase().contains("sittingrev") || t.title.to_ascii_lowercase().contains("sitting review")
+}
+
+/// The confirmation-method sitting reviews in `tests`, split against the grandfather set into
+/// `(forward violations, grandfathered count)`. `None` for the set means the boundary did not resolve:
+/// nothing is grandfathered and every such Test is forward, because a check that cannot resolve its
+/// boundary must overstate the obligation rather than understate it (the `sitting-coverage` stance).
+pub(crate) fn sitting_review_method_violations(tests: &[DeclaredTest], grandfathered: Option<&HashSet<String>>) -> (Vec<String>, usize) {
+    let mut forward = Vec::new();
+    let mut old = 0usize;
+    for t in tests.iter().filter(|t| t.confirmation && is_sitting_review(t)) {
+        if grandfathered.is_some_and(|g| g.contains(&t.name)) {
+            old += 1;
+        } else {
+            forward.push(format!(
+                "{}: sitting review `{}` carries method = confirmation - from D0510 on a sitting review is a Test with method = analysis, judged by the AI actor with #Covers edges and the per-item asks listed by verb; the human's word is asked for through those asks, never for the sitting (D0510/issue597)",
+                t.at, t.name
+            ));
+        }
+    }
+    (forward, old)
+}
+
+/// Guard 77 `sitting-review-method` (D0510 / issue597): a sitting review recorded after D0510's
+/// introduction commit is not a `method = confirmation` Test.
+///
+/// HARD, forward-only by GIT rather than by date: a Test declared in the backlog carries no `createdAt`,
+/// so the population present at the Decision's introduction commit (`verification <name> :` under
+/// `.tracking` and `.engine`, read by `keel_view::govern::grandfathered_verifications_under`) is the set
+/// that stays. A Test is a sitting review when its name contains `sittingRev` or its title names a
+/// `sitting review`. The grandfathered ones are counted on one HISTORY line, never enumerated; an
+/// unresolved boundary is one WARNING and every match is forward (overstated, said so).
+#[must_use]
+pub fn sitting_review_method(root: &Path) -> GuardReport {
+    let mut files = keel_model::corpus::collect_sysml(&root.join(".tracking"));
+    files.extend(keel_model::corpus::collect_sysml(&root.join(".engine")));
+    let mut tests = Vec::new();
+    for path in &files {
+        let Ok(text) = keel_model::corpus::read_to_string(path) else { continue };
+        tests.extend(declared_tests(&relpath(root, path), &text));
+    }
+    let grandfathered = keel_view::govern::grandfathered_verifications_under(root, SITTING_METHOD_DECISION);
+    let (violations, old) = sitting_review_method_violations(&tests, grandfathered.as_ref());
+    let mut warnings = Vec::new();
+    if grandfathered.is_none() {
+        warnings.push(format!(
+            "D0510's introduction commit did not resolve (not yet committed, or git unavailable) - nothing is grandfathered and every confirmation-method sitting review is reported, because a boundary that cannot be resolved overstates rather than understates ({SITTING_METHOD_DECISION})"
+        ));
+    } else if old > 0 {
+        warnings.push(history_line(&format!(
+            "{old} sitting review(s) recorded as method = confirmation before D0510's introduction commit - the human's word on those sittings, kept as written and not re-recorded"
+        )));
+    }
+    GuardReport { name: "sitting-review-method", scanned: tests.len(), warnings, violations }
+}
+
+#[cfg(test)]
+mod sitting_review_method_tests {
+    use super::{declared_tests, sitting_review_method, sitting_review_method_violations, DeclaredTest};
+    use std::collections::HashSet;
+
+    fn fixture(tag: &str, body: &str) -> std::path::PathBuf {
+        let root = keel_fs::scratch(tag);
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
+        std::fs::write(root.join(".tracking").join("probe.sysml"), body).expect("write");
+        root
+    }
+
+    /// D0388 known-positive: a planted `sittingRevProbe` with method = analysis is green - the fixture
+    /// has no git, so the boundary is unresolved and everything is forward, and it still passes.
+    #[test]
+    fn an_analysis_sitting_review_passes() {
+        let root = fixture(
+            "keel-sitting-method-pos",
+            "package P {\n    verification sittingRevProbe : Test { :>> id = \"x\"; :>> title = \"Per-sitting review - sprint 900 presented\"; :>> method = VerificationMethod::analysis; :>> procedureText = \"p\"; }\n}\n",
+        );
+        let r = sitting_review_method(&root);
+        assert_eq!(r.scanned, 1, "one Test declared: {:?} {:?}", r.warnings, r.violations);
+        assert!(r.violations.is_empty(), "{:?}", r.violations);
+        assert_eq!(r.warnings.len(), 1, "the unresolved boundary is said once: {:?}", r.warnings);
+        assert!(r.warnings[0].contains("did not resolve"));
+    }
+
+    /// D0388 known-negative: the same fixture with method = confirmation is red, naming the Test and
+    /// where it is declared.
+    #[test]
+    fn a_confirmation_sitting_review_is_named() {
+        let root = fixture(
+            "keel-sitting-method-neg",
+            "package P {\n    verification sittingRevProbe : Test { :>> id = \"x\"; :>> title = \"Per-sitting review - sprint 900 accepted\"; :>> method = VerificationMethod::confirmation; :>> procedureText = \"p\"; }\n}\n",
+        );
+        let r = sitting_review_method(&root);
+        assert_eq!(r.violations.len(), 1, "{:?}", r.violations);
+        assert!(r.violations[0].starts_with(".tracking/probe.sysml:2: sitting review `sittingRevProbe`"), "{}", r.violations[0]);
+        assert!(r.violations[0].contains("method = analysis"), "the red says what the shape is now");
+    }
+
+    /// The reader: a Test by name, by title, a confirmation Test that is neither, and a non-Test
+    /// `verification` line; the split counts a grandfathered name and forwards a new one.
+    #[test]
+    fn the_reader_and_the_split_hold_the_boundary() {
+        let text = "verification sittingRevS900 : Test { :>> title = \"x\"; :>> method = VerificationMethod::confirmation; }\n\
+                    verification reviewOfS901 : Test { :>> title = \"Per-sitting review - S901 accepted\"; :>> method = VerificationMethod::confirmation; }\n\
+                    verification d0900Accept : Test { :>> title = \"Acceptance of d0900\"; :>> method = VerificationMethod::confirmation; }\n\
+                    verification someReq : Requirement { :>> title = \"not a Test\"; }\n";
+        let tests = declared_tests("f.sysml", text);
+        assert_eq!(tests.len(), 3, "{tests:?}");
+        assert_eq!(tests[0], DeclaredTest { at: "f.sysml:1".into(), name: "sittingRevS900".into(), title: "x".into(), confirmation: true });
+        let old: HashSet<String> = std::iter::once("sittingRevS900".to_string()).collect();
+        let (forward, grandfathered) = sitting_review_method_violations(&tests, Some(&old));
+        assert_eq!(grandfathered, 1);
+        assert_eq!(forward.len(), 1, "{forward:?}");
+        assert!(forward[0].starts_with("f.sysml:2: sitting review `reviewOfS901`"), "{}", forward[0]);
+        let (all_forward, none) = sitting_review_method_violations(&tests, None);
+        assert_eq!((all_forward.len(), none), (2, 0), "an unresolved boundary forwards both");
+    }
+
+    /// issue629, known-positive: a Test at method = analysis whose procedureText QUOTES the confirmation
+    /// literal, a title and a close brace is read by its fields - analysis, its real title, one Test.
+    #[test]
+    fn a_literal_quoted_in_prose_is_not_read_as_the_field() {
+        let text = "verification sittingRevS950 : Test { :>> title = \"real\"; :>> method = VerificationMethod::analysis; :>> procedureText = \"not VerificationMethod::confirmation; :>> title = \\\"fake\\\"; a brace } in prose\"; }\n\
+                    verification sittingRevS951 : Test { :>> title = \"second\"; :>> method = VerificationMethod::analysis; }\n";
+        let tests = declared_tests("f.sysml", text);
+        assert_eq!(tests.len(), 2, "{tests:?}");
+        assert_eq!(tests[0], DeclaredTest { at: "f.sysml:1".into(), name: "sittingRevS950".into(), title: "real".into(), confirmation: false });
+        let (forward, _) = sitting_review_method_violations(&tests, None);
+        assert!(forward.is_empty(), "prose is not a field: {forward:?}");
+    }
+
+    /// issue629, known-negative: a confirmation method on its own line AFTER a procedureText holding a
+    /// close brace is still read, with the right name - the block does not end inside the string.
+    #[test]
+    fn a_confirmation_after_a_brace_in_prose_is_still_read() {
+        let text = "verification sittingRevS952 : Test {\n    :>> procedureText = \"a brace } here\";\n    :>> method = VerificationMethod::confirmation;\n}\n";
+        let tests = declared_tests("f.sysml", text);
+        assert_eq!(tests.len(), 1, "{tests:?}");
+        assert!(tests[0].confirmation, "{tests:?}");
+        let (forward, _) = sitting_review_method_violations(&tests, None);
+        assert_eq!(forward.len(), 1, "{forward:?}");
+        assert!(forward[0].starts_with("f.sysml:1: sitting review `sittingRevS952`"), "{}", forward[0]);
+    }
+
+    /// The real tree: the eighty sitting reviews recorded before D0510 are counted on one HISTORY
+    /// line and nothing is forward.
+    #[test]
+    fn the_self_build_holds_and_counts_its_history() {
+        let r = sitting_review_method(&super::test_repo_root());
+        assert!(r.violations.is_empty(), "{:?}", r.violations);
+        assert_eq!(r.warnings.len(), 1, "{:?}", r.warnings);
+        assert!(super::is_history(&r.warnings[0]) && r.warnings[0].contains("before D0510"), "{}", r.warnings[0]);
+        assert!(r.scanned > 1000, "every declared Test is the population: {}", r.scanned);
+    }
 }
 
 #[cfg(test)]

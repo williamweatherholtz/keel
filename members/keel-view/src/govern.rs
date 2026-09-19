@@ -495,6 +495,25 @@ pub fn grandfathered_under(root: &Path, decision: &str) -> Option<std::collectio
     Some(names_present_at(root, &commit))
 }
 
+/// The `verification` names (Tests under `.tracking` + `.engine`) present at `decision`'s
+/// introduction commit — the grandfather set for a rule about how a Test is RECORDED (D0510: a
+/// sitting review is analysis from that commit on, and the eighty recorded before it stay as they are).
+///
+/// A sibling of [`grandfathered_under`], which reads `part`/`requirement` names only: a Test is
+/// declared with `verification`, so the charter-time set never held one. `None` when the introduction
+/// commit cannot be resolved; the caller says what it does with an unresolved boundary.
+#[must_use]
+pub fn grandfathered_verifications_under(root: &Path, decision: &str) -> Option<std::collections::HashSet<String>> {
+    keel_perf::perf::add(&keel_perf::perf::GF_CALLS, 1);
+    let commit = decision_intro_commit(root, decision)?;
+    Some(
+        git_lines(root, &["grep", "-hoE", "verification [A-Za-z0-9_]+ :", &commit, "--", ".tracking", ".engine"])
+            .iter()
+            .filter_map(|l| l.split_whitespace().nth(1).map(String::from))
+            .collect(),
+    )
+}
+
 // ── the resolver ──────────────────────────────────────────────────────────────
 
 struct GovernData {

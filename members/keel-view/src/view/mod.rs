@@ -2081,19 +2081,20 @@ fn covered_sprints(model: &Model) -> HashSet<&str> {
 
 /// Sitting-coverage view (D0049/D0092 issue040): which delivery sprints are covered by a review.
 ///
-/// A "sitting review" attests its sprints via `#Covers` edges (review -> sprint `Story`); a sprint is
+/// A "sitting review" presents its sprints via `#Covers` edges (review -> sprint `Story`); a sprint is
 /// covered iff some `#Covers` edge points to it. Makes the previously-unmodeled "sitting" UNIT
-/// computable (the human gate's coverage). A VIEW, not a gate — the human reviews per sitting at their
-/// own cadence (batchable, D0019); an uncovered sprint is surfaced, not blocked.
+/// computable. A VIEW, not a gate, and since D0510 an ASSURANCE surface, not an obligation: the review
+/// is an analysis the AI judges, so no field here says a human owes anything — an uncovered sprint is a
+/// sprint no review has presented yet, surfaced, not blocked.
 ///
-/// `uncovered` is every sitting with no review, unchanged. `due` is the LIVE obligation: uncovered and
-/// created after D0155's grandfather line, drawn at that Decision's introduction commit. The 313
+/// `uncovered` is every sitting with no review, unchanged. `unpresented` is the LIVE count: uncovered
+/// and created after D0155's grandfather line, drawn at that Decision's introduction commit. The 313
 /// sittings uncovered when it landed are accepted-unreviewed by human attestation and reported as
-/// `grandfathered_unreviewed` — a waived obligation stays on screen, or the waiver is unfalsifiable.
+/// `grandfathered_unreviewed` — a waived line stays on screen, or the waiver is unfalsifiable.
 ///
-/// If the line can't be resolved, NOTHING is grandfathered and every uncovered sitting is due. That is
-/// the opposite of the gate stance (D0050 grandfathers everything on git failure so a gate never
-/// spuriously blocks): a gate failing open is cautious, but an obligation surface reporting nothing owed
+/// If the line can't be resolved, NOTHING is grandfathered and every uncovered sitting is unpresented.
+/// That is the opposite of the gate stance (D0050 grandfathers everything on git failure so a gate never
+/// spuriously blocks): a gate failing open is cautious, but a surface reporting everything presented
 /// when it doesn't know is the one thing N-C2 forbids.
 ///
 /// # Errors
@@ -2106,11 +2107,11 @@ pub fn sitting_coverage(root: &Path) -> Result<String, ViewError> {
     let gf = crate::govern::grandfathered_under(root, SITTING_DECISION);
     let uncovered_names: Vec<&String> = sprints.iter().filter(|s| !covered.contains(s.as_str())).copied().collect();
     let is_gf = |s: &str| gf.as_ref().is_some_and(|g| g.contains(s));
-    let due: Vec<Json> = uncovered_names.iter().filter(|s| !is_gf(s)).map(|s| Json::s((*s).clone())).collect();
-    let gf_n = uncovered_names.len() - due.len();
+    let unpresented: Vec<Json> = uncovered_names.iter().filter(|s| !is_gf(s)).map(|s| Json::s((*s).clone())).collect();
+    let gf_n = uncovered_names.len() - unpresented.len();
     let basis = match gf.as_ref() {
-        None => "GRANDFATHER LINE UNRESOLVED (D0155 not yet committed, or git unavailable) — nothing is grandfathered and every uncovered sitting is reported as due, because a surface that cannot resolve its boundary must overstate the obligation rather than understate it".to_string(),
-        Some(_) => format!("due = uncovered AND not present at D0155's introduction commit; {gf_n} sitting(s) accepted-unreviewed by human attestation (D0155), reported and not deleted"),
+        None => "GRANDFATHER LINE UNRESOLVED (D0155 not yet committed, or git unavailable) — nothing is grandfathered and every uncovered sitting is reported as unpresented, because a surface that cannot resolve its boundary must overstate rather than understate what no review has presented".to_string(),
+        Some(_) => format!("unpresented = uncovered AND not present at D0155's introduction commit; {gf_n} sitting(s) accepted-unreviewed by human attestation (D0155), reported and not deleted; a sitting review is an analysis the AI judges (D0510) - nothing here is owed by a human"),
     };
     let uncovered: Vec<Json> = uncovered_names.iter().map(|s| Json::s((*s).clone())).collect();
     // Each per-sitting review (a source of #Covers edges) + the sprints it attests.
@@ -2149,7 +2150,7 @@ pub fn sitting_coverage(root: &Path) -> Result<String, ViewError> {
         sprints.iter().filter(|s| batch_covered.contains(s.as_str()) && !read_covered.contains(s.as_str())).count();
     let total = sprints.len();
     let uncovered_n = uncovered.len();
-    let due_n = due.len();
+    let unpresented_n = unpresented.len();
     let out = Json::Obj(vec![
         ("sprints".to_string(), Json::Int(i64::try_from(total).unwrap_or(i64::MAX))),
         ("covered".to_string(), Json::Int(i64::try_from(total - uncovered_n).unwrap_or(i64::MAX))),
@@ -2157,11 +2158,11 @@ pub fn sitting_coverage(root: &Path) -> Result<String, ViewError> {
         ("batchAcknowledgedOnly".to_string(), Json::Int(i64::try_from(batch_only_n).unwrap_or(i64::MAX))),
         ("splitBasis".to_string(), Json::s("covered = readReviewed + batchAcknowledgedOnly (D0200: acknowledgment is not examination and is never counted as it; batch = the machine token, or 'batch' in the review's own text for the pre-D0200 history)".to_string())),
         ("uncovered".to_string(), Json::Int(i64::try_from(uncovered_n).unwrap_or(i64::MAX))),
-        ("due".to_string(), Json::Int(i64::try_from(due_n).unwrap_or(i64::MAX))),
+        ("unpresented".to_string(), Json::Int(i64::try_from(unpresented_n).unwrap_or(i64::MAX))),
         ("grandfathered_unreviewed".to_string(), Json::Int(i64::try_from(gf_n).unwrap_or(i64::MAX))),
         ("grandfatherBasis".to_string(), Json::s(basis)),
         ("sitting_reviews".to_string(), Json::Arr(reviews)),
-        ("due_sprints".to_string(), Json::Arr(due)),
+        ("unpresented_sprints".to_string(), Json::Arr(unpresented)),
         ("uncovered_sprints".to_string(), Json::Arr(uncovered)),
     ]);
     Ok(out.dump())
@@ -4139,10 +4140,11 @@ mod tests {
     }
 
     #[test]
-    fn an_unresolved_grandfather_line_reports_every_sitting_as_due() {
-        // D0155: the obligation surface must OVERSTATE rather than understate when it cannot resolve its
-        // own boundary. A non-repo root has no D0155 introduction commit, so nothing may be grandfathered
-        // — the opposite of the gate stance (D0050), because "nothing owed" must never be a guess.
+    fn an_unresolved_grandfather_line_reports_every_sitting_as_unpresented() {
+        // D0155: the surface must OVERSTATE rather than understate when it cannot resolve its own
+        // boundary. A non-repo root has no D0155 introduction commit, so nothing may be grandfathered
+        // — the opposite of the gate stance (D0050), because "everything presented" must never be a guess.
+        // D0510: the key is `unpresented`, not `due` - no field here says a human owes a review.
         let dir = keel_fs::scratch("keel_sitting_gf_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".tracking/delivery")).unwrap();
@@ -4154,9 +4156,35 @@ mod tests {
         .unwrap();
         let out = sitting_coverage(&dir).unwrap();
         assert!(out.contains("\"uncovered\": 1"), "one uncovered sitting: {out}");
-        assert!(out.contains("\"due\": 1"), "an unresolved line grandfathers NOTHING: {out}");
+        assert!(out.contains("\"unpresented\": 1"), "an unresolved line grandfathers NOTHING: {out}");
+        assert!(!out.contains("\"due\""), "D0510: no field says a human owes a review: {out}");
         assert!(out.contains("\"grandfathered_unreviewed\": 0"), "{out}");
         assert!(out.contains("GRANDFATHER LINE UNRESOLVED"), "the basis must SAY why it could not scope: {out}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_retired_viewpoint_is_not_offered_on_its_surface() {
+        // D0108/D0510: another actor's viewpoint is retired by a #Supersede edge beside it, never edited.
+        // The retired lens must leave the surface it declared the moment the edge lands, or the act
+        // surface keeps counting an obligation its successor says nobody owes.
+        let dir = keel_fs::scratch("keel_surfaces_retired_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".engine/views")).unwrap();
+        std::fs::create_dir_all(dir.join(".tracking")).unwrap();
+        std::fs::write(
+            dir.join(".engine/views/reg.sysml"),
+            "package R {\n\
+             \x20   part oldVP : Viewpoint { :>> id = \"11111111-1111-4111-8111-111111111111\"; :>> title = \"old\"; :>> surface = \"act\"; }\n\
+             \x20   part newVP : Viewpoint { :>> id = \"22222222-2222-4222-8222-222222222222\"; :>> title = \"new\"; :>> surface = \"assurance\"; }\n\
+             \x20   #Supersede dependency from newVP to oldVP;\n\
+             }\n",
+        )
+        .unwrap();
+        let out = surfaces_json(&dir).unwrap();
+        assert!(out.contains("\"viewpoint\": \"newVP\""), "the successor is offered: {out}");
+        assert!(!out.contains("\"viewpoint\": \"oldVP\""), "the retired viewpoint is not offered anywhere: {out}");
+        assert!(!out.contains("\"surface\": \"act\""), "a surface whose only lens is retired is not listed: {out}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -4989,8 +5017,12 @@ pub fn surfaces_json(root: &Path) -> Result<String, ViewError> {
     // console nav, the act-surface obligation bar and anything else derived from surfaces all agree, and a
     // project that deactivated a lens does not keep being invited to look through it.
     let act = keel_model::activation::Activation::load(root);
+    // A RETIRED viewpoint (the target of a `#Supersede` edge) is not offered either: another actor's
+    // lens is retired by that edge beside it, never edited (D0108), and the surface it declared must
+    // stop counting it the moment the edge lands - sittingReviewVP left the act surface this way (D0510).
+    let retired = model.retired();
     for n in names {
-        if !act.is_viewpoint_active(n) {
+        if !act.is_viewpoint_active(n) || retired.contains(n) {
             continue;
         }
         let Some(i) = model.items.get(n) else { continue };

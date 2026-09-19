@@ -4,8 +4,8 @@ description: |
   Autonomously closes a sprint (D0049): verify DoD passes, record actualHours,
   record the closeOut gate (method=inspect, AI-judged) — NO human confirmation.
   Use at the closeOut gate, or when asked "close out this sprint," "sprint closeout,"
-  or "record sprint done." Human acceptance is NOT here; it moved to the per-sitting
-  sprint review (sprint-review skill).
+  or "record sprint done." Human acceptance is NOT here and not at the sitting review
+  either: it is per item, through keel accept / keel judge-set / a disposition (D0510).
 metadata:
   version: 0.2.0
   domain: [agile, sprint-closeout, autonomous, DoD, SysMLv2]
@@ -17,7 +17,8 @@ metadata:
 
 Covers the CloseOut phase. Per D0049 closeOut is **autonomous** — it records once the
 sprint DoD passes; it is no longer a human gate (`method=inspect`, AI-judged). The
-human's acceptance happens once per sitting at the sprint review, not here.
+human's word is asked for per item (a held Decision, a proposed result, a finding), never
+here and never on a sitting; the sprint review is an analysis that lists those asks (D0510).
 
 ## Behavioral Instructions
 
@@ -42,8 +43,8 @@ human's acceptance happens once per sitting at the sprint review, not here.
 
 ## Anti-Patterns
 
-- **Pausing for human sign-off** — closeOut is autonomous now (D0049). The human gate
-  is the per-sitting review. Don't block the sprint on a confirmation.
+- **Pausing for human sign-off** — closeOut is autonomous now (D0049), and the per-sitting
+  review is an analysis, not a gate (D0510). Don't block the sprint on a confirmation.
 - **Closing out of order** — closeOut requires the earlier gates recorded (the guard
   enforces it). refine→standup→implement→review→closeOut→retro.
 - **Committing before validation** — run `keel gate validate .` after adding the result.
