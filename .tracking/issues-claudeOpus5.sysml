@@ -2350,7 +2350,7 @@ package IssuesClaudeOpus5 {
     }
     #Resolves dependency from dcConfirmationFlipChecksItsDelegation to issue621;
 
-    part issue622 : Issue {
+    part issue632 : Issue {
         :>> id = "44b23ad0-cc2e-413f-9eec-e2af510a0cf7";
         :>> title = "Every human-verdict channel is a compromise; on a fresh project their sum is a terminal and a hand-edited policy file";
         :>> createdAt = "2026-09-19";
@@ -2359,5 +2359,5 @@ package IssuesClaudeOpus5 {
         :>> discoveredInField = false;
         :>> severity = Severity::High;
     }
-    #Resolves dependency from dcVerdictChannelIsOneSurface to issue622;
+    #Resolves dependency from dcVerdictChannelIsOneSurface to issue632;
 }
