@@ -25,7 +25,7 @@
 use std::path::Path;
 
 fn git(repo: &Path, args: &[&str]) -> Option<String> {
-    let out = crate::gitx::git().arg("-C").arg(repo).args(args).output().ok()?;
+    let out = keel_git::gitx::git().arg("-C").arg(repo).args(args).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
@@ -70,11 +70,11 @@ fn verdict_for(repo: &Path, sha: &str, scratch: &Path) -> CommitVerdict {
         };
     }
 
-    let report = crate::validate_root(&wt);
+    let report = keel_model::validate::validate_root(&wt);
     if !report.is_clean() {
         reasons.push(format!("validate: {} parse error(s), {} semantic diagnostic(s)", report.errors.len(), report.diagnostics.len()));
     }
-    for r in crate::guards::run_all(&wt) {
+    for r in crate::run_all(&wt) {
         if !r.violations.is_empty() {
             reasons.push(format!("guard:{} — {} violation(s)", r.name, r.violations.len()));
         }

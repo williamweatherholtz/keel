@@ -67,8 +67,11 @@ pub(crate) fn is_process_def(p: &str) -> bool {
 /// test fails CI if a new guard-defining file appears outside this list, which is the D0209-clause-2
 /// "diff `is_process_def` against the actual guard-definition paths" audit made executable.
 // guard_names.rs holds GUARD_NAMES (sprint 732): removing a name there disarms a guard as surely as
-// deleting its arm here would, so the list is locked with the source that dispatches it.
-pub(crate) const GUARD_SOURCE_FILES: &[&str] = &["keel-cli/src/adherence.rs", "members/keel-schema/src/guard_names.rs"];
+// deleting its arm here would, so the list is locked with the source that dispatches it. The
+// audit-adherence gate (adherence.rs) and the audit-history re-derivation (history.rs) are this member's
+// since sprint 748 (D0513), locked by GUARD_SOURCE_DIRS below; the file entry that named the audit in
+// keel-cli/src is retired here because that path no longer exists.
+pub(crate) const GUARD_SOURCE_FILES: &[&str] = &["members/keel-schema/src/guard_names.rs"];
 
 /// The directories whose EVERY file is enforcement logic: member keel-guards (sprint 733) - the family
 /// modules, the runner, the receipt that lets a green guard be skipped (D0371), the content key it is

@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 fn git(repo: &Path, args: &[&str]) -> Option<String> {
-    let out = crate::gitx::git().arg("-C").arg(repo).args(args).output().ok()?;
+    let out = keel_git::gitx::git().arg("-C").arg(repo).args(args).output().ok()?;
     if out.status.success() { Some(String::from_utf8_lossy(&out.stdout).into_owned()) } else { None }
 }
 
@@ -160,7 +160,7 @@ fn signature(repo: &Path, sha: &str) -> BTreeMap<String, u8> {
 
 /// Path prefixes for every project in this repository: `[""]`  for a single project at the root.
 fn project_prefixes(repo: &Path) -> Vec<String> {
-    let ws = crate::workspace::discover(repo);
+    let ws = keel_git::projects::discover(repo);
     let mut out: Vec<String> = ws
         .projects
         .iter()
@@ -282,7 +282,7 @@ pub fn cmd(args: &[String], repo: &Path) -> i32 {
     // implicit prefix (`alpha/alpha/.engine/rules/`), matched nothing, and the audit reported PASS on
     // a tree carrying eight unsigned rule downgrades. Verified before this line existed: FAIL from
     // the repo root, PASS from one directory down, same commit.
-    let anchored = crate::workspace::discover(repo).root;
+    let anchored = keel_git::projects::discover(repo).root;
     let repo: &Path = &anchored;
     let since = args.iter().position(|a| a == "--since").and_then(|i| args.get(i + 1)).cloned();
     let max: usize = args

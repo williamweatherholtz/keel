@@ -194,7 +194,7 @@ package ProjectCodeRegistry {
         :>> title = "history.rs - tree-derived gate verdicts over pushed ranges (the K15 backstop)";
         :>> createdAt = "2026-08-22"; :>> createdBy = "claudeFable5";
         :>> kind = "module";
-        :>> filePath = "keel-cli/src/history.rs";
+        :>> filePath = "members/keel-guards/src/history.rs";
         :>> riskClass = RiskClass::correctness;
         :>> invariantSafety = InvariantSafety::enforced;
         :>> stpaRole = StpaRole::sensor;

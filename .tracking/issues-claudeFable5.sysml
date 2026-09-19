@@ -2293,4 +2293,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcGuardReaderSkipsStringLiterals to issue629;
+
+    part issue630 : Issue {
+        :>> id = "3afce8c0-b213-46b7-bfb4-ec818f08fc70";
+        :>> title = "A known-negative planted in a failed-checkout scratch clone passes for the wrong reason";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A known-negative planted in a scratch clone of this repository can pass for the wrong reason: a clone at a deep target path fails its checkout on this host (Filename too long) and leaves every path staged as deleted; a git commit -a there then records the whole tree's deletion, and the command under test refuses against an empty tree rather than against the planted edit. Sprint 748's first known-negative for keel audit adherence did exactly that - the audit named every guard absent and exited 1, which read as the negative case holding; the diff stat (2122 files changed, 254614 deletions) was the only sign. The clone, the status check and the one-path stage are three separate hand steps today; a probe that skips one produces a verdict that is not about its plant. Resolver: a single probe helper that clones with core.longpaths=true, refuses a dirty clone, stages exactly one path and prints the probe commit's stat before running anything.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcScratchCloneProbeAssertsItsPlant to issue630;
+
+    part issue631 : Issue {
+        :>> id = "fc9539ea-f2cf-4a89-868b-461c1fa85524";
+        :>> title = "verifier:tree-written measures two directories while its scope says the whole project";
+        :>> createdAt = "2026-09-19";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The verifier:tree-written control (D0502) reads the tree through keel_model::fingerprint, which folds (path, len, mtime) over .tracking and .engine only (members/keel-model/src/fingerprint.rs). A verifier that writes anywhere else under the project - the repo root, scripts/, a member crate - moves the tree without moving the fingerprint, and the SubagentStop hook routes Silent. Observed in sprint 748: the verifier redirected keel verify --wait into verify-wait-output.txt at the repo root (git status listed it untracked); the hook said nothing, and the ledger's most recent verifier:tree-written line (ts 1789801814) predates the run's receipt (at=1789815136). The control's stated scope is 'nothing under the project'; its measurement covers two directories. Resolver: fold git status --porcelain --untracked-files=all into the verifier's baseline and stop reading.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcVerifierTreeWrittenSeesEveryPath to issue631;
 }

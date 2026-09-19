@@ -16,6 +16,9 @@
 
 pub mod adoption_check;
 pub mod currency;
+// keel advance and keel enroll (sprint 748, D0513): the process cursor and the actor-enrollment process.
+pub mod cursor;
+pub mod enroll;
 pub mod library;
 pub mod migrate;
 pub mod process_cmd;

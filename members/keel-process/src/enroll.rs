@@ -105,7 +105,7 @@ fn gate_report(root: &Path) -> Result<String, Refusal> {
             remedy: "run `keel init <dir>` to scaffold one, or enroll from inside an existing project.".to_string(),
         });
     }
-    let report = crate::validate_root(root);
+    let report = keel_model::validate::validate_root(root);
     if !report.is_clean() {
         return Err(Refusal {
             what: format!("the local gate RUNS but the project does not pass it ({} problem(s))", report.errors.len() + report.diagnostics.len()),
@@ -171,7 +171,7 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
     };
 
     // Step 3: register without duplicating.
-    let already = crate::actor::registered(root).iter().any(|k| k == actor);
+    let already = keel_actor::actor::registered(root).iter().any(|k| k == actor);
     if already {
         println!("actor '{actor}' is already registered — re-binding without creating a second entry.");
     } else {
@@ -192,7 +192,7 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
     }
 
     // Step 4: bind the machine, then PROVE the binding by reading back what the write path resolves.
-    let binding = root.join(crate::actor::BINDING_PATH);
+    let binding = root.join(keel_actor::actor::BINDING_PATH);
     if let Some(parent) = binding.parent() {
         if let Err(err) = std::fs::create_dir_all(parent) {
             eprintln!("keel enroll: cannot create {}: {err}", parent.display());
@@ -206,7 +206,7 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
     // The read-back is the point: issue072 was a capture step that printed an actor id which nothing
     // CONSUMED, so the write paths kept defaulting. Asking the resolver is the only proof that the
     // binding actually governs attribution.
-    match crate::actor::resolve(root, None) {
+    match keel_actor::actor::resolve(root, None) {
         Ok(resolved) if resolved == actor => {
             println!("bound this machine to '{actor}' ({}) — the write path resolves to it.", binding.display());
         }
@@ -234,7 +234,7 @@ pub fn cmd(args: &[String], root: &Path) -> i32 {
     }
     println!("  Recorded role: {role}.");
     println!("  Next: `keel show orient .` to see where things stand, then the `distributed-collaboration` skill.");
-    println!("  note: {} is machine-local and must never be committed.", crate::actor::BINDING_PATH);
+    println!("  note: {} is machine-local and must never be committed.", keel_actor::actor::BINDING_PATH);
     0
 }
 

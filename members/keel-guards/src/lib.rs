@@ -15,7 +15,11 @@
 // Tests may use unwrap/expect/panic/indexing/asserts freely.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing))]
 
+// The two audits that re-derive the gate verdict from the git tree (sprint 748, D0513): keel audit adherence
+// and keel audit history. Under the enforcement lock by the directory they live in.
+pub mod adherence;
 pub mod hardening;
+pub mod history;
 pub mod plan_cover;
 pub mod receipt;
 
@@ -1243,11 +1247,15 @@ mod tests {
         assert!(is_enforcement_surface("members/keel-guards/src/lib.rs"));
         assert!(is_enforcement_surface("members/keel-guards/src/identity.rs"));
         assert!(is_enforcement_surface("members/keel-guards/src/receipt.rs"));
-        assert!(is_enforcement_surface("keel-cli/src/adherence.rs"));
+        // The two audits are locked by the directory they entered in sprint 748 (D0513), not by name.
+        assert!(is_enforcement_surface("members/keel-guards/src/adherence.rs"));
+        assert!(is_enforcement_surface("members/keel-guards/src/history.rs"));
         assert!(is_enforcement_surface("members/keel-schema/src/guard_names.rs"));
-        // NOT locked: ordinary source, docs, a workflow-shaped path outside the dir, the old path.
+        // NOT locked: ordinary source, docs, a workflow-shaped path outside the dir, the old paths.
         assert!(!is_enforcement_surface("keel-cli/src/main.rs"));
         assert!(!is_enforcement_surface("keel-cli/src/guards.rs"));
+        assert!(!is_enforcement_surface("keel-cli/src/adherence.rs"));
+        assert!(!is_enforcement_surface("keel-cli/src/history.rs"));
         assert!(!is_enforcement_surface("members/keel-guards/Cargo.toml"));
         assert!(!is_enforcement_surface(".engine/docs/guards.md"));
         assert!(!is_enforcement_surface("README.md"));

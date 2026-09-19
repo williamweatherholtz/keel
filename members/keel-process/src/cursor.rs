@@ -23,8 +23,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::orient::gate_order;
-use crate::textscan::gate_passed;
+use keel_model::orient::gate_order;
+use keel_model::textscan::gate_passed;
 
 /// A gate is DEFINED in a sprint when it has a `verification <...>Gate : Test` declaration (the
 /// space-before-colon distinguishes the Test from its `<...>GateR<n> : TestResult`).
@@ -42,7 +42,7 @@ fn resolve_delivery(root: &Path, arg: &str) -> Result<Option<PathBuf>, String> {
     }
     let delivery = root.join(".tracking").join("delivery");
     let needle = arg.to_lowercase();
-    let mut hits: Vec<PathBuf> = crate::collect_sysml(&delivery)
+    let mut hits: Vec<PathBuf> = keel_model::corpus::collect_sysml(&delivery)
         .into_iter()
         .filter(|p| p.file_stem().is_some_and(|s| s.to_string_lossy().to_lowercase().contains(&needle)))
         .collect();
@@ -172,8 +172,8 @@ fn processes_in(text: &str) -> Vec<String> {
 fn resolve_process(root: &Path, arg: &str) -> Result<(String, Vec<StepBinding>), String> {
     let dir = root.join(".engine").join("processes");
     let mut by_stem: Option<(PathBuf, Vec<String>)> = None;
-    for path in crate::collect_sysml(&dir) {
-        let Ok(text) = crate::corpus::read_to_string(&path) else { continue };
+    for path in keel_model::corpus::collect_sysml(&dir) {
+        let Ok(text) = keel_model::corpus::read_to_string(&path) else { continue };
         if let Some(steps) = process_steps(&text, arg) {
             return Ok((arg.to_owned(), steps));
         }
@@ -183,7 +183,7 @@ fn resolve_process(root: &Path, arg: &str) -> Result<(String, Vec<StepBinding>),
     }
     match by_stem {
         Some((path, names)) if names.len() == 1 => {
-            let Ok(text) = crate::corpus::read_to_string(&path) else {
+            let Ok(text) = keel_model::corpus::read_to_string(&path) else {
                 return Err(format!("advance: cannot read {}", path.display()));
             };
             let Some(name) = names.into_iter().next() else {
@@ -229,14 +229,14 @@ fn evaluate(root: &Path, steps: &[StepBinding]) -> Vec<Verdict> {
             if check.starts_with("gate:") {
                 return Verdict::NeedsRun;
             }
-            if let Some(report) = crate::guards::run_one(check, root) {
+            if let Some(report) = keel_guards::run_one(check, root) {
                 return report
                     .violations
                     .first()
                     .map_or(Verdict::Green, |v| Verdict::Red(v.clone()));
             }
             if rules.is_none() {
-                rules = crate::view::check(root).ok().and_then(|j| serde_json::from_str(&j).ok());
+                rules = keel_view::view::check(root).ok().and_then(|j| serde_json::from_str(&j).ok());
             }
             let empty = Vec::new();
             let hit = rules

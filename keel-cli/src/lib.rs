@@ -29,10 +29,11 @@ pub use keel_model::algo;
 pub use keel_view::arch;
 pub use keel_view::verification;
 pub use keel_schema::schema;
-pub mod history;
-pub mod adherence;
+// The two audits are the guards member's and the cursor and enrollment the process member's (D0513, sprint 748); the old paths keep resolving.
+pub use keel_guards::history;
+pub use keel_guards::adherence;
 pub use keel_github::ci_runs;
-pub mod cursor;
+pub use keel_process::cursor;
 // The governance processes are member keel-process (D0479, sprint 736); `crate::workspace::` etc. keep resolving.
 pub use keel_process::currency;
 // The build-and-test tooling is member keel-suite (D0479, sprint 735); `crate::suite::` etc. keep resolving.
@@ -54,7 +55,7 @@ pub use keel_actor::device;
 pub use keel_schema::embedded;
 pub use keel_serve::launcher;
 pub use keel_process::library;
-pub mod enroll;
+pub use keel_process::enroll;
 pub use keel_git::gitx;
 // Project discovery and the shared argument helpers descended below the verbs (D0479, sprint 740).
 pub use keel_git::projects;
