@@ -163,6 +163,15 @@ package ProjectBusinessKeelViewer {
     // ── Business gate: human acceptance of the Needs (needs-before-architecture). ──
     verification keelViewerNeedsAccept : Test { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000000a"; :>> title = "keel-viewer Needs accepted (Business gate)"; :>> createdAt = "2026-07-14"; :>> createdBy = "wweatherholtz"; :>> method = VerificationMethod::confirmation; :>> procedureText = "wweatherholtz accepts the 8 keel-viewer Needs (N-1..N-8: nViewerViewpointForm / nViewerExplorableGraph / nViewerTemporalState / nViewerCrossCuttingSlices / nViewerSeparation [must], nViewerQueryExpansion / nViewerMultiStakeholder / nViewerPersistedViewpoints [should]) AS-IS via the explicit 'Accept the Needs as-is' selection on 2026-07-14 — the Business gate. Architecture (SystemRequirements + the A/B/C Decision) may now be derived from these accepted Needs."; }
     part keelViewerNeedsAcceptR1 : TestResult { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000000b"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "5f82eec"; :>> judgedAt = "2026-07-14"; :>> judgedBy = "wweatherholtz"; }
+    // #Verify backfill: N-1..N-8, the eight the Test names (sprint 752, D0534)
+    #Verify dependency from keelViewerNeedsAccept to nViewerViewpointForm;
+    #Verify dependency from keelViewerNeedsAccept to nViewerExplorableGraph;
+    #Verify dependency from keelViewerNeedsAccept to nViewerTemporalState;
+    #Verify dependency from keelViewerNeedsAccept to nViewerCrossCuttingSlices;
+    #Verify dependency from keelViewerNeedsAccept to nViewerSeparation;
+    #Verify dependency from keelViewerNeedsAccept to nViewerQueryExpansion;
+    #Verify dependency from keelViewerNeedsAccept to nViewerMultiStakeholder;
+    #Verify dependency from keelViewerNeedsAccept to nViewerPersistedViewpoints;
 
     // =====================================================================
     // EXPANSION (Sprint 210) — additional Personas + UseCases (scenarios) + Needs. N-9..N-14 were
@@ -298,6 +307,13 @@ package ProjectBusinessKeelViewer {
     // ── Business gate 2: human acceptance of the expansion Needs N-9..N-14 (needs-before-architecture). ──
     verification keelViewerNeedsAccept2 : Test { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000001a"; :>> title = "keel-viewer expansion Needs N-9..N-14 accepted (Business gate 2)"; :>> createdAt = "2026-07-14"; :>> createdBy = "wweatherholtz"; :>> method = VerificationMethod::confirmation; :>> procedureText = "wweatherholtz accepts the 6 expansion Needs (N-9 nViewerCoverageGap [must], N-10 nViewerChangeImpact / N-11 nViewerNotifications / N-12 nViewerExportShare / N-14 nViewerAuditProvenance [should], N-13 nViewerBaselineCompare [could]) AS-IS via the explicit 'Accept N-9..N-14 as-is' selection on 2026-07-14 — the second Business gate. Architecture (SystemRequirements) may now be derived from these accepted Needs, under the existing shape B (D0114)."; }
     part keelViewerNeedsAccept2R1 : TestResult { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000001b"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "4510d0e"; :>> judgedAt = "2026-07-14"; :>> judgedBy = "wweatherholtz"; }
+    // #Verify backfill: N-9..N-14, the six the Test names (sprint 752, D0534)
+    #Verify dependency from keelViewerNeedsAccept2 to nViewerCoverageGap;
+    #Verify dependency from keelViewerNeedsAccept2 to nViewerChangeImpact;
+    #Verify dependency from keelViewerNeedsAccept2 to nViewerNotifications;
+    #Verify dependency from keelViewerNeedsAccept2 to nViewerExportShare;
+    #Verify dependency from keelViewerNeedsAccept2 to nViewerAuditProvenance;
+    #Verify dependency from keelViewerNeedsAccept2 to nViewerBaselineCompare;
 
     // =====================================================================
     // SCOPE REVISION (Sprint 212, D0115) — human feedback 2026-07-14. Four Needs superseded (out of
@@ -343,6 +359,9 @@ package ProjectBusinessKeelViewer {
     // ── Business gate 3: human acceptance of N-15 + N-16 (needs-before-architecture). ──
     verification keelViewerNeedsAccept3 : Test { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000002a"; :>> title = "keel-viewer critique Needs N-15 + N-16 accepted (Business gate 3)"; :>> createdAt = "2026-07-14"; :>> createdBy = "wweatherholtz"; :>> method = VerificationMethod::confirmation; :>> procedureText = "wweatherholtz accepts N-15 (nViewerIterativeCritique) + N-16 (nViewerInProgramEdit), both must, via the explicit 'Accept N-15 + N-16 — build downstream' selection on 2026-07-14. Architecture (SystemRequirements + use cases + backlog) may now be derived, under shape B (D0114)."; }
     part keelViewerNeedsAccept3R1 : TestResult { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000002b"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "83993ce"; :>> judgedAt = "2026-07-14"; :>> judgedBy = "wweatherholtz"; }
+    // #Verify backfill: N-15 and N-16, the two the Test names (sprint 752, D0534)
+    #Verify dependency from keelViewerNeedsAccept3 to nViewerIterativeCritique;
+    #Verify dependency from keelViewerNeedsAccept3 to nViewerInProgramEdit;
 
     // ── UseCases for the accepted critique Needs (the human's #1/#2 examples + in-program edit). ──
     use case ucCritiqueProcessDownstream : UseCase {
@@ -382,6 +401,8 @@ package ProjectBusinessKeelViewer {
     // ── Business gate 4: human acceptance of N-17 (needs-before-architecture). ──
     verification keelViewerNeedsAccept4 : Test { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000003a"; :>> title = "keel-viewer generative-UI Need N-17 accepted (Business gate 4)"; :>> createdAt = "2026-07-15"; :>> createdBy = "wweatherholtz"; :>> method = VerificationMethod::confirmation; :>> procedureText = "wweatherholtz directed N-17 (2026-07-15): 'it should dynamically integrate with keel data and processes and intelligently generate a UI... we're not hard coding actions, we're developing an engine. when a process is added, it should be manipulable in the UI. same for new attribute fields. evolution!' Accepting the model-driven generative-UI Need; architecture (D0117 + SRs) may derive."; }
     part keelViewerNeedsAccept4R1 : TestResult { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000003b"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "38a31a2"; :>> judgedAt = "2026-07-15"; :>> judgedBy = "wweatherholtz"; }
+    // #Verify backfill: N-17, the one the Test names (sprint 752, D0534)
+    #Verify dependency from keelViewerNeedsAccept4 to nViewerGenerativeUi;
 
     // ── N-18: axis→visual-encoding viewpoints — map model attributes to graphical channels (human, 2026-07-15). ──
     requirement nViewerEncodingViewpoints : Need {
@@ -395,6 +416,8 @@ package ProjectBusinessKeelViewer {
     // ── Business gate 5: human acceptance of N-18 (needs-before-architecture). SIGNED — see the result below. ──
     verification keelViewerNeedsAccept5 : Test { :>> id = "6e50d1c0-0113-4c8b-9d2e-00000000003c"; :>> title = "keel-viewer encoding-viewpoints Need N-18 accepted (Business gate 5)"; :>> createdAt = "2026-07-15"; :>> createdBy = "claudeOpus"; :>> method = VerificationMethod::confirmation; :>> procedureText = "AWAITING wweatherholtz's explicit acceptance of N-18 (axis->visual-encoding viewpoints: colour/position/swimlanes/nesting, auto-generated + overridable). Directed 2026-07-15 as a 'HUGE feature'; captured as a Need before architecture. Design direction is D0120 (PROPOSED). No downstream build until this gate passes."; }
     part keelViewerNeedsAccept5R1 : TestResult { :>> id = "12a80483-5bbe-4b02-b448-7283b10e2f16"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "e40db8b"; :>> judgedAt = "2026-07-15"; :>> judgedBy = "wweatherholtz"; :>> notes = "N-18 approved by wweatherholtz (2026-07-15, 'yes this is a huge need. approved') — axis-encoding viewpoints; unblocks D0120."; }
+    // #Verify backfill: N-18: the Test's text says AWAITING, its R1 records the word ('yes this is a huge need. approved') - the result is the fact (sprint 752, D0534)
+    #Verify dependency from keelViewerNeedsAccept5 to nViewerEncodingViewpoints;
 
     // =====================================================================
     // SCOPE CORRECTION (Sprint 320, D0156) — N-8 superseded. Its statement asserted "per-user view

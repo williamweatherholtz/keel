@@ -282,6 +282,16 @@ package ProjectBusiness {
         :>> procedureText = "At least five Needs authored; each carries source, priority, and a solution-free statement; MoSCoW priorities distributed across must/should/could; team lead accepts.";
     }
     part needsGateR1 : TestResult { :>> id = "d3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "2f70f0e"; :>> judgedAt = "2026-06-11"; :>> judgedBy = "wweatherholtz"; }
+    // #Verify backfill: the Needs phase gate judged 2026-06-11 at 2f70f0e accepts the nine Needs that existed then; n10 onward post-date it and stay unaccepted until asked (sprint 752, D0534)
+    #Verify dependency from needsGate to n01AtomicItems;
+    #Verify dependency from needsGate to n02DecisionsFirstClass;
+    #Verify dependency from needsGate to n03VerificationTraced;
+    #Verify dependency from needsGate to n04ComputedState;
+    #Verify dependency from needsGate to n05GitNative;
+    #Verify dependency from needsGate to n06ProcessAsData;
+    #Verify dependency from needsGate to n07AgentAutonomy;
+    #Verify dependency from needsGate to n08TraceQueryable;
+    #Verify dependency from needsGate to n09SelfHosting;
 
     verification useCasesGate : Test {
         :>> id = "2f16c7d8-e9f0-4a1b-2c3d-4e5f6a7b8c9d";

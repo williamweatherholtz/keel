@@ -223,4 +223,15 @@ package EngineDerivedNeeds {
 
     #Verify dependency from engineNeedsAccept to nIntakeBeforeInterpretation;
     #Verify dependency from engineNeedsAcceptAttest1 to nIntakeBeforeInterpretation;
+    // #Verify backfill: the Test's words accept the derived set AS NARROWED (the thirteen that stand as Needs); these are that set (sprint 752, D0534)
+    #Verify dependency from engineNeedsAccept to nTurnStartRecall;
+    #Verify dependency from engineNeedsAccept to nEnginePinAndEvolution;
+    #Verify dependency from engineNeedsAccept to nForeignTreeVerification;
+    #Verify dependency from engineNeedsAccept to nPassDisclosesItsSource;
+    #Verify dependency from engineNeedsAccept to nMonitoredNotGated;
+    #Verify dependency from engineNeedsAccept to nDecisionPromisesTracked;
+    #Verify dependency from engineNeedsAccept to nAuthoringIsLowFriction;
+    #Verify dependency from engineNeedsAccept to nParserIsTheTrustedBase;
+    #Verify dependency from engineNeedsAccept to nDeclaredControlDistinguishableFromArmed;
+    #Verify dependency from engineNeedsAccept to nDocSurfaceCannotOutliveTheChange;
 }

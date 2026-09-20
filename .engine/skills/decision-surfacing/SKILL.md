@@ -31,7 +31,12 @@ keel show authority-queue .
 ```
 
 Each `decisionAcceptance` row carries the id, the `shortName` of what it is about, and how long it
-has waited. **This is the assessment.** Do not re-derive it, do not estimate it, do not carry it
+has waited. Beside them, each `needAcceptance` row (D0534) is a Need no `method=confirmation` Test
+with a passing result judged by a Person reaches through `#Verify`: its `note` names the Test whose
+word is still owed, or says `no acceptance test` when nobody has asked. A Need's ask goes on the
+page the same way a Decision's does - the Need's text quoted, what accepting it charters (the
+requirements and Decisions that may then derive from it) - grouped by set, since one Test usually
+accepts a set. **This is the assessment.** Do not re-derive it, do not estimate it, do not carry it
 between turns in your head.
 
 ### 2. The state test — this is what makes silence honest
@@ -42,7 +47,7 @@ and when).
 | Result | What this process does |
 |---|---|
 | Same set | **Nothing.** No page, no link, no sentence about decisions. |
-| Changed — added, answered, or withdrawn, and at least one still waits | Continue to step 3. |
+| Changed — added, answered, or withdrawn, and at least one still waits | Continue to step 3. A `needAcceptance` row entering or leaving is a change like any other. |
 | Changed to EMPTY — the last ask was answered | **Nothing** (D0380, their words: *"do not republish when the queue is empty"*). The last page stands, the toml keeps its ids, and the next publish is the next ask. |
 
 Silence is a *computed state*, not forgetfulness: it means the published page already says

@@ -153,4 +153,13 @@ package ProjectBusinessModularMembers {
     }
     // RAN: Selected on the decision brief copy-out (twenty-ninth publish, built at cfb1cb8), pasted into chat 2026-09-14 by wweatherholtz; the read-back asked what was WIDER than meant and Accept as written was marked on all three tabs, Narrow / Fix a threshold / Hold on none. The reading of the marks as their acceptance was stated back in chat with the offer that one word stops it; their next message was 'Sure accept B then.' - their marked lines, verbatim: '[x] Accept as written: the 3 Needs on this tab (nMemberRebuildIsLocal, nMemberDependsDownOnly, nEveryModuleHasAMemberHome) say what I meant; record my confirmation of the Business gate for them' / '[x] Accept as written: the 3 Needs on this tab (nIssuesSubsetIsItsOwnMember, nStateIsComputedAndExposed, nMemberIsAnAnchor) say what I meant; record my confirmation of the Business gate for them' / '[x] Accept as written: the 2 Needs on this tab (nProcessIsReadNotHardcoded, nCustomProcessRefusesEverywhere) say what I meant; record my confirmation of the Business gate for them'.
     part modularMembersNeedsAcceptR1 : TestResult { :>> id = "06fa8f1d-28f2-49f3-b350-146c5e9b0185"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "2beaa66"; :>> judgedAt = "2026-09-14"; :>> judgedBy = "wweatherholtz"; }
+    // #Verify backfill: the eight the Test names, marked Accept as written on the three tabs (sprint 752, D0534)
+    #Verify dependency from modularMembersNeedsAccept to nMemberRebuildIsLocal;
+    #Verify dependency from modularMembersNeedsAccept to nMemberDependsDownOnly;
+    #Verify dependency from modularMembersNeedsAccept to nIssuesSubsetIsItsOwnMember;
+    #Verify dependency from modularMembersNeedsAccept to nStateIsComputedAndExposed;
+    #Verify dependency from modularMembersNeedsAccept to nProcessIsReadNotHardcoded;
+    #Verify dependency from modularMembersNeedsAccept to nCustomProcessRefusesEverywhere;
+    #Verify dependency from modularMembersNeedsAccept to nEveryModuleHasAMemberHome;
+    #Verify dependency from modularMembersNeedsAccept to nMemberIsAnAnchor;
 }

@@ -3335,7 +3335,55 @@ fn collect_decision_and_finding_obligations(model: &Model, awaiting: &mut Vec<Aw
             note: format!("in force from {disp_from} ({disp_dec})"),
         });
     }
+}
 
+/// (1b) Needs awaiting the human's acceptance (D0534, issue661).
+///
+/// A Need is accepted when a `method=confirmation` Test reaches it through a `#Verify` edge and that
+/// Test has a passing result whose `judgedBy` names a `Person`. The predicate IS the control (D0535):
+/// an AI-kind judge is refused at the write layer (D0178), and one typed by hand still does not clear
+/// the row. NOT grandfathered: the Business workflow always ordered requirements after accepted Needs,
+/// so a Need nobody accepted was never correct-when-written - it was unasked. Three Needs waited
+/// seventeen days with nothing computed showing it; that wait is what this row makes visible.
+fn collect_need_acceptance_obligations(model: &Model, awaiting: &mut Vec<Awaiting>) {
+    let mut needs: Vec<&String> = model.items.iter().filter(|(_, i)| i.type_name == "Need").map(|(n, _)| n).collect();
+    needs.sort();
+    for n in needs {
+        let mut tests: Vec<&str> = model
+            .edges
+            .iter()
+            .filter(|e| e.kind == "verify" && e.to == *n)
+            .map(|e| e.from.as_str())
+            .filter(|t| model.items.get(*t).is_some_and(|i| i.attrs.get("method").is_some_and(|m| m.ends_with("confirmation"))))
+            .collect();
+        tests.sort_unstable();
+        tests.dedup();
+        let persons_pass = tests.iter().any(|t| {
+            model.edges.iter().filter(|e| e.kind == "resultof" && e.to == *t).any(|e| {
+                model.items.get(&e.from).is_some_and(|r| {
+                    r.attrs.get("outcome").is_some_and(|o| o.ends_with("pass"))
+                        && r.attrs.get("judgedBy").and_then(|j| model.items.get(j)).is_some_and(|a| a.type_name == "Person")
+                })
+            })
+        });
+        if persons_pass {
+            continue;
+        }
+        let info = model.items.get(n);
+        let note = if tests.is_empty() {
+            "no acceptance test reaches it (a method=confirmation Test through #Verify) - the human's word has not been asked for (D0534)".to_owned()
+        } else {
+            format!("awaiting the human's word through {}: no passing result judgedBy a Person (D0534/D0535)", tests.join(", "))
+        };
+        awaiting.push(Awaiting {
+            kind: "needAcceptance".to_owned(),
+            item: n.clone(),
+            short_name: info.and_then(|i| i.attrs.get("title")).cloned().unwrap_or_default(),
+            origin: info.and_then(|i| i.attrs.get("createdBy")).cloned().unwrap_or_default(),
+            since: info.and_then(|i| i.attrs.get("createdAt")).cloned().unwrap_or_default(),
+            note,
+        });
+    }
 }
 
 /// Everything genuinely awaiting HUMAN authority, with waiting age and originating contributor.
@@ -3345,8 +3393,9 @@ fn collect_decision_and_finding_obligations(model: &Model, awaiting: &mut Vec<Aw
 /// Anything an automated check already settles. D0051 is explicit — confirm only what tests cannot —
 /// and asking a human to re-affirm a passing test degrades review into rubber-stamping, which
 /// launders unreviewed work as reviewed. So a gate that passed by `method=test` never appears here;
-/// only obligations REQUIRING a human verdict do: accepting a Decision, dispositioning a finding at
-/// or above the threshold, adjudicating a contention, and the per-sitting review.
+/// only obligations REQUIRING a human verdict do: accepting a Decision, accepting a Need (D0534 -
+/// the stakeholder contract nothing but their word can supply), dispositioning a finding at or
+/// above the threshold, adjudicating a contention, and the per-sitting review.
 ///
 /// # Errors
 /// Returns [`ViewError`] if a tracking/instance file fails to parse.
@@ -3355,6 +3404,7 @@ pub fn authority_queue(root: &Path) -> Result<String, ViewError> {
     let today = repo_today(root);
     let mut awaiting: Vec<Awaiting> = Vec::new();
     collect_decision_and_finding_obligations(&model, &mut awaiting);
+    collect_need_acceptance_obligations(&model, &mut awaiting);
 
     // (3) Contentions — D0108 clause 5: a human adjudicates, never a contributor holding one side.
     let contention_rows = contentions(root)?.matches("\"kind\"").count();
@@ -3410,7 +3460,67 @@ pub fn authority_queue(root: &Path) -> Result<String, ViewError> {
 
 #[cfg(test)]
 mod authority_queue_tests {
-    use super::{days_between, in_force_from};
+    use super::{collect_need_acceptance_obligations, days_between, in_force_from, Awaiting, Model};
+
+    /// A one-file tree: one Need, one Person, one ai Actor, and whatever `tail` adds (a Test, its
+    /// results, its `#Verify` edge). Returns the needAcceptance rows the collector pushes for it.
+    fn need_rows(stem: &str, tail: &str) -> Vec<Awaiting> {
+        let dir = std::env::temp_dir().join(format!("keel_needq_{stem}_{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let tracking = dir.join(".tracking");
+        std::fs::create_dir_all(&tracking).unwrap();
+        let body = format!(
+            concat!(
+                "package P {{\n",
+                "    part hum : Person {{ :>> name = \"H\"; }}\n",
+                "    part bot : Actor {{ :>> name = \"B\"; :>> kind = ActorKind::ai; }}\n",
+                "    requirement nX : Need {{ :>> id = \"1\"; :>> title = \"the need\"; :>> createdAt = \"2026-09-02\"; :>> createdBy = \"bot\"; }}\n",
+                "{}",
+                "}}\n"
+            ),
+            tail
+        );
+        std::fs::write(tracking.join("m.sysml"), body).unwrap();
+        let model = Model::build(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        let mut rows = Vec::new();
+        collect_need_acceptance_obligations(&model, &mut rows);
+        rows.retain(|a| a.kind == "needAcceptance");
+        rows
+    }
+
+    const ACCEPT_TEST: &str = "    verification acc : Test { :>> id = \"2\"; :>> method = VerificationMethod::confirmation; }\n    #Verify dependency from acc to nX;\n";
+
+    /// D0388 known-positive: a Need no confirmation Test reaches is one row saying so.
+    #[test]
+    fn need_acceptance_row_for_a_need_no_confirmation_test_reaches() {
+        let rows = need_rows("pos", "");
+        assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].item.as_str(), rows[0].short_name.as_str(), rows[0].since.as_str()), ("nX", "the need", "2026-09-02"));
+        assert!(rows[0].note.contains("no acceptance test"), "{}", rows[0].note);
+        // A reaching Test that is not method=confirmation does not count as asking for their word.
+        let rows = need_rows("pos2", "    verification t : Test { :>> id = \"3\"; :>> method = VerificationMethod::test; }\n    #Verify dependency from t to nX;\n    part tR1 : TestResult { :>> outcome = VerdictKind::pass; :>> judgedBy = \"hum\"; }\n");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].note.contains("no acceptance test"), "{}", rows[0].note);
+        // A confirmation Test with no result yet names itself in the note.
+        let rows = need_rows("pos3", ACCEPT_TEST);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].note.contains("through acc"), "{}", rows[0].note);
+    }
+
+    /// D0388 known-negative: the same Need clears on a passing result judgedBy a Person - and
+    /// stays a row when the pass is judgedBy an ai Actor (D0535: the predicate is the control).
+    #[test]
+    fn need_acceptance_row_absent_after_a_persons_pass_and_present_after_an_ai_actors_pass() {
+        let person = format!("{ACCEPT_TEST}    part accR1 : TestResult {{ :>> outcome = VerdictKind::pass; :>> judgedBy = \"hum\"; }}\n");
+        assert!(need_rows("neg", &person).is_empty());
+        let ai = format!("{ACCEPT_TEST}    part accR1 : TestResult {{ :>> outcome = VerdictKind::pass; :>> judgedBy = \"bot\"; }}\n");
+        let rows = need_rows("neg2", &ai);
+        assert_eq!(rows.len(), 1, "an ai-judged pass must not clear the row");
+        assert!(rows[0].note.contains("through acc"), "{}", rows[0].note);
+        let failed = format!("{ACCEPT_TEST}    part accR1 : TestResult {{ :>> outcome = VerdictKind::fail; :>> judgedBy = \"hum\"; }}\n");
+        assert_eq!(need_rows("neg3", &failed).len(), 1, "a human's fail is not acceptance");
+    }
 
     #[test]
     fn day_arithmetic_is_exact_across_months_and_leap_years() {
