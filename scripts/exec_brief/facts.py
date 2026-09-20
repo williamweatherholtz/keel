@@ -6678,7 +6678,8 @@ _ij55 = as_json(_out55i) if _ok55i else None
 def _guard55(name):
     _rc, _o = run_rc([KEEL, "gate", "guard", name, "--no-receipt", "."], timeout=300)
     _l = (_o or "").strip().splitlines()[-1] if (_o or "").strip() else ""
-    _m = re.search(r"\[guard:" + re.escape(name) + r"\] (PASS|FAIL) \W+ (\d+) scanned, (\d+) warning\(s\)(?: \+ \d+ counted-history line\(s\))?, (\d+) violation\(s\)", _l)
+    # `N scanned` may carry a parenthesised read source: `0 scanned (read: working tree), 0 warning(s)` (process-change)
+    _m = re.search(r"\[guard:" + re.escape(name) + r"\] (PASS|FAIL) \W+ (\d+) scanned(?: \([^)]*\))?, (\d+) warning\(s\)(?: \+ \d+ counted-history line\(s\))?, (\d+) violation\(s\)", _l)
     return {"exit0": _rc == 0, "verdict": _m.group(1) if _m else None, "scanned": int(_m.group(2)) if _m else None,
             "warnings": int(_m.group(3)) if _m else None, "violations": int(_m.group(4)) if _m else None, "line": _l}
 
@@ -6735,6 +6736,125 @@ fact("oneSurfaceFiveForks", {
      "every intake file; intake* from `" + KEEL + " show intake .` JSON. live: each guard's last line; open issues = distinct issue ids in "
      "`" + KEEL + " show open-issues .`. today: attestation-policy.toml's delegatedRecording line, .keel/decision-page.toml's ids and url, "
      "issue632/633 as section 34, the resolver as section 51.")
+
+# ================================================================ 58. the fifty-fifth publish: nine held, and the Needs nobody asked about
+# The queue after sprint 752 (D0534/D0535): the six forks of the fifty-fourth page still wait, three held process changes join
+# them (D0532 guard verbs are guard source, D0533 the verifier's receipt is rendered, D0536 the surfacing process reads
+# needAcceptance rows), and the authority queue now lists every Need no Person-judged confirmation Test reaches through
+# #Verify. Each Need is read from its file with what derives from it; the rows are the lens's own JSON; nothing typed.
+_ok58q, _out58q = run([KEEL, "show", "authority-queue", "."], timeout=120)
+_aq58 = as_json(_out58q) if _ok58q else None
+_rows58 = (_aq58 or {}).get("awaiting") or []
+_need_rows58 = [r for r in _rows58 if r.get("kind") == "needAcceptance"]
+_dec_rows58 = [r for r in _rows58 if r.get("kind") == "decisionAcceptance"]
+_biz_dir58 = os.path.join(REPO, ".tracking", "business")
+_biz58 = {f: read(os.path.join(_biz_dir58, f)) or "" for f in sorted(os.listdir(_biz_dir58)) if f.endswith(".sysml")}
+_all_tracking58 = "".join(read(os.path.join(dp, f)) or "" for dp, _, fs in os.walk(os.path.join(REPO, ".tracking")) for f in fs if f.endswith(".sysml"))
+_all_dec58 = "".join(read(os.path.join(DEC_DIR, f)) or "" for f in sorted(os.listdir(DEC_DIR)) if f.endswith(".sysml"))
+_corpus58 = _all_tracking58 + _all_dec58
+
+
+def _need58(name):
+    """One Need as its file declares it, with what derives from it across .tracking and the decisions."""
+    # a Need is declared `requirement nX : Need {` in the older files and `part nX : Need {` in the newer ones; both are Needs
+    _file = next((f for f, t in _biz58.items() if re.search(r"(?:requirement|part) " + name + r" : Need\b", t)), None)
+    _t = _biz58.get(_file, "")
+    _b = (re.search(r"(?:requirement|part) " + name + r" : Need\s*\{(.*?)\n    \}", _t, re.S) or [None, ""])[1]
+    _tests = sorted(set(re.findall(r"#Verify dependency from (\w+) to " + name + ";", _t)))
+    return {"name": name, "file": _file,
+            "title": (re.search(r'title\s*=\s*"([^"]*)"', _b) or [None, None])[1],
+            "createdAt": (re.search(r'createdAt\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "createdBy": (re.search(r'createdBy\s*=\s*"([^"]+)"', _b) or [None, None])[1],
+            "source": (re.search(r"source\s*=\s*NeedSource::(\w+)", _b) or [None, None])[1],
+            "verifyTests": _tests,
+            "requirementsSatisfying": len(set(re.findall(r"satisfy " + name + r" by (\w+);", _all_tracking58))),
+            "decisionsDerived": len(set(re.findall(r"#DerivedFrom dependency from (d\d{4}) to " + name + ";", _corpus58))),
+            "storiesOrCasesDerived": len(set(re.findall(r"#DerivedFrom dependency from ((?:us|uc)\w+) to " + name + ";", _all_tracking58))),
+            "statementsBehind": len(set(re.findall(r"#DerivedFrom dependency from " + name + r" to (st\d+);", _all_tracking58)))}
+
+
+def _row_test58(note):
+    _m = re.search(r"through (\w+):", note or "")
+    return _m.group(1) if _m else None
+
+
+_needs58 = {r["item"]: {**_need58(r["item"]), "waitingSince": r.get("waitingSince"), "escalated": r.get("escalated"),
+                        "rowTest": _row_test58(r.get("note")), "rowNote": r.get("note")} for r in _need_rows58}
+_groups58 = {}
+for _n, _x in _needs58.items():
+    _k = (_x["file"] or "?") + "|" + (_x["rowTest"] or "none")
+    _groups58.setdefault(_k, {"file": _x["file"], "test": _x["rowTest"], "needs": []})["needs"].append(_n)
+for _g in _groups58.values():
+    _g["needs"].sort()
+    _g["count"] = len(_g["needs"])
+    _g["requirementsSatisfying"] = sum(_needs58[n]["requirementsSatisfying"] for n in _g["needs"])
+    _g["decisionsDerived"] = sum(_needs58[n]["decisionsDerived"] for n in _g["needs"])
+    _g["storiesOrCasesDerived"] = sum(_needs58[n]["storiesOrCasesDerived"] for n in _g["needs"])
+    _g["oldestSince"] = min((_needs58[n]["waitingSince"] or "9999" for n in _g["needs"]), default=None)
+    _g["testHasResult"] = bool(_g["test"]) and bool(re.search(r"part " + _g["test"] + r"R\d+ : TestResult", _biz58.get(_g["file"] or "", "")))
+    # a Test is declared on one line in the newer files and over several in the older ones (needsGate); read the block
+    _g["humanConfTestsInFile"] = sorted({_n for _n, _b in re.findall(r"verification (\w+) : Test\s*\{(.*?)\n    \}", _biz58.get(_g["file"] or "", ""), re.S)
+                                         if "VerificationMethod::confirmation" in _b})
+_all_needs58 = re.findall(r"(?:requirement|part) (\w+) : Need\b", "".join(_biz58.values()))
+_backfill58 = {f: len(re.findall(r"^    #Verify dependency from \w+ to \w+;", t, re.M)) for f, t in _biz58.items()}
+_backfill_comments58 = sum(t.count("// #Verify backfill:") for t in _biz58.values())
+
+
+def _held58(dname):
+    _t = _dec_file(dname[1:] + "-")
+    _f = _decision_facts(_t, dname)
+    _d = _f["decision"] or ""
+    return {**_f,
+            "fork": bool(re.search(r"\bOPTION [A-Z]\b", _d)),
+            "options": sorted(set(re.findall(r"\bOPTION ([A-Z])\b", _d))),
+            "recommended": (re.search(r"\bOPTION ([A-Z]) \(recommended\)", _d) or [None, None])[1],
+            "held": _f["status"] == "proposed" and _f["acceptance"] is None,
+            "shortName": (_f["title"] or "").split(":", 1)[0],
+            "derivedFrom": re.findall(r"#DerivedFrom dependency from " + dname + r" to (\w+);", _t),
+            "dependsOn": re.findall(r"#DependsOn dependency from " + dname + r" to (d\d{4});", _t),
+            "supersedesClause": re.findall(r"#SupersedeClause dependency from " + dname + r" to (d\d{4});", _t),
+            "fileExists": bool(_t)}
+
+
+_mod58 = read(os.path.join(REPO, "members", "keel-view", "src", "view", "mod.rs")) or ""
+_s752 = read(os.path.join(REPO, ".tracking", "delivery", "sprint752_authorityQueueListsNeedsAwaitingAcceptance.sysml")) or ""
+_skill58 = read(os.path.join(REPO, ".engine", "skills", "decision-surfacing", "SKILL.md")) or ""
+fact("nineHeldAndTheNeedsNobodyAsked", {
+    "held": {d: _held58(d) for d in ("d0525", "d0527", "d0528", "d0529", "d0530", "d0531", "d0532", "d0533", "d0536")},
+    "accepted": {d: {**_held58(d), "accepted": _decision_facts(_dec_file(d[1:] + "-"), d)["status"] == "accepted"} for d in ("d0534", "d0535")},
+    "queue": {"exit0": _ok58q, "count": (_aq58 or {}).get("count"), "asOf": (_aq58 or {}).get("asOf"),
+              "byKind": {k: sum(1 for r in _rows58 if r.get("kind") == k) for k in sorted({r.get("kind") for r in _rows58})},
+              "decisionRows": sorted(r["item"] for r in _dec_rows58),
+              "needRows": len(_need_rows58), "needsTotal": len(_all_needs58), "needsBound": len(_all_needs58) - len(_need_rows58)},
+    "needs": _needs58,
+    "groups": _groups58,
+    "backfill": {"verifyEdgesByFile": _backfill58, "verifyEdges": sum(_backfill58.values()), "backfillComments": _backfill_comments58},
+    "predicate": {"collectorLine": _line19(_mod58, "fn collect_need_acceptance_obligations"),
+                  "callLine": _line19(_mod58, "collect_need_acceptance_obligations(&model, &mut awaiting);"),
+                  "personCheck": 'a.type_name == "Person"' in _mod58,
+                  "confirmationCheck": 'm.ends_with("confirmation")' in _mod58,
+                  "positiveTest": "fn need_acceptance_row_for_a_need_no_confirmation_test_reaches" in _mod58,
+                  "negativeTest": "fn need_acceptance_row_absent_after_a_persons_pass_and_present_after_an_ai_actors_pass" in _mod58},
+    "skill": {"stepOneReadsNeedRows": "each `needAcceptance` row (D0534)" in _skill58,
+              "stepTwoCountsNeedRows": "A `needAcceptance` row entering or leaving is a change like any other." in _skill58},
+    "sprint752": {"exists": bool(_s752), "gateResults": len(re.findall(r"GateR\d+ : TestResult", _s752)),
+                  "gatePasses": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::pass", _s752)),
+                  # an inspect/analyze gate the AI examined lands `proposed` until `keel judge-set` (D0312 B) - it is not a pass
+                  "gateProposed": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::proposed", _s752)),
+                  "dodOnBacklog": bool(re.search(r"part dcAuthorityQueueListsNeedsAwaitingAcceptanceDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _bl))},
+    "issue661": _issue_facts("661", "dcAuthorityQueueListsNeedsAwaitingAcceptance"),
+    "live": {"processChange": _guard55("process-change"), "confirmationAuthenticity": _guard55("confirmation-authenticity")},
+}, "the nine held Decisions, the two accepted ones behind the row, the queue by kind, every waiting Need with what derives from it, grouped by file and Test",
+     _DEC_HOW + " fork/options/recommended by regex over the decision field; derivedFrom / dependsOn / supersedesClause = the edge lines in the "
+     "Decision's file. queue: `" + KEEL + " show authority-queue .` JSON - awaiting rows by kind, decision items, needAcceptance rows. needs: each "
+     "row's Need read from its .tracking/business file (title, createdAt, createdBy, source, its #Verify Tests); requirementsSatisfying = distinct "
+     "`satisfy <need> by <sr>;` across .tracking; decisionsDerived = distinct `#DerivedFrom dependency from dNNNN to <need>;` across .tracking and "
+     ".engine/decisions; storiesOrCasesDerived = the same edge from us*/uc* items; statementsBehind = `#DerivedFrom ... from <need> to stNNN`. groups: "
+     "keyed on file plus the Test the row's note names (`through <Test>:`) or none; sums over members; testHasResult = a `<Test>R<n> : TestResult` "
+     "in the file; humanConfTestsInFile = confirmation Tests declared in the file. backfill: `#Verify dependency from X to Y;` lines per business "
+     "file and the `// #Verify backfill:` comments. predicate: literal lines in members/keel-view/src/view/mod.rs. skill: literal phrases in "
+     ".engine/skills/decision-surfacing/SKILL.md. sprint752: the delivery file's GateR results; the DoD result in backlog.sysml. issue661 as "
+     "section 34. live: each guard's last line as section 55.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
