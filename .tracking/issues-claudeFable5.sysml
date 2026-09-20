@@ -2645,4 +2645,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcEveryGuardHasAControlMapRow to issue662;
+
+    part issue663 : Issue {
+        :>> id = "88440a25-792c-495f-9a99-f486c5474ad4";
+        :>> title = "Recorder dispatch owed list is never checked against the tree";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The recorder dispatch's owed list is typed by the primary and nothing checks it against the tree before the recorder is spawned. At sprint 741 (2026-09-18) and again at sprint 753 (2026-09-20) the list named the DoD record as --task <action>DoD - the Test's name - where record result --task takes the action's name; the write API refused the first attempt each time, the recorder retried with the action name and landed the write, and at sprint 741 the landed retry was filed as REFUSED, which is issue602. D0537's refusal 9 catches the misfiled report; it does not catch the dispatch that provoked the retry. Found in sprint 754's retro.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcDispatchOwedListResolvesInTheTree to issue663;
+
+    part issue664 : Issue {
+        :>> id = "3c0c335b-f4ff-4ef4-914e-8c499b2cf8c1";
+        :>> title = "Verifier receipt quotes a previous run's verify-touched.out line";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The rendered verifier receipt (D0533, scripts/verify_receipt.py) quotes two lines from .keel/metrics/verify-touched.out - first red line and test result line - without checking that the file is newer than verify-launch.epoch, while its LADDER and TOUCHED lines are epoch-checked. At sprint 754 (2026-09-20) the verifier launched the ladder without the skill's redirect into that file, the file still held sprint 753's stdout (dated 01:39 against a launch epoch of 02:16), and the receipt reported test result line: 925 passed in 776s for a run whose touched-receipt.toml says passed = 918, seconds = 726. The verdict lines were fresh and correct; the quoted line was another run's, and the recorder copied it into the sprint story's DoD evidence. A stale first red line would be worse: a previous run's red, or none over a current red. Found by reading the receipt against touched-receipt.toml before dispatching the recorder.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcReceiptQuotesOnlyTheRunItDescribes to issue664;
 }

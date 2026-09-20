@@ -84,7 +84,10 @@ line and no REFUSED line is refused whatever the count (sprint 723's first recor
 reported NONE). The dispatch's <COUNT> is the ONLY owed count: the receipt's VERIFIER-NOTED WRITES line
 is the verifier's noticing addressed to you, never your count - a REFUSED line that cites it as the
 reason a record was not written is refused (sprint 735's second recorder read OWED WRITES: NONE as
-"no writes owed" and wrote nothing, D0516).
+"no writes owed" and wrote nothing, D0516); (7) a write that lands after a refused attempt is a WROTE
+line naming the command that landed, never a REFUSED line for the attempt that did not - the check reads
+your WROTE lines against the TestResult parts the tree gained since HEAD and refuses a report claiming
+fewer (sprint 741's recorder landed a DoD result on a retry and filed the first attempt as REFUSED, D0537).
 Report shape, written to <ABS SCRATCH PATH>/recorder-report.txt:
   RECORDER REPORT  <date>  receipt=<path>  sprint=<file>
   WROTE: <the exact keel record command> -> <the verdict line it printed>      (one per write)
@@ -118,7 +121,14 @@ the control (D0492); the list alone was the reminder sprint 723's first recorder
    WRITES`) as its reason - sprint 735's second recorder, dispatched `--owed 1`, wrote nothing and
    reported `REFUSED: ... receipt line 19 states OWED WRITES: NONE; no writes owed per verifier`, and
    refusal 7 counted the REFUSED line (issue590, D0516). That receipt line lists writes the verifier
-   noticed for the recorder; the dispatch's count is the only owed count.
+   noticed for the recorder; the dispatch's count is the only owed count;
+9. under `--root`, `WROTE:` lines numbering fewer than the `part <name> : TestResult` lines the working
+   tree gained since HEAD under `.tracking` (`git diff HEAD -U0 -- .tracking` plus untracked `.tracking`
+   files) - the refusal names each gained result no `WROTE:` key claims (`--gate G` claims `G R<n>`,
+   `--task T` claims `T R<n>` / `T DoDR<n>`). Sprint 741's recorder was refused by the write API on the
+   Test's name, retried with the action's, landed `dcTouchedSetDescendsTheWorkspaceDoDR1`, and reported it
+   as `REFUSED:`; seven WROTE plus one REFUSED met `--owed 8` while the tree held eight (issue602, D0537).
+   The eight refusals above read the report alone; this one reads it against the tree it describes.
 
 `python check_report.py --probe --root <ROOT>` runs the D0388 pairs: `fixtures/positive-undeclared-marker.txt`
 (sprint 647's third act, refused) and `fixtures/negative-sprint647-receipt-driven.txt` (the same ceremony
@@ -131,7 +141,11 @@ report as returned, refused naming the textpatch line), `fixtures/positive-sprin
 (one gate line removed under `--owed 7`; refused naming the shortfall);
 `fixtures/positive-sprint735-refused-citing-owed-writes.txt` (sprint 735's second recorder's first report
 under `--owed 1`; refused naming the OWED WRITES citation) and `fixtures/negative-sprint735-one-owed.txt`
-(its rewritten report, one WROTE line under `--owed 1`; passes). `--probe <FIXTURE>` runs one row and
+(its rewritten report, one WROTE line under `--owed 1`; passes);
+`fixtures/positive-sprint741-landed-write-filed-refused.txt` (sprint 741's report as returned - seven WROTE,
+one REFUSED - judged over the eight results that tree gained; refused under `--owed 8` naming
+`dcTouchedSetDescendsTheWorkspaceDoDR1`) and `fixtures/negative-sprint741-eight-written.txt` (its corrected
+form, eight WROTE over the same eight; passes). `--probe <FIXTURE>` runs one row and
 exits 0 when that side holds - the form each line of a pair file takes, since the ladder needs both sides
 to exit 0 (sprint 724's first dispatch named the bare checker runs, and the positive's exit 1 stopped the
 ladder at the probe rung).

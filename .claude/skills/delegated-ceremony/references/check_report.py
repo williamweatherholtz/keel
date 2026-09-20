@@ -1,9 +1,10 @@
 """The delegated-ceremony skill's own check over a RECORDER's report (dcDelegatedCeremonyIsASkill).
 
-A recorder returns its report only after this passes. Eight refusals; the first three are sprint 647's
+A recorder returns its report only after this passes. Nine refusals; the first three are sprint 647's
 failures, the next two are sprint 703's (issue532, dcRecorderReportRefusesNonRecordWrites), the next two
-are sprint 723's (issue568, dcRecorderReportAccountsForEveryOwedRecord), the last is sprint 735's (issue590,
-dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine, D0516):
+are sprint 723's (issue568, dcRecorderReportAccountsForEveryOwedRecord), the eighth is sprint 735's (issue590,
+dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine, D0516), the ninth is sprint 741's (issue602,
+dcRecorderReportAccountsForEveryTreeWrite, D0537):
 
   1. an undeclared marker - any `#Word` token in the report that no `metadata def Word` under .engine or
      .tracking declares (sprint 647 typed `#Addresses`; the marker-vocabulary guard turned the Stop hook
@@ -31,7 +32,16 @@ dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine, D0516):
      --owed 1, wrote nothing and reported `REFUSED: ... receipt line 19 states OWED WRITES: NONE; no writes
      owed per verifier`; refusal 7 counted the REFUSED line and passed it). That receipt line lists writes the
      VERIFIER noticed for the recorder, never what the recorder owes - the dispatch's --owed count is the only
-     owed count (D0492). A dispatched record is a WROTE line, or a REFUSED line naming what the write API lacks.
+     owed count (D0492). A dispatched record is a WROTE line, or a REFUSED line naming what the write API lacks;
+  9. a report that says less than the tree - under `--root`, the `part <name> : TestResult` lines the working
+     tree gained since HEAD under .tracking (`git diff HEAD -U0 -- .tracking`, plus every such line of an
+     untracked .tracking file) outnumber the `WROTE:` lines. Sprint 741's recorder was refused by the write API
+     on `--task dcTouchedSetDescendsTheWorkspaceDoD`, retried with the action's name, landed
+     dcTouchedSetDescendsTheWorkspaceDoDR1, and reported the record as REFUSED: seven WROTE plus one REFUSED
+     met --owed 8 while the tree held eight new results (issue602). The eight refusals above read the report
+     alone; this one reads it against the tree it describes and names each gained result no WROTE line claims -
+     a `--gate G` claims `G R<n>`, a `--task T` claims `T R<n>` and `T DoDR<n>`. A write that lands after a
+     refused attempt is a WROTE line naming the command that landed (D0537).
 
     python check_report.py REPORT [--root DIR] [--owed N]   # exit 0 = pass, 1 = refused (each refusal printed), 2 = usage
     python check_report.py --probe [--root DIR]             # the D0388 pairs from fixtures/ beside this file
@@ -53,9 +63,14 @@ that report with one gate line removed and is REFUSED under --owed 7 naming the 
 fixtures/positive-sprint735-refused-citing-owed-writes.txt is sprint 735's second recorder's first report as
 returned (one REFUSED line citing receipt line 19's OWED WRITES: NONE) and is REFUSED under --owed 1 naming the
 citation; fixtures/negative-sprint735-one-owed.txt is its rewritten report (one WROTE line) and PASSES under --owed 1.
+fixtures/positive-sprint741-landed-write-filed-refused.txt is sprint 741's report as returned (seven WROTE, one
+REFUSED) judged over the eight results that tree gained (SPRINT741_GAINED) and is REFUSED under --owed 8 naming
+dcTouchedSetDescendsTheWorkspaceDoDR1; fixtures/negative-sprint741-eight-written.txt is its corrected form (eight
+WROTE) over the same eight and PASSES under --owed 8.
 """
 import os
 import re
+import subprocess
 import sys
 
 MARKER_TOKEN = re.compile(r"(?<![\w`'\"])#([A-Z][A-Za-z0-9]*)\b")
@@ -71,6 +86,10 @@ CITES_VERIFIER_WRITES_LINE = re.compile(r"\b(OWED|VERIFIER-NOTED|NOTED)[ -]WRITE
 # The binary as a brief names it: `keel`, `KEEL`, `<KEEL>`, `$KEEL`, or a path ending in keel[-suffix][.exe].
 KEEL_BINARY = re.compile(r"^(<KEEL>|\$KEEL|KEEL|(?:.*[\\/])?keel(?:-[\w-]+)?(?:\.exe)?)$", re.I)
 RECORD_KEY = re.compile(r"--(gate|task)\s+(\S+)")
+# A TestResult part as the write API lays it down: `part <name> : TestResult {` (gate-result: <gate>R<n>;
+# result: <task>DoDR<n> or <task>R<n>). Matched on a diff's added line or an untracked file's line.
+RESULT_PART = re.compile(r"^\s*part\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*TestResult\b")
+DIFF_FILE = re.compile(r"^\+\+\+ b/(.*)$")
 
 
 def declared_markers(root):
@@ -90,6 +109,45 @@ def declared_markers(root):
     return out
 
 
+def results_gained(root):
+    """The TestResult parts the working tree gained since HEAD under .tracking, as (part name, file) pairs -
+    the added lines of `git diff HEAD -U0 -- .tracking` plus every result line of an untracked .tracking file.
+    This is the count the report must meet (refusal 9, D0537). A root that is not a git checkout yields nothing,
+    and says so on stderr rather than passing silently."""
+    out = []
+    try:
+        diff = subprocess.run(["git", "-C", root, "diff", "HEAD", "-U0", "--", ".tracking"],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
+        untracked = subprocess.run(["git", "-C", root, "ls-files", "--others", "--exclude-standard", "--", ".tracking"],
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"check_report: --root {root} is not readable as a git checkout ({e}); the tree-gained count is unknown", file=sys.stderr)
+        return out
+    current = None
+    for line in diff.splitlines():
+        m = DIFF_FILE.match(line)
+        if m:
+            current = m.group(1)
+            continue
+        if line.startswith("+") and not line.startswith("+++"):
+            r = RESULT_PART.match(line[1:])
+            if r and current is not None:
+                out.append((r.group(1), current))
+    for rel in untracked.splitlines():
+        rel = rel.strip()
+        if not rel.endswith(".sysml"):
+            continue
+        try:
+            with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    r = RESULT_PART.match(line)
+                    if r:
+                        out.append((r.group(1), rel))
+        except OSError:
+            continue
+    return out
+
+
 def wrote_command(line):
     """The command a WROTE: line reports, or None when the line is not one."""
     m = WROTE_LINE.match(line.strip())
@@ -104,17 +162,26 @@ def is_record_write(command):
     return len(tokens) >= 2 and tokens[0] == "record" and re.fullmatch(r"[a-z][a-z-]*", tokens[1]) is not None
 
 
-def refusals(report_text, declared, owed=None):
+def claims(key, name):
+    """Whether a WROTE line's --gate/--task `key` is the write that produced the result part `name`: the
+    API names a gate's result <gate>R<n>, a task's <task>DoDR<n> or <task>R<n>."""
+    return re.fullmatch(re.escape(key) + r"(DoD)?R\d+", name) is not None
+
+
+def refusals(report_text, declared, owed=None, gained=None):
     """The refusals for one report text - pure, so the pairs can pin it without a tree.
 
     `owed` is the count of records the dispatch named, or None when the caller did not say; the
-    nothing-written refusal (6) needs no count, the shortfall refusal (7) needs one.
+    nothing-written refusal (6) needs no count, the shortfall refusal (7) needs one. `gained` is the
+    (part name, file) list of TestResult parts the tree gained since HEAD (results_gained), or None when
+    no tree was read; the tree refusal (9) needs it.
     """
     found = []
     lines = report_text.splitlines()
     seen = {}
     wrote = 0
     refused = 0
+    keys = []
     for n, line in enumerate(lines, 1):
         stripped = line.strip()
         first = stripped.split(" ", 1)[0] if stripped else ""
@@ -136,10 +203,15 @@ def refusals(report_text, declared, owed=None):
             found.append(f"line {n}: write outside the record API `{command[:60]}` - the recorder's only write path is keel record <sub-verb>; a change the API cannot make is a REFUSED line for the primary")
             continue
         for kind, key in RECORD_KEY.findall(command):
+            keys.append(key)
             if (kind, key) in seen:
                 found.append(f"line {n}: --{kind} {key} written again (first at line {seen[(kind, key)]}) - a red after a write is a DISCREPANCIES line, never a second record with reworded evidence")
             else:
                 seen[(kind, key)] = n
+    if gained is not None and len(gained) > wrote:
+        unclaimed = [(name, path) for name, path in gained if not any(claims(k, name) for k in keys)]
+        named = "; ".join(f"{name} in {path}" for name, path in unclaimed) or "; ".join(f"{name} in {path}" for name, path in gained)
+        found.append(f"the tree gained {len(gained)} TestResult part(s) since HEAD under .tracking and the report has {wrote} WROTE line(s) - unclaimed: {named}. A write that lands after a refused attempt is a WROTE line naming the command that landed, never a REFUSED line for the attempt that did not (issue602, D0537)")
     if wrote == 0 and refused == 0:
         found.append("zero WROTE: lines and no REFUSED: line - a recorder dispatched with nothing to write does not exist; this report is a recorder that did nothing and said NONE (sprint 723, issue568)")
     if owed is not None and wrote + refused < owed:
@@ -156,21 +228,37 @@ def refusals(report_text, declared, owed=None):
 def check_file(path, root, owed=None):
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
-    return refusals(text, declared_markers(root), owed)
+    return refusals(text, declared_markers(root), owed, results_gained(root))
 
 
-# (fixture, what the refusal must name; None = must pass, owed count or None)
+# The eight TestResult parts sprint 741's tree gained (issue602) - the list its two fixtures are judged over,
+# stated here so the pair pins refusal 9 without a checkout.
+SPRINT741_FILE = ".tracking/delivery/sprint741_touchedSetDescendsTheWorkspace.sysml"
+SPRINT741_GAINED = [
+    ("touchedSetDescendsTheWorkspaceRefineGateR1", SPRINT741_FILE),
+    ("touchedSetDescendsTheWorkspaceStandupGateR1", SPRINT741_FILE),
+    ("touchedSetDescendsTheWorkspaceImplementGateR1", SPRINT741_FILE),
+    ("touchedSetDescendsTheWorkspaceReviewGateR1", SPRINT741_FILE),
+    ("touchedSetDescendsTheWorkspaceCloseOutGateR1", SPRINT741_FILE),
+    ("touchedSetDescendsTheWorkspaceRetroGateR1", SPRINT741_FILE),
+    ("storyTouchedSetDescendsTheWorkspaceDoDR1", SPRINT741_FILE),
+    ("dcTouchedSetDescendsTheWorkspaceDoDR1", ".tracking/backlog.sysml"),
+]
+
+# (fixture, what the refusal must name; None = must pass, owed count or None, gained list or None)
 PAIRS = [
-    ("positive-undeclared-marker.txt", "undeclared marker #Addresses", None),
-    ("negative-sprint647-receipt-driven.txt", None, None),
-    ("positive-sprint703-textpatch-write.txt", "write outside the record API `python scripts/textpatch.py", None),
-    ("positive-sprint703-retro-recorded-twice.txt", "--gate livingDocsNameOnlyDeclaredCliVerbsRetroGate written again", None),
-    ("negative-sprint703-record-only.txt", None, None),
-    ("positive-sprint723-nothing-written.txt", "zero WROTE: lines and no REFUSED: line", None),
-    ("negative-sprint723-seven-owed.txt", None, 7),
-    ("positive-sprint723-six-of-seven.txt", "owed 7, accounted 6", 7),
-    ("positive-sprint735-refused-citing-owed-writes.txt", "REFUSED line cites the receipt's OWED WRITES line", 1),
-    ("negative-sprint735-one-owed.txt", None, 1),
+    ("positive-undeclared-marker.txt", "undeclared marker #Addresses", None, None),
+    ("negative-sprint647-receipt-driven.txt", None, None, None),
+    ("positive-sprint703-textpatch-write.txt", "write outside the record API `python scripts/textpatch.py", None, None),
+    ("positive-sprint703-retro-recorded-twice.txt", "--gate livingDocsNameOnlyDeclaredCliVerbsRetroGate written again", None, None),
+    ("negative-sprint703-record-only.txt", None, None, None),
+    ("positive-sprint723-nothing-written.txt", "zero WROTE: lines and no REFUSED: line", None, None),
+    ("negative-sprint723-seven-owed.txt", None, 7, None),
+    ("positive-sprint723-six-of-seven.txt", "owed 7, accounted 6", 7, None),
+    ("positive-sprint735-refused-citing-owed-writes.txt", "REFUSED line cites the receipt's OWED WRITES line", 1, None),
+    ("negative-sprint735-one-owed.txt", None, 1, None),
+    ("positive-sprint741-landed-write-filed-refused.txt", "unclaimed: dcTouchedSetDescendsTheWorkspaceDoDR1 in .tracking/backlog.sysml", 8, SPRINT741_GAINED),
+    ("negative-sprint741-eight-written.txt", None, 8, SPRINT741_GAINED),
 ]
 
 
@@ -187,10 +275,12 @@ def probe(root, only=None):
         return 2
     declared = declared_markers(root)
     all_hold = True
-    for name, expect, owed in rows:
+    for name, expect, owed, gained in rows:
         with open(os.path.join(fx, name), encoding="utf-8") as fh:
-            got = refusals(fh.read(), declared, owed)
+            got = refusals(fh.read(), declared, owed, gained)
         under = f" under --owed {owed}" if owed is not None else ""
+        if gained is not None:
+            under += f" over a tree that gained {len(gained)} result(s)"
         if expect is None:
             ok = not got
             print(f"probe: known-negative {name}{under} -> {'PASS' if ok else 'REFUSED'}: {len(got)} refusal(s)")
@@ -238,7 +328,8 @@ def main(argv):
             print(f"  {r}")
         return 1
     accounted = f", every one of the {owed} owed records accounted for" if owed is not None else ""
-    print(f"check_report: pass - no typed or undeclared marker, every write a keel record sub-verb written once{accounted}, report ends with the gate's last line")
+    gained = len(results_gained(root))
+    print(f"check_report: pass - no typed or undeclared marker, every write a keel record sub-verb written once{accounted}, the {gained} TestResult part(s) the tree gained since HEAD covered by WROTE lines, report ends with the gate's last line")
     return 0
 
 
