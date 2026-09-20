@@ -10,6 +10,9 @@ description = "Keel — an AI-complemented, SysML v2-text work-tracking engine w
 readme = "../README.md"
 keywords = ["sysml", "mbse", "work-tracking", "ai", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+# `keel version` reports the build it is (KEEL_BUILD_COMMIT); the script that bakes the commit is
+# the workspace's build/provenance.rs, one home below every crate that bakes it (sprint 757, issue585).
+build = "../build/provenance.rs"
 
 [[bin]]
 name = "keel"

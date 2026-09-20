@@ -104,14 +104,16 @@ pub struct ContentKeys {
 ///
 /// Pure. `keel-cli/src/x.rs`, `members/keel-git/src/gitx.rs`, `keel-parser/src/lexer.rs`,
 /// `.engine/skills/y/SKILL.md`, `Cargo.lock`, `.githooks/post-commit`, `.claude/output-styles/keel.md`,
-/// `keelw` -> true; `.tracking/backlog.sysml`, `docs/x.md`, `fonts/a.ttf` -> false. Every workspace
-/// member is code (sprint 714): the binaries link all of them.
+/// `keelw`, `build/provenance.rs` -> true; `.tracking/backlog.sysml`, `docs/x.md`, `fonts/a.ttf` -> false. Every
+/// workspace member is code (sprint 714): the binaries link all of them; so is the workspace-level build script
+/// every stamped crate is built from (sprint 757) - owned by no member, it seeds every candidate.
 #[must_use]
 pub fn is_code(rel: &str) -> bool {
     let p = rel.replace('\\', "/");
     p.starts_with("keel-cli/")
         || p.starts_with("members/")
         || p.starts_with("keel-parser/")
+        || p.starts_with("build/")
         || p.starts_with(".engine/")
         || p.starts_with(".githooks/")
         || p.starts_with(".claude/")
@@ -189,6 +191,7 @@ mod tests {
         assert!(is_code("keelw"));
         assert!(is_code("members/keel-git/src/gitx.rs"));
         assert!(is_code("keel-parser/src/lexer.rs"));
+        assert!(is_code("build/provenance.rs"), "the stamp script no member owns builds six crates (sprint 757)");
         assert!(!is_code(".tracking/backlog.sysml"));
         assert!(!is_code(".tracking/delivery/sprint706_x.sysml"));
         assert!(!is_code("fonts/NotoEmoji-var.ttf"));

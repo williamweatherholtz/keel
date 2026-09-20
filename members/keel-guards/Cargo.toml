@@ -6,8 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 description = "The forward guards, one module per family, with the runner, the guard receipts, the hardening census and the plan-cover check."
 # The guard receipt keys on the build that wrote it (receipt.rs: KEEL_BUILD_COMMIT); the script that
-# bakes the commit is keel-cli's, shared, not copied (sprint 733, as keel-write).
-build = "../../keel-cli/build.rs"
+# bakes the commit is the workspace's build/provenance.rs, one home below every crate that bakes it (sprint 757, issue585).
+build = "../../build/provenance.rs"
 
 [dependencies]
 keel-parser = { path = "../../keel-parser" }

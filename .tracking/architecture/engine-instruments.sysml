@@ -437,11 +437,11 @@ package EngineInstruments {
     }
 
     // modGraph: scripts/modgraph.py (D0479, sprint 717)
-    // KNOWN FAILURE MODES: it reads `crate::<module>` tokens with `//` comments and string literals stripped, so a reference reached through a `use` alias or a re-export is attributed to the alias's home, not the module named; only `//` comments (doc comments included) and string literals are stripped, so a `/* */` block comment that spells `crate::guards::` reads as a reference (a false positive, never a miss; none in the tree at the adding commit). The forbidden pairs are a list in the script, so a new layer is guarded only once its pair is added there.
-    // PUBLISHED TO: the DoD of dcGuardsViewOrientCycleIsBroken (its D0388 pair) and, under dcWorkspaceLayeringIsGuarded, the guard that will carry it
+    // KNOWN FAILURE MODES: it reads `crate::<module>` tokens with `//` comments and string literals stripped, so a reference reached through a `use` alias or a re-export is attributed to the alias's home, not the module named; only `//` comments (doc comments included) and string literals are stripped, so a `/* */` block comment that spells `crate::guards::` reads as a reference (a false positive, never a miss; none in the tree at the adding commit). The forbidden pairs are a list in the script, so a new layer is guarded only once its pair is added there. A build script's owner is the workspace member whose directory contains it (build/provenance.rs is owned by none), and `build = true` or an absent key resolves to the crate's own build.rs; the dependency closure follows PATH dependencies only, so a member reached through a registry version is not in it (a false upward, never a miss).
+    // PUBLISHED TO: the DoD of dcGuardsViewOrientCycleIsBroken (its D0388 pair); the CI script-probe step and the pre-commit hook on staged scripts (`# ci-probe: --probe`, sprint 757 - the probe's last rung is `--check` on the landed tree); under dcWorkspaceLayeringIsGuarded, the guard that will carry it
     part fbModGraph : Feedback {
         :>> id = "612aa446-c514-4f63-a818-5735a9f591ee";
-        :>> title = "whether keel-cli's module graph holds the D0479 layering: no reference from view, orient, write or scaffold into guards, none from view into orient";
+        :>> title = "whether the workspace holds the D0479 layering: no reference from view, orient, write or scaffold into guards, none from view into orient, and no crate built from a script a crate above it owns (build = read as a dependency edge, sprint 757)";
         :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
         :>> sensedFrom = cpDeliverable;
         :>> reportsTo = ctAgent;
@@ -451,7 +451,7 @@ package EngineInstruments {
         :>> title = "modGraph";
         :>> createdAt = "2026-09-14"; :>> createdBy = "claudeFable5";
         :>> mechanism = "scripts/modgraph.py";
-        :>> measures = "the top-level module graph of keel-cli/src (nodes: modules and keel_* re-exports; edges: crate::X references): module and edge counts, Tarjan cycles, and under --check the FORBIDDEN back-edges each named at file:line, exit 1 on any";
+        :>> measures = "the top-level module graph of keel-cli/src (nodes: modules and keel_* re-exports; edges: crate::X references): module and edge counts, Tarjan cycles, and under --check the FORBIDDEN back-edges each named at file:line, exit 1 on any; the build-script edges of every workspace member (--build-edges: crate, script, the script's owner crate, the manifest line), and under --check an UPWARD row - a script owned by a crate that is neither the crate itself nor in its transitive path-dependency closure - is FORBIDDEN, exit 1; --probe runs the D0388 pair on two temp fixtures (an upward build.rs; a workspace-level build/provenance.rs) and then --check on the landed tree";
         :>> determinism = Determinism::tree;
         :>> reading = SensorReading::verdict;
         :>> producesFeedback = fbModGraph;

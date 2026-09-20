@@ -101,7 +101,7 @@ license.workspace = true
 description = "The governance processes: the process cursor (advance), activation and adoption, the unit library, the two migrations, the workspace gate, sync/land, status and the unattended currency pass."
 # `keel migrate` reports the binary's engine build (migrate.rs: KEEL_BUILD_COMMIT); the script that bakes
 # the commit is keel-cli's, shared, not copied (sprint 736, as keel-guards and keel-write).
-build = "../../keel-cli/build.rs"
+build = "../../build/provenance.rs"
 
 [dependencies]
 keel-fs = { path = "../keel-fs" }

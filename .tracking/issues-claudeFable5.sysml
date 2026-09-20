@@ -2722,4 +2722,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcOwedRecordsAreComputedFromTheSprint to issue669;
+
+    part issue670 : Issue {
+        :>> id = "d8a6ffb6-fec9-4862-9080-f462780c6d4a";
+        :>> title = "Receipt's test result line read a stale verify-touched.out - six sprint 757 gate results quote the previous ladder's count as evidence";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 757's verifier receipt (2026-09-20, ladder at=1789928370) rendered test result line: keel suite --touched: pass - 496 passed in 215s over [8 binaries] while the same receipt's TOUCHED RECEIPT line, read from touched-receipt.toml, said passed=718 seconds=257 over 19 ran rows. The two are one Run struct in keel-suite (touched.rs:644 prints the line, :734 writes the toml), so they cannot differ for one run: the line came from .keel/metrics/verify-touched.out, whose mtime 1789927385 is the previous ladder's - the third launch did not redirect its stdout there as the test-verify skill's launch line (SKILL.md:82) does, and scripts/verify_receipt.py:303 reads the file without holding it to verify-launch.epoch, though it holds the touched toml's at to that epoch at line 350. check_receipt.py holds the receipt's rung verdicts and TOUCHED RECEIPT counts to the tomls and nothing to the .out, so it passed the receipt, and the recorder wrote the stale line as --evidence on six gate results: 5c16bc97-45e2-42a8-8cbb-a6ceb555f8e8, 9a923ebe-b2aa-4fdc-a9ab-f7dfaa9948d8, d631695b-7666-485a-9c08-65b5b2161e0a, 23f3eb98-5152-40d4-b753-f68706782b83, 04a56b95-0304-49ea-99d3-d44e81470383, 4d6b35f0-12ce-48c1-bbfd-c2a6661c65ad. Their pass verdicts are the ladder's (718 passed, 0 failed at 1789928370); the count they quote describes the run before contentkey::is_code gained build/. They stay as written (D0129; recorder rule 3). The class is issue603's - a receipt line describing another run than the one it sits under - one file further along: the ladder receipt and touched receipt are now held to the launch, the ladder's stdout is not.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcReceiptStdoutIsHeldToTheLaunch to issue670;
 }

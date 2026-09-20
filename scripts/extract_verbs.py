@@ -480,9 +480,9 @@ def add_dependencies(man: str, new: list[str]) -> str:
 
 
 def add_build_script(man: str, crate_dir: Path) -> str:
-    rel = os.path.relpath(CLI_DIR / "build.rs", crate_dir).replace("\\", "/")
+    rel = os.path.relpath(REPO / "build" / "provenance.rs", crate_dir).replace("\\", "/")
     note = ("# A verb body reports the binary's engine build (KEEL_BUILD_COMMIT, sprint 750); the script that bakes\n"
-            "# the commit is keel-cli's, shared, not copied (as keel-process, keel-guards and keel-hooks).\n"
+            "# the commit is the workspace's build/provenance.rs, one home below every crate that bakes it (sprint 757, issue585).\n"
             f'build = "{rel}"\n')
     return man.replace("\n[dependencies]\n", "\n" + note + "\n[dependencies]\n", 1)
 
@@ -713,7 +713,7 @@ def main(argv: list[str]) -> int:
     for m, adds in s["dep_adds"].items():
         print(f"manifest {m}: + {', '.join(a.split(' =')[0] for a in adds)}")
     for m in s["build_adds"]:
-        print(f"manifest {m}: + build = keel-cli/build.rs")
+        print(f"manifest {m}: + build = build/provenance.rs")
     for src, dst in asset_moves.items():
         print(f"asset {src.relative_to(REPO).as_posix()} -> {dst.relative_to(REPO).as_posix()}")
     print(f"reconciliation: {s['items']} items = {s['moved']} moved + {len(s['stay'])} stay ({', '.join(s['stay'])}); "

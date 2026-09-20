@@ -6,8 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 description = "The write API: every authored fact enters the tree through here, under one lock, atomically, provenance bound."
 # The Claude surface stamps the build that wrote it (claude_surface::SURFACE_BUILD); the script that
-# bakes the commit is keel-cli's, shared, not copied (sprint 733).
-build = "../../keel-cli/build.rs"
+# bakes the commit is the workspace's build/provenance.rs, one home below every crate that bakes it (sprint 757, issue585).
+build = "../../build/provenance.rs"
 
 [dependencies]
 keel-parser = { path = "../../keel-parser" }

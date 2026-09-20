@@ -142,7 +142,7 @@ pub fn dependents(graph: &Graph, seeds: &BTreeSet<String>) -> Vec<String> {
 
 /// The candidate members for a set of changed `/`-normalised repo-relative paths: the owners of the
 /// changed paths closed over their dependents. Any changed CODE path with no owner (root manifest,
-/// lock file, `.engine/`, `.githooks/`, `.claude/`, `keelw`) makes every member a candidate; a
+/// lock file, `build/`, `.engine/`, `.githooks/`, `.claude/`, `keelw`) makes every member a candidate; a
 /// changed path that is neither code nor owned (`.tracking/`, docs) contributes nothing. Sorted.
 #[must_use]
 pub fn candidates(graph: &Graph, changed: &[String]) -> Vec<String> {

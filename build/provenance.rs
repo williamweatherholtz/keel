@@ -44,9 +44,9 @@ fn main() {
 
     // Rebuild when HEAD moves, so the baked commit cannot go stale. Only emit for paths that exist —
     // naming an absent path makes cargo rebuild on EVERY invocation. The repository root is found by
-    // walking up from the package's own directory: this script is shared by keel-cli and by keel-write
-    // (`build = "../../keel-cli/build.rs"`, sprint 733 - the Claude surface stamps the build it was
-    // written by), and the two packages sit at different depths.
+    // walking up from the package's own directory: this script is the workspace's (build/provenance.rs,
+    // owned by no crate - issue585), named by `build =` from keel-cli and from every member that bakes
+    // the stamp, and those packages sit at different depths.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
     let mut dir = Some(Path::new(&manifest_dir));
     while let Some(d) = dir {

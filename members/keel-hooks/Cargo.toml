@@ -6,8 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 description = "The Claude hooks (D0134): the Stop, PostToolUse, PreToolUse, UserPromptSubmit and SubagentStop entry points, their ledger, the override unlock, the bash and write classifiers, the pre-bash and post-edit advisories - the in-loop gates, in the binary, above every member they read and below keel-cli."
 # The console probe reports the binary's engine build (KEEL_BUILD_COMMIT); the script that bakes the commit is
-# keel-cli's, shared, not copied (sprint 736, as keel-guards, keel-write and keel-process).
-build = "../../keel-cli/build.rs"
+# the workspace's build/provenance.rs, one home below every crate that bakes it (sprint 757, issue585).
+build = "../../build/provenance.rs"
 
 [dependencies]
 keel-perf = { path = "../keel-perf" }
