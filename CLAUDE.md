@@ -141,7 +141,11 @@ Change Request cross-cuts and is itself frozen.
   pointing at it, agent types `verifier`/`recorder` in `.claude/agents/`). VERIFIER (haiku, skill `test-verify`,
   D0438) runs `keel verify . --probe-from PAIR_FILE` DETACHED (the D0476 ladder: validate, guard, clippy, the D0388
   pair - two lines the PRIMARY wrote, positive then negative, the verifier names the path and retypes nothing (D0500) -
-  `suite --touched`, stopping at the first red), plus `gate check-engine`, `sync-claude --check`; writes a receipt only. RECORDER (haiku, no Write/Edit tool) writes ceremony through
+  `suite --touched`, stopping at the first red), plus `gate check-engine`, `sync-claude --check`; writes a receipt only,
+  rendered by `scripts/verify_receipt.py` (D0533) and held to the ladder that ended by `references/check_receipt.py`
+  before it returns (D0538: `keel verify --wait`, then `verify-receipt.toml`/`touched-receipt.toml`; a receipt saying
+  KILLED/running over an ended ladder, quoting another run's `at=`, or disagreeing with a rung verdict or the touched
+  counts is REFUSED, and no recorder is dispatched on it). RECORDER (haiku, no Write/Edit tool) writes ceremony through
   `keel record` from that receipt ONLY; a marker/edge the API lacks is a `REFUSED:` report line, never typed; its
   report ends with the last line of `keel gate --fast .`. `references/check_report.py` refuses a report otherwise,
   one whose `WROTE:` names a non-`record` command or writes one gate/task twice (D0473), and one accounting for nothing

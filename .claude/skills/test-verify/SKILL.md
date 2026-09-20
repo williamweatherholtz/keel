@@ -208,6 +208,25 @@ never a reason to type over the file: a typed correction is the class this step 
 
 The recorder reads THIS file and nothing else; it never reads the primary's description.
 
+### 7. The receipt is checked against the ladder that ended before you return (D0538)
+
+```
+python .claude/skills/delegated-ceremony/references/check_receipt.py "<ABS RECEIPT PATH>" --root . --keel KEEL
+```
+
+The check runs `KEEL verify --wait .` itself - blocking while the ladder's writer lives, returning the
+ladder's own exit once it has ended - then reads `.keel/metrics/verify-receipt.toml` and
+`touched-receipt.toml` and holds the receipt to them: the `LADDER` line's `at=`, `outcome` and
+`stopped_at`, the five rung verdicts against the `[[rung]]` rows, the `TOUCHED RECEIPT` counts when
+the ladder reached that rung. It refuses a receipt that says the ladder did not end (`KILLED`,
+`running`, a `killed` rung) while `--wait` says it did, naming the rung and exit `--wait` printed -
+sprint 743's receipt, returned while pid 29824 was alive and the touched rung still running, said
+exactly that and the ladder ended `touched fail (101)` (issue603). It refuses one whose `at=` is
+another ladder's. A rendered receipt passes by construction; a refusal means the render ran early or
+over another run's files. Return the receipt path, its `DISCREPANCIES` line and the check's verdict
+line (`check_receipt: pass - ...` or `check_receipt: REFUSED (n):` with its lines). A refused receipt
+is returned refused: not retyped, not re-rendered by hand, not rerun until it passes.
+
 ## Anti-patterns — each one has happened
 
 1. **Foreground touched run** (issue469): killed at the cap, eleven minutes lost. Detach.
@@ -227,6 +246,10 @@ The recorder reads THIS file and nothing else; it never reads the primary's desc
 8. **Typing the summary line** (issue490, sprints 676/745/750; issue567, sprint 726): `DISCREPANCIES:
    NONE` over a red `LADDER` row, `killed` over a live writer. The receipt is the renderer's output
    (D0533); the only line you write is `--noted`.
+9. **Returning a receipt no one held to the ladder** (issue603, sprint 743): `KILLED during touched;
+   exit=2` and `pid 29824 dead` while the pid was alive and the rung still running; the ladder ended
+   `touched fail (101)`. Step 7's check reads the receipt against the ladder that ended (D0538); a
+   refusal is returned as the finding, never fixed by hand.
 
 ## Questions This Skill Answers
 

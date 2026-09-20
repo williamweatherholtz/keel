@@ -1,0 +1,7 @@
+keel verify --wait: the ladder that wrote .keel/metrics/verify-receipt.toml has ended (head 66f74bd0, at 1789725917)
+  validate  pass             0 s
+  guard     pass             4 s
+  clippy    pass           112 s
+  probe     pass             6 s
+  touched   fail (101)     977 s
+keel verify: fail - stopped at touched after 1102 s; receipt .keel/metrics/verify-receipt.toml

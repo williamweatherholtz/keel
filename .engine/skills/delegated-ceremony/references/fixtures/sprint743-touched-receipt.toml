@@ -1,0 +1,22 @@
+# The touched receipt of sprint 743's ended ladder (issue603), RECONSTRUCTED from the sprint's recorded
+# evidence: 880 passed, 23 failed, every failure an init-scaffolded project whose gate the source-reference
+# guard reddened (sprint743_sourceCitationsOnTheLivingDocsResolve.sysml). The 23 names were not recorded and
+# `failing` is left empty; check_receipt.py holds a receipt to outcome, passed, failed and at, not to names.
+# `at` is one second before the ladder's own (the ladder writes this file, then its receipt).
+head = "66f74bd0"
+at = 1789725916
+base = "origin/main"
+stems = ["guard_names", "init", "surface"]
+unattributed = []
+tests = []
+lib = true
+members = []
+outcome = "fail"
+passed = 880
+failed = 23
+failing = []
+ran = []
+skipped = []
+seconds = 977
+runner = "cargo-nextest 0.9.144"
+log = "./.keel/metrics/touched-1789724942.log"

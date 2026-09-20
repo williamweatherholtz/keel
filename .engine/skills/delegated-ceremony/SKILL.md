@@ -6,7 +6,8 @@ description: |
   the ceremony through the keel write API from that receipt ONLY. Use when a sprint's
   gate results, DoD results or sprint record are owed and the session can spawn
   subagents; dispatch by pointing at this skill, never by retyping a brief. Carries
-  the two dispatch briefs verbatim and the recorder's report check
+  the two dispatch briefs verbatim and the two checks: the verifier's receipt against the
+  ladder that ended (references/check_receipt.py) and the recorder's report
   (references/check_report.py). Deploys .engine/processes/delegated-ceremony.sysml.
 metadata:
   version: 0.1.0
@@ -28,7 +29,7 @@ and it reported "All issues resolved ... ready for commit" over a tree whose gua
 | Role | Agent type | Reads | Writes |
 |---|---|---|---|
 | PRIMARY | the session | everything | the substance: code, design, analysis; the dispatches below |
-| VERIFIER | `verifier` (haiku) | the tree; the commands' output (`keel verify . --probe-from <PAIR FILE>` - the D0476 ladder: validate, guard, clippy, the probe pair, suite --touched, stopping at the first red - plus check-engine and sync-claude --check) | ONE receipt file in the scratchpad. Nothing under `.tracking/`, `.engine/`, `keel-cli/`, `.claude/`, `CLAUDE.md`; no `keel record`; no git |
+| VERIFIER | `verifier` (haiku) | the tree; the commands' output (`keel verify . --probe-from <PAIR FILE>` - the D0476 ladder: validate, guard, clippy, the probe pair, suite --touched, stopping at the first red - plus check-engine and sync-claude --check) | ONE receipt file in the scratchpad, rendered by `scripts/verify_receipt.py` and passed by `references/check_receipt.py` against the ladder that ended before it returns (D0538). Nothing under `.tracking/`, `.engine/`, `keel-cli/`, `.claude/`, `CLAUDE.md`; no `keel record`; no git |
 | RECORDER | `recorder` (haiku) | the verifier's receipt file ONLY - never the primary's account of the work | `keel record ...` calls ONLY. No Write/Edit on any tree file (the agent has neither tool); no git |
 
 The agent types are `.claude/agents/verifier.md` and `.claude/agents/recorder.md`. They carry the
@@ -49,8 +50,13 @@ lines, the known-positive command then the known-negative, written by the primar
 PROBE PAIR: not named by the dispatch). The receipt is RENDERED (D0533): after `KEEL verify --wait .`
 run `python scripts/verify_receipt.py --root . --keel <KEEL> --out <ABS SCRATCH PATH>/verifier-receipt.txt`
 until it exits 0 or 3 (exit 2 = WAIT, call again), adding `--noted "<line>"` only for a write you noticed is
-owed; never open or edit the file it wrote. Return only its path and its DISCREPANCIES line. You write
-nothing else anywhere.
+owed; never open or edit the file it wrote. Then run
+`python <ABS ROOT>/.claude/skills/delegated-ceremony/references/check_receipt.py <ABS SCRATCH PATH>/verifier-receipt.txt --root . --keel <KEEL>`
+(D0538): it runs `KEEL verify --wait .` again and holds the receipt to verify-receipt.toml and
+touched-receipt.toml. Return only the receipt's path, its DISCREPANCIES line and check_receipt.py's
+verdict line (`check_receipt: pass ...`, or `check_receipt: REFUSED (n):` with its lines quoted). A
+refused receipt is returned refused - never retyped, re-rendered by hand, or rerun to a pass. You
+write nothing else anywhere.
 ```
 
 The primary fills `<KEEL>`, `<ABS ROOT>`, the pair file's path and the scratch path. The pair file
@@ -102,6 +108,42 @@ the write it names and run it again; return the report only when it passes, and 
 The primary fills `<COUNT>` with the number of records it listed under "Records owed" - the count is
 the control (D0492); the list alone was the reminder sprint 723's first recorder ignored.
 
+## What the receipt check refuses (references/check_receipt.py, D0538)
+
+`check_receipt.py <RECEIPT> --root <ROOT> --keel <KEEL>` runs `keel verify --wait ROOT` - which blocks
+while the ladder's writer pid lives and returns the ladder's own exit once it has ended - then reads
+`.keel/metrics/verify-receipt.toml` and `touched-receipt.toml` and refuses the receipt when:
+
+1. `--wait` reports no ended ladder (in flight, `KILLED`, or no receipt) - the ladder has no verdict to
+   check against; the refusal names `--wait`'s exit and last line, and says to relaunch;
+2. the receipt says the ladder did not end - no `VERIFIER RECEIPT` header, `KILLED` in its `LADDER`
+   line, `outcome=running`, or a rung verdict `killed` - while `--wait` reports it ended; the refusal
+   names the rung and exit `--wait` printed. Sprint 743's verifier returned `LADDER -> KILLED during
+   touched; exit=2`, `touched=killed`, `DISCREPANCIES: pid 29824 dead` while that pid was alive and the
+   ladder went on to end `touched fail (101)` (issue603);
+3. the receipt's `LADDER` line carries an `at=` other than the ended ladder's - a render of another
+   run (sprint 743's tree held two ladders at one head fifty minutes apart) - or no `at=` at all;
+4. `LADDER outcome=` or `stopped_at=` differs from the file;
+5. any of the five rung verdicts differs from the file's `[[rung]]` row;
+6. the `TOUCHED RECEIPT` line's `at=`, `outcome`, `passed` or `failed` differ from
+   `touched-receipt.toml` when the ladder reached that rung, the file is absent, the line says the rung
+   was not reached while `stopped_at` says it was, or the line quotes touched counts for a ladder that
+   stopped before touched;
+7. `verify-receipt.toml`'s `at=` moved between `--wait` and the read - another ladder launched under the
+   check.
+
+A receipt rendered by `scripts/verify_receipt.py` after `--wait` returned passes by construction; the
+check costs one `--wait` call on an ended ladder. `python check_receipt.py --probe` runs the D0388 pairs
+over the sprint 743 files (`fixtures/sprint743-wait.txt`, exit 101; `sprint743-verify-receipt.toml` and
+`sprint743-touched-receipt.toml`, reconstructed from the `--wait` table and the sprint's recorded counts):
+`fixtures/positive-sprint743-killed-while-ended.txt` (the receipt as returned; refused naming
+`stopped at touched fail (101)`), `fixtures/negative-sprint743-rendered-fail.txt` (its D0533 render:
+touched fail, 880 passed, 23 failed; passes), `fixtures/positive-rendered-killed-while-ended.txt` (the
+renderer's one-line KILLED form over an ended ladder; refused) and
+`fixtures/positive-sprint743-other-run-quoted.txt` (the following run's receipt, at=1789728746, pass
+904/0; refused naming both `at=` values). `--probe <FIXTURE>` runs one row and exits 0 when that side
+holds - the form each line of a pair file takes.
+
 ## What the check refuses (references/check_report.py)
 
 1. an undeclared marker anywhere in the report (`#Addresses`; the marker-vocabulary guard's own
@@ -150,9 +192,11 @@ exits 0 when that side holds - the form each line of a pair file takes, since th
 to exit 0 (sprint 724's first dispatch named the bare checker runs, and the positive's exit 1 stopped the
 ladder at the probe rung).
 
-## What the primary does with the report
+## What the primary does with the receipt and the report
 
-Reads it back from the tree, not from the report: `KEEL show verification . --pending`, the sprint
+A receipt `check_receipt.py` refused is not a dispatch input: `dcyDispatchRecorder` waits on a passed
+one, and the refusal lines say whether the ladder is to be relaunched or the receipt re-rendered by the
+verifier. The report it reads back from the tree, not from the report: `KEEL show verification . --pending`, the sprint
 file, `KEEL gate guard --no-receipt .`. A `REFUSED:` line is the primary's write to make (a `--fill`
 edge, a DoD sentence naming an obligation) - or its decision not to. A `recorder:tree-red` line in
 `.keel/metrics/hooks.jsonl` means a recorder left the tree red; a `verifier:tree-written` line means

@@ -2667,4 +2667,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcReceiptQuotesOnlyTheRunItDescribes to issue664;
+
+    part issue665 : Issue {
+        :>> id = "fa495354-d091-475d-bfd5-9377af1c7fca";
+        :>> title = "Ladder and touched receipts are one file each, overwritten by every launch - a dispute older than one launch is reconstructed";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The ladder receipt (.keel/metrics/verify-receipt.toml) and the touched receipt (touched-receipt.toml) are each one file rewritten by every launch. At sprint 755 (2026-09-20) the check_receipt.py fixtures for the sprint 743 dispute (issue603, ladder at=1789725917, touched fail 880/23) had to be reconstructed from the session transcript's keel verify --wait table and the sprint's recorded counts: the receipt had been overwritten by the next ladder (at=1789728746) within the hour, and keel land rewrote touched-receipt.toml again after the sprint 754 ladder (live at=1789912024, outcome empty, against the ladder's 1789893069). The touched log is already kept per launch (touched-<epoch>.log); the two receipts that a later check - check_receipt.py, a retro, a human reading a dispute - needs are not. Any receipt dispute older than one launch is therefore reconstructed, and a reconstruction is what issue603's whole class is about.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcLadderReceiptIsKeptPerLaunch to issue665;
+
+    part issue666 : Issue {
+        :>> id = "f2b0c123-3b90-4e6a-b8c5-58fdce157c88";
+        :>> title = "Verifier receipt quoted the previous run's test summary and launch epoch beside this run's counts - the renderer's stdout and epoch sources are not held to the ladder";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Sprint 755's second verifier receipt rendered the ladder that ended at=1789916017 (918 passed, 0 failed) with launch=1789914168 and a test result line reading '917 passed in 846s ... 1 failed, failing [init_smoke]' - the FIRST run's summary. The verifier's launch did not rewrite .keel/metrics/verify-launch.epoch (mtime 1789914168) or verify-touched.out (mtime 1789915151), both older than this ladder's launch (at - seconds = 1789915340), and scripts/verify_receipt.py read them as this run's: test_summary_line takes the last summary line of whatever verify-touched.out holds, and the launch check at >= epoch is satisfied by any epoch older than the ladder. check_receipt.py holds outcome, stopped_at, rung verdicts and the touched counts to the toml receipts and passed the receipt correctly; the stale lines are advisory, and the test-verify table says the test result line is never a discrepancy. A reader of the receipt saw two contradicting counts on one page. Control owed: the renderer marks verify-touched.out older than the ladder's launch STALE and a summary line whose passed/failed disagree with touched-receipt.toml a DISCREPANCY, the epoch is held to the ladder's launch window rather than merely preceding its end, and check_receipt.py refuses a receipt whose test result line counts disagree with the touched receipt.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRendererHoldsItsAuxiliarySourcesToTheLadder to issue666;
 }

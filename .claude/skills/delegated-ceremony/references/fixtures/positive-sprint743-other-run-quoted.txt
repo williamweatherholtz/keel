@@ -1,0 +1,12 @@
+VERIFIER RECEIPT  2026-09-18  head=66f74bd0  tree=12 dirty paths
+LADDER: keel verify . --probe-from C:/Users/WILLIA~1/AppData/Local/Temp/claude/C--Users-WilliamWeatherholtz-claude-code-sysmlv2-ai-toolkit/b43aa4fc-84f7-4c3d-bc35-61eccafbbda8/scratchpad/pair743.txt -> outcome=pass stopped_at=none seconds=1023 at=1789728746 (at > launch: ok)
+  validate=pass guard=pass clippy=pass probe=pass touched=pass
+  first red line: none
+keel gate check-engine . -> .engine instance files validated clean (kernel-free; D0112 phase 2).; exit=0
+keel sync-claude --check . -> claude-surface: keel-owned subset matches this binary's generator (47 registry skill(s)); exit=0
+PROBE PAIR: --probe-from C:/Users/WILLIA~1/AppData/Local/Temp/claude/C--Users-WilliamWeatherholtz-claude-code-sysmlv2-ai-toolkit/b43aa4fc-84f7-4c3d-bc35-61eccafbbda8/scratchpad/pair743.txt: python C:/Users/WILLIA~1/AppData/Local/Temp/claude/C--Users-WilliamWeatherholtz-claude-code-sysmlv2-ai-toolkit/b43aa4fc-84f7-4c3d-bc35-61eccafbbda8/scratchpad/pos743.py ; python C:/Users/WILLIA~1/AppData/Local/Temp/claude/C--Users-WilliamWeatherholtz-claude-code-sysmlv2-ai-toolkit/b43aa4fc-84f7-4c3d-bc35-61eccafbbda8/scratchpad/neg743.py -> positive case: pass; negative case: pass
+TOUCHED RECEIPT: outcome=pass passed=904 failed=0 seconds=935 at=1789728746 launch=1789727711 (at > launch: ok)
+  stems=[guard_names, init, surface] changed=[guard_names, init, surface] (MATCH) lib=true head=66f74bd0 log=./.keel/metrics/touched-1789727805.log
+  test result line: "federation::f1_a_scaffolded_project_can_make_its_first_commit_at_any_path_shape" millis=338105 verdict=pass (critical path, 5m 38s)
+DISCREPANCIES: NONE
+OWED WRITES: NONE
