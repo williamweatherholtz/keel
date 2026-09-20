@@ -6980,6 +6980,90 @@ fact("elevenHeldTheReceiptReadAgainstTheLadder", {
      "issue666. issue603: declared anywhere under .tracking or the decisions, and whether `" + KEEL + " show open-issues .` still lists it. retroIssues: "
      "the `part issueNNN : Issue` declaration and the `#Resolves` edge beside it in issues-claudeFable5.sysml. live: each guard's last line as section 55.")
 
+# ================================================================ 61. the fifty-eighth publish: the twelfth held Decision - every guards.md row names the family that dispatches it
+# The queue after sprint 756 (D0539): the eleven of the fifty-seventh page still wait and one held process change joins them -
+# doc-guard-count gains a second clause: in a catalogue file whose table header declares the Family column it reads every row
+# and fails an empty cell, a non-family, or another family, naming file:line, the row, the cell and the dispatching module.
+# The catalogue is counted here (rows, cells, families as module files) and the guard is run live.
+_gmd61 = read(os.path.join(REPO, ".engine", "docs", "guards.md")) or ""
+_fam_dir61 = os.path.join(REPO, "members", "keel-guards", "src")
+_rows61 = [(n + 1, m.group(1), m.group(2).strip()) for n, l in enumerate(_gmd61.splitlines())
+           for m in [re.match(r"^\| `([^`]+)` \|([^|]*)\|", l)] if m]
+_fam_names61 = sorted({c for _, _, c in _rows61 if c})
+_fam_files61 = {f: os.path.isfile(os.path.join(_fam_dir61, f + ".rs")) for f in _fam_names61}
+_headers61 = [n + 1 for n, l in enumerate(_gmd61.splitlines()) if l.startswith("| Guard | Family |")]
+def _row_under_header61(lineno):
+    lines = _gmd61.splitlines()
+    i = lineno - 2
+    while i >= 0:
+        l = lines[i]
+        if l.startswith("| Guard |"):
+            return True
+        if not l.strip() or l.startswith("## "):
+            return False
+        i -= 1
+    return False
+_enf61 = read(os.path.join(_fam_dir61, "enforcement.rs")) or ""
+_lib61 = read(os.path.join(_fam_dir61, "lib.rs")) or ""
+_ok61g, _out61g = run([KEEL, "gate", "guard", "doc-guard-count", ".", "--no-receipt"], timeout=300)
+_s756 = read(os.path.join(REPO, ".tracking", "delivery", "sprint756_guardsCatalogueNamesTheFamily.sysml")) or ""
+_iss61 = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_ok61o, _out61o = run([KEEL, "show", "open-issues", "."], timeout=120)
+_open61 = set(re.findall(r"\bissue\d+\b", _out61o or "")) if _ok61o else None
+_ok61q, _out61q = run([KEEL, "show", "authority-queue", "."], timeout=120)
+try:
+    _aq61 = json.loads(_out61q) if _ok61q else None
+except ValueError:
+    _aq61 = None
+_dec_rows61 = [r for r in ((_aq61 or {}).get("awaiting") or []) if r.get("kind") == "decisionAcceptance"]
+_need_rows61 = [r for r in ((_aq61 or {}).get("awaiting") or []) if r.get("kind") == "needAcceptance"]
+_ok61v, _out61v = run([KEEL, "version"], timeout=60)
+_m61 = re.search(r"guards: (\d+) \(", _out61v or "")
+fact("twelveHeldTheCatalogueNamesTheFamily", {
+    "held": _held58("d0539"),
+    "queue": {"exit0": _ok61q, "count": (_aq61 or {}).get("count"),
+              "decisionRows": sorted(r["item"] for r in _dec_rows61), "needRows": len(_need_rows61)},
+    "catalogue": {"rows": len(_rows61), "rowsWithFamily": len([r for r in _rows61 if r[2]]),
+                  "rowsWithoutFamily": [name for _, name, c in _rows61 if not c],
+                  "familyHeaders": len(_headers61),
+                  "families": _fam_names61, "familyModuleFiles": _fam_files61,
+                  "everyFamilyIsAModule": all(_fam_files61.values()) if _fam_files61 else None,
+                  "rowsOutsideATable": [name for n, name, _ in _rows61 if not _row_under_header61(n)],
+                  "enforcedGuards": int(_m61.group(1)) if _m61 else None,
+                  "preambleNamesTheColumn": "The `Family` column is the guard's code home" in _gmd61},
+    "code": {"clauseInDocGuardCount": "violations.extend(family_cell_violations(&rel, &text));" in _enf61,
+             "headerConstant": 'const FAMILY_COLUMN_HEADER: &str = "| Guard | Family |";' in _enf61,
+             "familyOfReadsFamilies": "pub(crate) fn family_of(guard: &str) -> Option<&'static str>" in _enf61,
+             "positiveTest": "fn a_row_under_another_family_fails_naming_the_row_and_both_families()" in _enf61,
+             "negativeTest": "fn the_shipped_catalogue_names_every_guards_family()" in _enf61,
+             "silentWithoutHeader": "fn a_file_without_the_column_claims_nothing()" in _enf61,
+             "rowsInsideATableTest": "fn every_catalogue_row_sits_inside_a_table()" in _lib61},
+    "guardRun": {"exit0": _ok61g, "lastLine": ((_out61g or "").strip().splitlines() or [""])[-1]},
+    "sprint756": {"exists": bool(_s756),
+                  "chartered": "#CharteredBy dependency from guardsCatalogueNamesTheFamilyStory to d0539;" in _s756,
+                  "gateResults": len(re.findall(r"GateR\d+ : TestResult", _s756)),
+                  "gatePasses": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::pass", _s756)),
+                  "gateProposed": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::proposed", _s756)),
+                  "storyDodPass": bool(re.search(r"part storyGuardsCatalogueNamesTheFamilyDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _s756)),
+                  "dodOnBacklog": bool(re.search(r"part dcGuardsCatalogueNamesTheFamilyDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _bl)),
+                  "retroNamesIssues": all(n in _s756 for n in ("issue584", "issue667", "issue668"))},
+    "resolvedIssues": {n: {"declared": bool(re.search(r"part issue" + n + r" : Issue\b", _corpus58 + _iss61)),
+                           "open": ("issue" + n in _open61) if _open61 is not None else None}
+                       for n in ("584", "667")},
+    "issue668": {"declared": bool(re.search(r"part issue668 : Issue\b", _iss61)),
+                 "resolver": (re.search(r"#Resolves dependency from (\w+) to issue668;", _iss61) or [None, None])[1],
+                 "open": ("issue668" in _open61) if _open61 is not None else None, "openIssuesExit0": _ok61o},
+    "live": {"processChange": _guard55("process-change"), "docGuardCount": _guard55("doc-guard-count")},
+}, "the twelfth held Decision, the queue's rows, the catalogue counted, the clause and its tests in source, the guard run live, the sprint's results, the two resolving issues and the tier issue",
+     _DEC_HOW + " fork/options/recommended/held/derivedFrom/dependsOn as section 58. queue: `" + KEEL + " show authority-queue .` run here - awaiting "
+     "rows by kind. catalogue: every line of .engine/docs/guards.md matching `| `name` | cell |` counted, its second cell taken as the family; "
+     "families = the distinct cells, each looked up as members/keel-guards/src/<cell>.rs; rowsOutsideATable = rows with no `| Guard |` header above "
+     "them before a blank line or heading (the issue667 shape); enforcedGuards from `" + KEEL + " version`. code: literal phrases in enforcement.rs and "
+     "lib.rs. guardRun: `" + KEEL + " gate guard doc-guard-count . --no-receipt` run here, exit and last line. sprint756: the delivery file's #CharteredBy "
+     "edge, GateR results by verdict, the story DoD result; the DoD result in backlog.sysml; the retro naming the three issues. resolvedIssues/issue668: "
+     "the `part issueNNN : Issue` declaration, the `#Resolves` edge beside it, and whether `" + KEEL + " show open-issues .` still lists it. live: each "
+     "guard's last line as section 55.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "

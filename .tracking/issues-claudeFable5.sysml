@@ -2711,4 +2711,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcGuardTierHasOneHome to issue668;
+
+    part issue669 : Issue {
+        :>> id = "4bf29b72-b226-40d0-9969-bc390c79ffdd";
+        :>> title = "The recorder's owed count is typed by the primary and nothing computes it from the sprint - sprint 756 omitted its story DoD result and the report check passed";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The recorder's owed count is typed by the primary and nothing computes it from the sprint. Sprint 756's first recorder dispatch owed 7 (six gate results on the delivery file and the DoD result on backlog.sysml) and omitted the story DoD result the sprint file's own Test declares; check_report.py --owed 7 --root passed the report because seven were owed and seven landed - the count it holds a report to is the dispatch's, and the dispatch is prose the primary wrote from memory of the previous sprint's list. Sprints 753, 754 and 755 each carry a storyXxxDoDR1 result; 756 had none until a second recorder was dispatched for the one record (recorder-report-756.txt, then recorder-report.txt of 2026-09-20). The omission is invisible to every control that exists: check_receipt.py reads the ladder, check_report.py reads the report against the dispatch's count and the tree's gained results, the sprint gates read their own results, and no view lists a sprint Test with no result at closeOut. Root: the owed set is derivable - every Test the sprint file declares (the phase gates and the story DoD) plus the DoD of each task the story #Delivers - and a derivable fact typed by hand drifts (D0018). Control: the owed list and its count are computed from the sprint file by a keel lens the dispatch quotes, and check_report.py under --sprint FILE derives N itself and refuses a report that accounts for fewer than the sprint owes, naming each Test with no result.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcOwedRecordsAreComputedFromTheSprint to issue669;
 }
