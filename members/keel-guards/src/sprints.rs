@@ -134,6 +134,13 @@ pub fn sprint_closure(root: &Path) -> GuardReport {
     };
     // The in-progress exemption: the single highest sprint number present.
     let newest = files.iter().filter_map(|p| number(p)).max();
+    // D0515: the DoD results a delivered item may carry live beside its DoD Test - in the backlog, not
+    // the delivery file - so the whole `.tracking` corpus's result names are read once.
+    let all_results: HashSet<String> = keel_model::corpus::collect_sysml(&root.join(".tracking"))
+        .iter()
+        .filter_map(|p| keel_model::corpus::read_to_string(p).ok())
+        .flat_map(|src| sprint_tasks_and_results(&src).1)
+        .collect();
     let mut violations = Vec::new();
     let mut scanned = 0usize;
     for path in &files {
@@ -141,12 +148,24 @@ pub fn sprint_closure(root: &Path) -> GuardReport {
         if !src.contains("action def ") {
             continue;
         }
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+        let delivered = delivers_targets(&src);
+        // D0515 clause 2: a sprint recorded on or after the Decision's acceptance names what it delivers.
+        // Every sprint, the newest included - the edge is authored at prep, so its absence is a prep
+        // omission visible now, not an in-progress state.
+        if delivered.is_empty() && story_created_at(&src).is_some_and(|d| d >= DELIVERS_REQUIRED_FROM) {
+            violations.push(format!(
+                "{name}: the Story carries no #Delivers edge, and the sprint was recorded on or after \
+                 {DELIVERS_REQUIRED_FROM} — a sprint names the backlog item it delivers, one edge per item \
+                 beside the charter edge; a ceremony-only sprint with nothing to deliver is the unfit case, \
+                 to be named, never silently exempted (D0515)"
+            ));
+        }
         if number(path).is_some() && number(path) == newest {
             continue; // in progress — see doc comment
         }
         let (tasks, results) = sprint_tasks_and_results(&src);
         scanned += tasks.len();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
         for t in tasks {
             if !results.iter().any(|r| r.starts_with(&t)) {
                 violations.push(format!(
@@ -156,9 +175,43 @@ pub fn sprint_closure(root: &Path) -> GuardReport {
                 ));
             }
         }
+        // D0515 clause 1: every delivered item's DoD has a result once work has moved on. Sprints 720
+        // and 735 (issue563/issue589) closed with the sprint story stamped and the backlog item it
+        // delivered left open, because nothing read the DoD's prose for what was delivered.
+        scanned += delivered.len();
+        for item in delivered {
+            let dod = format!("{item}DoD");
+            if !all_results.iter().any(|r| r.starts_with(&dod)) {
+                violations.push(format!(
+                    "{name}: delivers `{item}`, whose DoD has no TestResult, but work has moved on to a \
+                     later sprint — the sprint closed on its own story while the item it delivered stays \
+                     open (D0515/issue563/issue589)"
+                ));
+            }
+        }
     }
     violations.sort();
     GuardReport { name: "sprint-closure", scanned, warnings: Vec::new(), violations }
+}
+
+/// D0515 accepted on this date: a sprint recorded on or after it names what it delivers. Sprints before
+/// it carry no edge and are history - nothing backfills by guessing from a shared slug.
+pub(crate) const DELIVERS_REQUIRED_FROM: &str = "2026-09-18";
+
+/// The targets of every `#Delivers dependency from <story> to <item>;` in a delivery file.
+pub(crate) fn delivers_targets(src: &str) -> Vec<String> {
+    src.lines()
+        .filter_map(|l| l.trim().strip_prefix("#Delivers dependency from "))
+        .filter_map(|rest| rest.split_once(" to "))
+        .filter_map(|(_, target)| target.trim().strip_suffix(';'))
+        .map(|t| t.trim().to_string())
+        .collect()
+}
+
+/// The Story's `createdAt` in a delivery file: the first `createdAt = "..."` after `: Story {`.
+pub(crate) fn story_created_at(src: &str) -> Option<&str> {
+    let after = src.split_once(": Story {")?.1;
+    after.split_once("createdAt = \"")?.1.split('"').next()
 }
 
 // ── ceremony guard (gate ordering + retro-scan evidence) ───────────────────────────────────────

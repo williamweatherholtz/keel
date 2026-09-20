@@ -6,6 +6,8 @@ package ProjectDeliveryS747 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from sittingReviewByAnalysisStory to d0510;
+    #Delivers dependency from sittingReviewByAnalysisStory to dcSittingReviewIsFinishedByAnalysis;
+    #Delivers dependency from sittingReviewByAnalysisStory to dcGuardReaderSkipsStringLiterals;
 
     part sittingReviewByAnalysisStory : Story {
         :>> id = "545c072f-fca7-43d0-8835-bcf8c89de4d4";

@@ -2634,4 +2634,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcAuthorityQueueListsNeedsAwaitingAcceptance to issue661;
+
+    part issue662 : Issue {
+        :>> id = "2fc43cb4-dfad-45e5-8664-24ee148abf05";
+        :>> title = "control-map-reconciled never reads the guard set: seventeen guards have no control-map row";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found in the sprint 753 retro while doc-syncing D0515: the Decision's consequences said control-map.sysml carries the widened sprint-closure clause on the existing row, and no row for sprint-closure existed. A count of `guard: <name>` SystemSafetyConstraint titles in .tracking/architecture/control-map.sysml against the guard rows of .engine/docs/guards.md found eighteen guards with no row (sprint-closure among them; seventeen after this sprint authored gSprintClosure). guards.md's control-map-reconciled row claims every enforced guard is a SystemSafetyConstraint bound to a hazard; the code (control_map_reconciled, members/keel-guards/src/enforcement.rs) reconciles control-events.toml event blocks against declared controls and never reads the guard set, so the claim is a doc line, not a check. Consequence: keel show controls computes hazard coverage over declared controls, so a guard no row names cannot show as covering, and a hazard only it covers cannot show as covered - the D0254 third failure class the guard was chartered to close, open for guards.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcEveryGuardHasAControlMapRow to issue662;
 }

@@ -6,6 +6,7 @@ package ProjectDeliveryS749 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from briefDraftKeyIsThePublishedSetStory to d0359;
+    #Delivers dependency from briefDraftKeyIsThePublishedSetStory to dcBriefDraftKeyIsThePublishedSet;
 
     part briefDraftKeyIsThePublishedSetStory : Story {
         :>> id = "99f39e0b-115e-4261-ba1d-c0bf54ea6b6b";

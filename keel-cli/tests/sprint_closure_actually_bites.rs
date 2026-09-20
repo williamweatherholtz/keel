@@ -95,6 +95,84 @@ fn stamping_the_task_clears_the_violation() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+// ── D0515: THE ITEM THE SPRINT DELIVERS (issue563 / issue589) ────────────────────────────────
+
+/// A sprint file whose Story is stamped, recorded on `created_at`, delivering `item` by edge (or not).
+fn delivering_sprint(root: &Path, n: u32, created_at: &str, item: Option<&str>) {
+    let edge = item.map_or(String::new(), |i| format!("    #Delivers dependency from s{n}Story to {i};\n"));
+    let body = format!(
+        "package S{n} {{\n    #CharteredBy dependency from s{n}Story to d0001;\n{edge}\n\
+         \x20   part s{n}Story : Story {{ :>> id = \"s{n}\"; :>> createdAt = \"{created_at}\"; }}\n\
+         \x20   action def Run{n} {{\n        action storyS{n};\n\
+         \x20       verification storyS{n}DoD : Test {{ :>> id = \"t{n}\"; }}\n\
+         \x20       part storyS{n}DoDR1 : TestResult {{ :>> id = \"r{n}\"; :>> outcome = VerdictKind::pass; }}\n    }}\n}}\n"
+    );
+    std::fs::write(delivery(root).join(format!("sprint{n:03}_probe.sysml")), body).expect("write");
+}
+
+/// The backlog declaring `item` with its DoD, stamped or not - the result lives HERE, beside the DoD,
+/// never in the delivery file.
+fn backlog(root: &Path, item: &str, stamped: bool) {
+    let result = if stamped {
+        format!("        part {item}DoDR1 : TestResult {{ :>> id = \"b1\"; :>> outcome = VerdictKind::pass; }}\n")
+    } else {
+        String::new()
+    };
+    let body = format!(
+        "package B {{\n    action def Backlog {{\n        action {item};\n\
+         \x20       verification {item}DoD : Test {{ :>> id = \"bt\"; }}\n{result}    }}\n}}\n"
+    );
+    std::fs::create_dir_all(root.join(".tracking")).expect("mkdir");
+    std::fs::write(root.join(".tracking").join("backlog.sysml"), body).expect("write backlog");
+}
+
+/// D0388 known-positive: sprint N delivers X, X's DoD has no result, sprint N+1 exists - red naming X
+/// and the sprint. This is sprint 720 (issue563) and sprint 735 (issue589): the story stamped, the
+/// delivered item left open, the frontier serving finished work as ready.
+#[test]
+fn a_delivered_item_left_open_while_work_moved_on_is_a_violation_naming_the_item() {
+    let root = fresh("delivers-open");
+    delivering_sprint(&root, 720, "2026-09-19", Some("dcDeliveredThing"));
+    delivering_sprint(&root, 721, "2026-09-19", Some("dcDeliveredThing"));
+    backlog(&root, "dcDeliveredThing", false);
+    let v = violations(&root);
+    assert_eq!(v.len(), 1, "sprint 720 delivers an open item and work moved on: {v:?}");
+    assert!(
+        v[0].contains("dcDeliveredThing") && v[0].contains("sprint720") && v[0].contains("D0515"),
+        "the violation names the item AND its sprint: {v:?}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// D0388 known-negative: the same fixture with X's DoD result recorded in the backlog is green - the
+/// stamp is what clears it, and the guard reads it where it lives.
+#[test]
+fn a_delivered_item_with_its_dod_result_is_clean() {
+    let root = fresh("delivers-stamped");
+    delivering_sprint(&root, 720, "2026-09-19", Some("dcDeliveredThing"));
+    delivering_sprint(&root, 721, "2026-09-19", Some("dcDeliveredThing"));
+    backlog(&root, "dcDeliveredThing", true);
+    let v = violations(&root);
+    assert!(v.is_empty(), "the delivered item's DoD result clears it: {v:?}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// D0515 clause 2, both arms: a Story recorded on or after 2026-09-18 with no #Delivers edge is red
+/// (the newest sprint included - the edge is authored at prep); one recorded before that date is history.
+#[test]
+fn a_sprint_recorded_after_d0515_names_what_it_delivers_and_earlier_ones_are_history() {
+    let root = fresh("delivers-edge");
+    backlog(&root, "dcDeliveredThing", true);
+    delivering_sprint(&root, 700, "2026-09-17", None);
+    delivering_sprint(&root, 701, "2026-09-18", None);
+    let v = violations(&root);
+    assert_eq!(v.len(), 1, "only the sprint recorded on/after the date owes an edge: {v:?}");
+    assert!(v[0].contains("sprint701") && v[0].contains("#Delivers"), "{v:?}");
+    delivering_sprint(&root, 701, "2026-09-18", Some("dcDeliveredThing"));
+    assert!(violations(&root).is_empty(), "authoring the edge clears it");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 // ── THE LIVE TREE: the ratchet starts clean, and that is asserted, not assumed ────────────────
 
 #[test]

@@ -6,6 +6,7 @@ package ProjectDeliveryS740 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from sharedHelpersDescendBelowTheVerbsStory to d0479;
+    #Delivers dependency from sharedHelpersDescendBelowTheVerbsStory to dcSharedHelpersDescendBelowTheVerbs;
 
     part sharedHelpersDescendBelowTheVerbsStory : Story {
         :>> id = "cd9bce9a-beee-4160-87b2-79ac880a027a";

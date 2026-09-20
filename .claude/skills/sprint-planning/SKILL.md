@@ -71,9 +71,19 @@ dependency unresolved; DoD criteria exist or are authored during refine.
    is computed from (pglViews). The charter guard (`keel gate guard charter`) FAILS any newly-added
    sprint whose Story has no `#CharteredBy` edge — so set it now.
 
+4c. **Name what the sprint delivers (D0515) — beside the charter edge.** One `#Delivers` edge from the
+   sprint Story to each backlog action it delivers: `#Delivers dependency from <story> to <dcItem>;`.
+   `keel record sprint N slug --charter dNNNN --fill F` authors them from the fill's `delivers` key
+   (the backlog actions, comma-separated; each must be a declared `action`, or the write refuses by
+   name). The sprint-closure guard reads the edge: once a later sprint exists, every delivered item's
+   DoD has a TestResult, or the guard names the sprint and the item; a sprint recorded on or after
+   2026-09-18 whose Story carries no `#Delivers` edge is a violation too. A ceremony-only sprint with
+   nothing to deliver is the unfit case — name it when it first occurs, never exempt it silently.
+
 5. **Run the DoR checklist:**
    - estimatedPoints set ✓
    - `#CharteredBy` edge set on the Story (charter lineage, D0068) ✓
+   - `#Delivers` edge set from the Story to each delivered backlog action (D0515) ✓
    - Scope / acceptance criteria unambiguous ✓
    - No blocking dependency or dependency is explicitly listed ✓
    - DoD tests exist or will be authored in refine ✓

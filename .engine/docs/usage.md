@@ -129,6 +129,7 @@ collision, not a merge.
 | Function F runs on component C | `allocate f to c;` |
 | D2 replaces D1 | a `dependency` from D2 to D1 marked `#Supersede` |
 | Work W was chartered by origin O | `#CharteredBy dependency from W to O;` (D0068; carries process identity by lineage) |
+| Sprint story S delivers backlog action X | `#Delivers dependency from S to X;` (D0515; authored at prep by `record sprint --fill` from the `delivers` key; sprint-closure holds X to a DoD result once a later sprint exists) |
 | Decision D changed a process | `#ProspectiveChange part D : Decision { ... }` (`#SafetyChange` = downstream must reprocess) — a prefix marker on the Decision; which process is git-derived (D0070) |
 
 ## What never goes in the model

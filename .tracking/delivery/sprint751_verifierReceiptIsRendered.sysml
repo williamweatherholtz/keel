@@ -6,6 +6,7 @@ package ProjectDeliveryS751 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from verifierReceiptIsRenderedStory to d0533;
+    #Delivers dependency from verifierReceiptIsRenderedStory to dcVerifierReceiptOutcomeIsRenderedNotTyped;
 
     part verifierReceiptIsRenderedStory : Story {
         :>> id = "07d5cda3-e1b9-4481-8d70-d3277aee2645";

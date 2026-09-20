@@ -6,6 +6,7 @@ package ProjectDeliveryS748 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from fourStayingModulesAreMembersStory to d0513;
+    #Delivers dependency from fourStayingModulesAreMembersStory to dcTheFourStayingModulesAreMembers;
 
     part fourStayingModulesAreMembersStory : Story {
         :>> id = "16bbd035-90a3-4b4b-93d0-0b67e1672fb6";

@@ -6,6 +6,7 @@ package ProjectDeliveryS741 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from touchedSetDescendsTheWorkspaceStory to d0481;
+    #Delivers dependency from touchedSetDescendsTheWorkspaceStory to dcTouchedSetDescendsTheWorkspace;
 
     part touchedSetDescendsTheWorkspaceStory : Story {
         :>> id = "78a24bab-afdd-4c9c-a058-847ca7eb48fc";

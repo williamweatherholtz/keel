@@ -158,9 +158,10 @@ pub fn cmd_new(args: &[String]) -> i32 {
         }
     };
     // issue267/D0301: `--fill FILE` writes the record's PROSE from a `--- key` draft (purpose, dod,
-    // refine, standup, implement, review, closeOut, retro) - the sanctioned path for what a scratchpad
-    // script used to emit, TestResult lines included. The fill writes no result; append-result and
-    // append-gate-result are the only writers of verdicts.
+    // delivers, refine, standup, implement, review, closeOut, retro) - the sanctioned path for what a
+    // scratchpad script used to emit, TestResult lines included. `delivers` names the backlog actions the
+    // Story delivers, comma-separated, each authored as a #Delivers edge beside the charter edge (D0515).
+    // The fill writes no result; append-result and append-gate-result are the only writers of verdicts.
     if let Some(fill_path) = flag(rest, "fill") {
         let fill = match decision_fields_from_file(&fill_path) {
             Ok(f) => f,

@@ -6,6 +6,7 @@ package ProjectDeliveryS742 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from suiteMeasuresTheWorkspaceStory to d0479;
+    #Delivers dependency from suiteMeasuresTheWorkspaceStory to dcSuiteMeasuresTheWorkspace;
 
     part suiteMeasuresTheWorkspaceStory : Story {
         :>> id = "793ec842-db68-47d3-840b-3b0cce1902dc";

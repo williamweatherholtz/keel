@@ -6,6 +6,7 @@ package ProjectDeliveryS750 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from keelCliIsThinDispatchStory to d0479;
+    #Delivers dependency from keelCliIsThinDispatchStory to dcKeelCliIsThinDispatch;
 
     part keelCliIsThinDispatchStory : Story {
         :>> id = "ffa7bea0-7e8e-4c3d-aee2-09764befc029";

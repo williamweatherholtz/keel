@@ -98,7 +98,7 @@ package EngineGuardConstraints {
     constraint def docGuardCount;
     constraint def manifestKeyPortability;
     constraint def controlMapReconciled;
-    constraint def sprintClosure;
+    constraint def sprintClosure;           // guard 55 (D0260); D0515 widens it to the Story's #Delivers targets
     constraint def untrustedRouting;
     constraint def controlDefectRegistry;
     constraint def cliSurfaceDeclared;      // guard 58 (D0271/D0283)

@@ -6,6 +6,7 @@ package ProjectDeliveryS744 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from recorderRefusalCannotCiteTheVerifiersWritesLineStory to d0516;
+    #Delivers dependency from recorderRefusalCannotCiteTheVerifiersWritesLineStory to dcRecorderRefusalCannotCiteTheVerifiersNoWritesLine;
 
     part recorderRefusalCannotCiteTheVerifiersWritesLineStory : Story {
         :>> id = "69a40dd5-8e4c-44e8-bacb-f1ba0ca475f2";

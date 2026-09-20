@@ -6,6 +6,7 @@ package ProjectDeliveryS743 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from sourceCitationsOnTheLivingDocsResolveStory to d0471;
+    #Delivers dependency from sourceCitationsOnTheLivingDocsResolveStory to dcSourceCitationsOnTheLivingDocsResolve;
 
     part sourceCitationsOnTheLivingDocsResolveStory : Story {
         :>> id = "2df508d2-7aad-48a3-93ca-29eefa774541";

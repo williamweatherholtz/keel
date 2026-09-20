@@ -6,6 +6,11 @@ package ProjectDeliveryS745 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from downstreamProjectsWholeStory to d0520;
+    #Delivers dependency from downstreamProjectsWholeStory to dcRatchetOverTheProjectsCorpusIsNeverSeeded;
+    #Delivers dependency from downstreamProjectsWholeStory to dcCharterResolvesInBothDecisionDirectories;
+    #Delivers dependency from downstreamProjectsWholeStory to dcSourceReferenceReadsTheAdoptersOwnClaims;
+    #Delivers dependency from downstreamProjectsWholeStory to dcToleratedRecordsSurviveTheRun;
+    #Delivers dependency from downstreamProjectsWholeStory to dcAWriteRefusesTheMemberTheTreesSchemaLacks;
     #CharteredBy dependency from downstreamProjectsWholeStory to d0521;
     #CharteredBy dependency from downstreamProjectsWholeStory to d0522;
 

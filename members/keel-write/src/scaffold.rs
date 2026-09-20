@@ -44,9 +44,11 @@ fn gate_kind(gate: &str) -> (&'static str, String) {
 /// A used sprint number or existing file, a malformed slug, an unknown charter Decision, or an io
 /// failure — each as a message naming the refusal, because every one is a caller mistake this
 /// command exists to catch before it becomes a recorded fact.
-/// The sections a filled sprint needs (issue267 / D0301): the purpose line, the story's `DoD`, and one
-/// prose block per ceremony gate. Keys as the `--- key` draft format spells them.
-pub const FILL_KEYS: [&str; 8] = ["purpose", "dod", "refine", "standup", "implement", "review", "closeOut", "retro"];
+/// The sections a filled sprint needs (issue267 / D0301): the purpose line, the story's `DoD`, one
+/// prose block per ceremony gate, and `delivers` - the backlog actions the Story delivers, comma-separated,
+/// each becoming a `#Delivers` edge beside the charter edge (D0515). Keys as the `--- key` draft format
+/// spells them.
+pub const FILL_KEYS: [&str; 9] = ["purpose", "dod", "delivers", "refine", "standup", "implement", "review", "closeOut", "retro"];
 
 /// Scaffold a sprint with its prose already in place - the write path for sprint records (issue267).
 ///
@@ -83,7 +85,31 @@ pub fn sprint_filled(
             purpose.split_whitespace().take(4).collect::<Vec<_>>().join(" ")
         ));
     }
+    // D0515: every delivered item is a declared backlog action, or the edge would point at nothing -
+    // refused here by name rather than caught later by the edge-endpoints guard.
+    for item in delivered_items(fill) {
+        if !backlog_action_exists(root, &item) {
+            return Err(format!(
+                "fill's delivers names `{item}`, which is not a declared backlog action under .tracking (`action {item};`) - a #Delivers edge to nothing is a lie (D0515)"
+            ));
+        }
+    }
     sprint_with(root, number, slug, charter, points, actor, Some(fill))
+}
+
+/// The backlog actions the fill's `delivers` key names: comma-separated, trimmed, empties dropped.
+fn delivered_items(fill: &std::collections::BTreeMap<String, String>) -> Vec<String> {
+    fill.get("delivers")
+        .map(|v| v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_owned).collect())
+        .unwrap_or_default()
+}
+
+/// True when `name` is declared `action <name>;` in some `.sysml` under `.tracking`.
+fn backlog_action_exists(root: &Path, name: &str) -> bool {
+    let needle = format!("action {name};");
+    keel_model::corpus::collect_sysml(&root.join(".tracking"))
+        .iter()
+        .any(|p| keel_model::corpus::read_to_string(p).is_ok_and(|text| text.contains(&needle)))
 }
 
 /// The pure control for issue573: does the fill's `purpose` restate a `Sprint <N>:` prefix (any
@@ -174,7 +200,12 @@ fn sprint_with(
     for imp in ["EngineElement", "EngineWork", "EngineVerification", "EngineRelationships"] {
         let _ = writeln!(t, "    private import {imp}::*;");
     }
-    let _ = writeln!(t, "\n    #CharteredBy dependency from {slug}Story to {charter};\n");
+    let _ = writeln!(t, "\n    #CharteredBy dependency from {slug}Story to {charter};");
+    // D0515: one #Delivers edge per delivered backlog action, beside the charter edge.
+    for item in fill.map(delivered_items).unwrap_or_default() {
+        let _ = writeln!(t, "    #Delivers dependency from {slug}Story to {item};");
+    }
+    let _ = writeln!(t);
     let _ = writeln!(t, "    part {slug}Story : Story {{");
     let _ = writeln!(t, "        :>> id = \"{}\";", gen_uuid());
     let _ = writeln!(t, "        :>> title = \"Sprint {number}: {} ({points} pts)\";", field(fill, "purpose", PLACEHOLDER));
@@ -330,6 +361,8 @@ pub mod tests {
         for k in super::FILL_KEYS {
             fill.insert(k.to_string(), format!("{k} prose with a \"quote\" inside"));
         }
+        declare_backlog(&root);
+        fill.insert("delivers".to_string(), "dcProbeItem".to_string());
         fill.remove("retro");
         let err = sprint_filled(&root, 7, "probe", "d0001", 1, "claudeOpus5", &fill).expect_err("missing section refused");
         assert!(err.contains("retro"), "{err}");
@@ -342,6 +375,7 @@ pub mod tests {
             assert!(text.contains(&format!("{k} prose with a 'quote' inside")), "{k} prose present and sanitised:\n{text}");
         }
         assert!(text.contains("no new item - already tracked: d0001"));
+        assert!(text.contains("    #CharteredBy dependency from probeStory to d0001;\n    #Delivers dependency from probeStory to dcProbeItem;\n"), "D0515: the #Delivers edge is authored beside the charter edge:\n{text}");
         let tokens = keel_parser::tokenize(&text, "sprint.sysml").expect("lex");
         assert!(keel_parser::parse(tokens, "sprint.sysml").is_ok(), "the filled record parses");
         let _ = std::fs::remove_dir_all(&root);
@@ -361,6 +395,8 @@ pub mod tests {
         for k in super::FILL_KEYS {
             fill.insert(k.to_string(), format!("{k} prose"));
         }
+        declare_backlog(&root);
+        fill.insert("delivers".to_string(), "dcProbeItem".to_string());
         fill.insert("purpose".to_string(), "Sprint 726: clippy lints CI's triple".to_string());
         let err = sprint_filled(&root, 726, "prefix", "d0001", 1, "claudeFable5", &fill).expect_err("prefixed purpose refused");
         assert!(err.contains("scaffold.rs") && err.contains("issue573") && err.contains("Sprint 726: Sprint 726:"), "{err}");
@@ -387,11 +423,72 @@ pub mod tests {
         for k in super::FILL_KEYS {
             fill.insert(k.to_string(), format!("{k} prose"));
         }
+        declare_backlog(&root);
+        fill.insert("delivers".to_string(), "dcProbeItem".to_string());
         fill.insert("purpose".to_string(), "clippy lints CI's triple".to_string());
         let path = sprint_filled(&root, 726, "once", "d0001", 3, "claudeFable5", &fill).expect("written");
         let text = std::fs::read_to_string(&path).expect("read");
         assert!(text.contains(":>> title = \"Sprint 726: clippy lints CI's triple (3 pts)\";"), "{text}");
         assert_eq!(text.matches("Sprint 726: Sprint 726:").count(), 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A fixture backlog declaring `dcProbeItem` and `dcOtherItem`, the actions a fill's `delivers` may name.
+    fn declare_backlog(root: &std::path::Path) {
+        std::fs::create_dir_all(root.join(".tracking")).expect("mkdir tracking");
+        std::fs::write(
+            root.join(".tracking").join("backlog.sysml"),
+            "package B {\n    action def Backlog {\n        action dcProbeItem;\n        action dcOtherItem;\n    }\n}\n",
+        )
+        .expect("write backlog");
+    }
+
+    /// D0515 known-negative: a fill delivering two declared items writes one `#Delivers` edge per item,
+    /// beside the charter edge, in the fill's order.
+    #[test]
+    fn a_fill_delivering_two_items_writes_one_edge_each() {
+        let root = std::env::temp_dir().join(format!("keel-fill-delivers-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");
+        std::fs::write(root.join(".engine").join("decisions").join("0001-x.sysml"), "package D1 {\n    part d0001 : Decision { }\n}\n").expect("decision");
+        declare_ceremony(&root);
+        declare_backlog(&root);
+        let mut fill: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        for k in super::FILL_KEYS {
+            fill.insert(k.to_string(), format!("{k} prose"));
+        }
+        fill.insert("delivers".to_string(), "dcOtherItem, dcProbeItem,".to_string());
+        let path = sprint_filled(&root, 8, "two", "d0001", 2, "claudeFable5", &fill).expect("written");
+        let text = std::fs::read_to_string(&path).expect("read");
+        assert!(
+            text.contains("    #CharteredBy dependency from twoStory to d0001;\n    #Delivers dependency from twoStory to dcOtherItem;\n    #Delivers dependency from twoStory to dcProbeItem;\n\n    part twoStory : Story {"),
+            "{text}"
+        );
+        assert_eq!(text.matches("#Delivers").count(), 2, "{text}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// D0515 known-positive: a fill whose `delivers` names an action no `.tracking` file declares is
+    /// refused before any write, naming the item; a fill with no `delivers` key is refused by the key.
+    #[test]
+    fn a_fill_delivering_an_undeclared_item_is_refused_before_the_write() {
+        let root = std::env::temp_dir().join(format!("keel-fill-undeclared-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".engine").join("decisions")).expect("mkdir");
+        std::fs::write(root.join(".engine").join("decisions").join("0001-x.sysml"), "package D1 {\n    part d0001 : Decision { }\n}\n").expect("decision");
+        declare_ceremony(&root);
+        declare_backlog(&root);
+        let mut fill: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        for k in super::FILL_KEYS {
+            fill.insert(k.to_string(), format!("{k} prose"));
+        }
+        fill.insert("delivers".to_string(), "dcProbeItem, dcNowhere".to_string());
+        let err = sprint_filled(&root, 9, "undeclared", "d0001", 1, "claudeFable5", &fill).expect_err("undeclared item refused");
+        assert!(err.contains("dcNowhere") && err.contains("D0515"), "{err}");
+        fill.remove("delivers");
+        let err = sprint_filled(&root, 9, "undeclared", "d0001", 1, "claudeFable5", &fill).expect_err("missing key refused");
+        assert!(err.contains("delivers"), "{err}");
+        assert_eq!(std::fs::read_dir(root.join(".tracking").join("delivery")).map_or(0, Iterator::count), 0, "nothing was written");
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -6,6 +6,12 @@ package ProjectDeliveryS746 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from releaseDownstreamGreenStory to d0519;
+    #Delivers dependency from releaseDownstreamGreenStory to dcReleaseGuardFixturesPinTheBinaryVersion;
+    #Delivers dependency from releaseDownstreamGreenStory to dcAFreshAdopterTreeIsGreenUnderEveryGuard;
+    #Delivers dependency from releaseDownstreamGreenStory to dcSchemaLacksMemberRefusalIsLedgered;
+    #Delivers dependency from releaseDownstreamGreenStory to dcUnresolvedCharterAdviceFitsAFirstTimeAdopter;
+    #Delivers dependency from releaseDownstreamGreenStory to dcVerbFoldsTravelWithMigrate;
+    #Delivers dependency from releaseDownstreamGreenStory to dcAllocatedNameIsOneNamespaceAcrossPackages;
 
     part releaseDownstreamGreenStory : Story {
         :>> id = "6a180e3d-65bf-403b-aaa9-98903d381dc2";

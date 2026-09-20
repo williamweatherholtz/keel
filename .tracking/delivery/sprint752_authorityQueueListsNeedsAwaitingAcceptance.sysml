@@ -6,6 +6,7 @@ package ProjectDeliveryS752 {
     private import EngineRelationships::*;
 
     #CharteredBy dependency from authorityQueueListsNeedsAwaitingAcceptanceStory to d0534;
+    #Delivers dependency from authorityQueueListsNeedsAwaitingAcceptanceStory to dcAuthorityQueueListsNeedsAwaitingAcceptance;
 
     part authorityQueueListsNeedsAwaitingAcceptanceStory : Story {
         :>> id = "b6dee86a-3f78-461f-b3da-dfa5c7a1768a";

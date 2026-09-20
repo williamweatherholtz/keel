@@ -53,6 +53,12 @@ package EngineRelationships {
     // lineage; the governing process VERSION is COMPUTED as-of the charter's creation commit.
     metadata def CharteredBy;
 
+    // #Delivers: a work-item Story -> the backlog action it delivers (D0515). Authored as a marked
+    // dependency beside #CharteredBy in the sprint delivery file, one edge per delivered item:
+    // `#Delivers dependency from <story> to <backlogAction>;`. `record sprint --fill` authors it at
+    // prep from the fill's `delivers` key; the sprint-closure guard reads it once a later sprint exists.
+    metadata def Delivers;
+
     // #Resolves: a resolver (backlog action OR Decision) -> the Issue it resolves (D0077, issue
     // resolution loop). Authored as a marked dependency: `#Resolves dependency from <resolver>
     // to <issueNNN>;`. An Issue is RESOLVED (computed, never stored) iff a #Resolves resolver is
