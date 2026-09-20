@@ -2689,4 +2689,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRendererHoldsItsAuxiliarySourcesToTheLadder to issue666;
+
+    part issue667 : Issue {
+        :>> id = "d9aef9cc-c29f-4022-a05b-ba07830e5cad";
+        :>> title = "Twenty guards.md rows rendered outside any table: a blank line split the Hard-blocking table and five rows sat above the Warning-only header";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Twenty of the 77 guard rows in .engine/docs/guards.md rendered outside any table at 957b2888. A blank line at guards.md:83, between the attestation-authority and manifest-key-portability rows, ended the Hard-blocking table in GitHub-flavoured markdown, so the fifteen rows from manifest-key-portability to cli-surface-declared (lines 84-98) rendered as pipe-separated prose; and five rows (decision-scaffolding, release-recorded, enrollment-binding, control-event-coverage, stpa-currency, lines 102-106) sat under the Warning-only heading ABOVE that table's header at lines 111-112, so they had no header either. Found by reading the file while adding the Family column (dcGuardsCatalogueNamesTheFamily); the census script that confirmed it walked every row and asked for a header above it with no blank line or heading between. The one control on the rows, every_guard_has_a_catalogue_row in members/keel-guards/src/lib.rs, is a substring match for the first cell and was green throughout - it holds that a row EXISTS, not that it renders. Control: every_catalogue_row_sits_inside_a_table beside it, failing with the line and guard of any row not under a table header.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcGuardsCatalogueNamesTheFamily to issue667;
+
+    part issue668 : Issue {
+        :>> id = "2b7aadca-f622-4c65-87d9-cf48bdc61f06";
+        :>> title = "A guard's tier has three homes - catalogue section, WARNING_ONLY_GUARDS, code - and five guards disagree between them";
+        :>> createdAt = "2026-09-20";
+        :>> createdBy = "claudeFable5";
+        :>> description = "A guard's tier is stated in three homes and nothing holds them together. The catalogue's Warning-only section held five rows on 2026-09-20 (decision-scaffolding, release-recorded, enrollment-binding, control-event-coverage, stpa-currency) that WARNING_ONLY_GUARDS in members/keel-serve/src/serve_verbs.rs (nine names) does not list, so keel version - which reports the hard-vs-warning split by subtracting that list from GUARD_NAMES - counted the five as hard-blocking while the catalogue called them warning-only. The code agrees with the catalogue for four: stpa_currency and control_event_coverage (enforcement.rs), release_recorded (release.rs) and enrollment_binding (identity.rs) build their GuardReport with violations: Vec::new() and can never block. It agrees with neither for the fifth: decision_scaffolding pushes violations (decisions.rs, the D0303 option C compound-Decision clause) while its catalogue row opens WARNING-tier. The test version_guard_split_cannot_drift_from_the_guards_that_run (keel-cli/src/main.rs) holds only that the list is a strict subset of GUARD_NAMES - it cannot see the catalogue or the code. Found by the tier census run while adding the Family column (dcGuardsCatalogueNamesTheFamily); the family clause deliberately does not touch tier, so this is its own item. Root: the tier is a fact typed in two places and implied by a third; it needs ONE home in code, with the other two computed from or held to it.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcGuardTierHasOneHome to issue668;
 }

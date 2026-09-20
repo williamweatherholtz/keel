@@ -665,6 +665,14 @@ pub fn defect_guard_coverage(root: &Path) -> GuardReport {
 /// literal cannot. Narrow by construction — it fires only on a digit immediately preceding
 /// "forward guards" or on "all N guards", so a SUBSET count ("5 guards are rule-sourced") and an
 /// ordinal reference ("Guard 37 checks...") are untouched.
+///
+/// Second clause (issue584, sprint 756): a catalogue row's `Family` cell equals the family whose table
+/// dispatches the guard. guards.md groups guards by TIER while the code groups them by family
+/// (`members/keel-guards/src/<family>.rs`, sprint 733), so a reader of the catalogue could not find a
+/// guard's code without grepping; the column is the pointer, and this clause is what keeps it true when
+/// a guard moves between family files without its row. The clause reads a file ONLY when its table header
+/// declares the column - a downstream copy shipped before the column existed claims nothing (D0419's
+/// lesson: an engine-self check that reads a scaffold turned CI red for six pushes).
 #[must_use]
 pub fn doc_guard_count(root: &Path) -> GuardReport {
     let mut files: Vec<PathBuf> = vec![root.join("CLAUDE.md")];
@@ -686,8 +694,53 @@ pub fn doc_guard_count(root: &Path) -> GuardReport {
                 ));
             }
         }
+        violations.extend(family_cell_violations(&rel, &text));
     }
     GuardReport { name: "doc-guard-count", scanned, warnings: Vec::new(), violations }
+}
+
+/// The header a catalogue table carries once it declares the family column.
+const FAMILY_COLUMN_HEADER: &str = "| Guard | Family |";
+
+/// Every guard row of a catalogue file whose table header declares a `Family` column, as
+/// `(line number, guard, the cell)`; a file without the header claims nothing.
+pub(crate) fn guard_family_claims(text: &str) -> Vec<(usize, String, String)> {
+    if !text.lines().any(|l| l.starts_with(FAMILY_COLUMN_HEADER)) {
+        return Vec::new();
+    }
+    text.lines()
+        .enumerate()
+        .filter_map(|(n, line)| {
+            let (name, rest) = line.strip_prefix("| `")?.split_once("` |")?;
+            let cell = rest.split('|').next()?.trim();
+            Some((n + 1, name.to_owned(), cell.to_owned()))
+        })
+        .collect()
+}
+
+/// The family whose table dispatches `guard`, read from `FAMILIES`; `None` for a name no table holds.
+pub(crate) fn family_of(guard: &str) -> Option<&'static str> {
+    FAMILIES.iter().find(|f| f.arms.iter().any(|(n, _)| *n == guard)).map(|f| f.name)
+}
+
+/// The rows of `text` whose family cell is absent or names a family other than the one dispatching the
+/// guard. A row for a name no family holds is not this clause's (the catalogue-row test owns the
+/// reverse direction).
+pub(crate) fn family_cell_violations(rel: &str, text: &str) -> Vec<String> {
+    guard_family_claims(text)
+        .into_iter()
+        .filter_map(|(n, name, cell)| {
+            let actual = family_of(&name)?;
+            if cell == actual {
+                return None;
+            }
+            Some(if FAMILIES.iter().any(|f| f.name == cell) {
+                format!("{rel}:{n}: row `{name}` names family `{cell}` but `{name}` is dispatched by family `{actual}` (members/keel-guards/src/{actual}.rs) - the row moves with the guard (issue584)")
+            } else {
+                format!("{rel}:{n}: row `{name}` carries no family cell (`{cell}`) while the table declares the column; `{name}` is dispatched by family `{actual}` (members/keel-guards/src/{actual}.rs, issue584)")
+            })
+        })
+        .collect()
 }
 
 /// The hardcoded TOTAL-count phrase in a line, if any. `None` for subset counts and ordinals.
@@ -1282,6 +1335,47 @@ pub fn step_check_resolves(root: &Path) -> GuardReport {
         ));
     }
     GuardReport { name: "step-check-resolves", scanned, warnings: Vec::new(), violations }
+}
+
+/// The D0388 pair for doc-guard-count's family clause (issue584), chosen before the real catalogue was
+/// read: a fixture row naming a guard under a family other than its table's FAILS naming the row and
+/// both families; the catalogue as shipped PASSES, and a file without the column claims nothing.
+#[cfg(test)]
+mod family_cell_tests {
+    use super::{family_cell_violations, family_of, guard_family_claims, FAMILIES, GUARD_NAMES};
+
+    const WRONG_FAMILY: &str = "## Hard-blocking\n\n| Guard | Family | What it enforces |\n|---|---|---|\n| `doc-guard-count` | identity | the count has one home |\n| `actors` | identity | registered actors |\n| `charter` |  | work traces to its charter |\n";
+
+    #[test]
+    fn a_row_under_another_family_fails_naming_the_row_and_both_families() {
+        let v = family_cell_violations("x/guards.md", WRONG_FAMILY);
+        assert_eq!(v.len(), 2, "{v:?}");
+        assert!(v[0].starts_with("x/guards.md:5: row `doc-guard-count` names family `identity` but `doc-guard-count` is dispatched by family `enforcement`"), "{}", v[0]);
+        assert!(v[1].starts_with("x/guards.md:7: row `charter` carries no family cell (``)"), "{}", v[1]);
+        assert!(v[1].contains("dispatched by family `sprints`"), "{}", v[1]);
+    }
+
+    #[test]
+    fn a_file_without_the_column_claims_nothing() {
+        let no_column = "| Guard | What it enforces |\n|---|---|\n| `doc-guard-count` | the count has one home |\n";
+        assert!(guard_family_claims(no_column).is_empty());
+        assert!(family_cell_violations("x/guards.md", no_column).is_empty());
+        assert!(family_cell_violations("x/guards.md", "this project enforces 999 forward guards\n").is_empty(), "the cursor.rs fixture stays a count-only red");
+    }
+
+    /// THE CONTROL for the column: every enforced guard's row carries the family that dispatches it, and
+    /// the guard itself is green on the shipped catalogue.
+    #[test]
+    fn the_shipped_catalogue_names_every_guards_family() {
+        let root = crate::test_repo_root();
+        let md = keel_model::corpus::read_to_string(root.join(".engine/docs/guards.md")).expect("guards.md ships with the engine");
+        let claims = guard_family_claims(&md);
+        assert!(!claims.is_empty(), "guards.md declares the Family column (issue584)");
+        let missing: Vec<&str> = GUARD_NAMES.iter().copied().filter(|g| !claims.iter().any(|(_, n, c)| n == g && Some(c.as_str()) == family_of(g))).collect();
+        assert!(missing.is_empty(), "guards with no row carrying their dispatching family: {missing:?}");
+        assert!(family_cell_violations(".engine/docs/guards.md", &md).is_empty());
+        assert!(FAMILIES.iter().all(|f| root.join("members/keel-guards/src").join(format!("{}.rs", f.name)).exists()), "a family's name is its module file");
+    }
 }
 
 #[cfg(test)]

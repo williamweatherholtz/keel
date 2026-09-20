@@ -934,6 +934,28 @@ mod guard_catalogue_tests {
         let missing: Vec<&str> = super::GUARD_NAMES.iter().copied().filter(|n| !md.contains(&format!("| `{n}` |"))).collect();
         assert!(missing.is_empty(), "guards with no row in .engine/docs/guards.md: {missing:?}");
     }
+
+    /// THE CONTROL for the tables (issue667): every catalogue row RENDERS inside a table - a `| Guard |`
+    /// header above it with no blank line or heading between. On 2026-09-20 twenty of the 77 rows did
+    /// not: a blank line split the Hard-blocking table after `attestation-authority`, and five rows sat
+    /// under `## Warning-only` above that table's header; GitHub-flavoured markdown ends a table at a
+    /// blank line, so the twenty rendered as pipe-separated prose while `every_guard_has_a_catalogue_row`
+    /// - a substring match - stayed green.
+    #[test]
+    fn every_catalogue_row_sits_inside_a_table() {
+        let md = keel_model::corpus::read_to_string(crate::test_repo_root().join(".engine/docs/guards.md")).expect("guards.md ships with the engine");
+        let lines: Vec<&str> = md.lines().collect();
+        let outside: Vec<String> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.starts_with("| `"))
+            .filter(|(i, _)| {
+                !lines[..*i].iter().rev().take_while(|x| !x.is_empty() && !x.starts_with("## ")).any(|x| x.starts_with("| Guard |"))
+            })
+            .map(|(i, l)| format!("guards.md:{}: {}", i + 1, l.split('|').nth(1).unwrap_or("").trim()))
+            .collect();
+        assert!(outside.is_empty(), "catalogue rows outside any table: {outside:?}");
+    }
 }
 
 #[cfg(test)]
