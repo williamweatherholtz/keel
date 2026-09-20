@@ -6879,7 +6879,8 @@ fact("tenHeldTheReportReadAgainstTheTree", {
               "pureTakesGained": "def refusals(report_text, declared, owed=None, gained=None):" in _cr59,
               "refusalNamesUnclaimed": "unclaimed:" in _cr59 and "(issue602, D0537)" in _cr59,
               "passLineCountsGained": "TestResult part(s) the tree gained since HEAD covered by WROTE lines" in _cr59,
-              "fixtures": len([f for f in os.listdir(_fx_dir59) if f.endswith(".txt")]) if os.path.isdir(_fx_dir59) else None,
+              # the directory is shared with check_receipt.py since sprint 755: its fixtures (sprint743-*, the rendered-killed one) are not this check's
+              "fixtures": len([f for f in os.listdir(_fx_dir59) if f.endswith(".txt") and "sprint743" not in f and f != "positive-rendered-killed-while-ended.txt"]) if os.path.isdir(_fx_dir59) else None,
               "probeExit0": _ok59p, "probeRows": len(_probe_lines59),
               "probeEveryPairHolds": "probe: every pair holds." in (_out59p or ""),
               "probePositive741": next((l for l in _probe_lines59 if "positive-sprint741" in l), None),
@@ -6904,10 +6905,79 @@ fact("tenHeldTheReportReadAgainstTheTree", {
 }, "the tenth held Decision, the queue's rows, the check's probe run over this tree, the sprint's results, the resolved issue and the two retro issues",
      _DEC_HOW + " fork/options/recommended/held/derivedFrom/dependsOn as section 58. queue: the same `" + KEEL + " show authority-queue .` run as "
      "section 58. check: literal phrases in .engine/skills/delegated-ceremony/references/check_report.py; fixtures = .txt files in its fixtures "
-     "directory; probe* = `python check_report.py --probe --root <repo>` run here - the `probe: known-` lines counted and the sprint 741 pair quoted, "
+     "directory other than check_receipt.py's (the sprint743-* files and the rendered-killed one, which share it since sprint 755); probe* = `python check_report.py --probe --root <repo>` run here - the `probe: known-` lines counted and the sprint 741 pair quoted, "
      "exit 0 and the final `every pair holds` line. skill: literal phrases in .engine/skills/delegated-ceremony/SKILL.md. sprint754: the delivery "
      "file's #CharteredBy edge, GateR results by verdict, the story DoD result; the DoD result in backlog.sysml; the retro naming issue663. "
      "issue602: declared anywhere under .tracking or the decisions, and whether `" + KEEL + " show open-issues .` still lists it. retroIssues: "
+     "the `part issueNNN : Issue` declaration and the `#Resolves` edge beside it in issues-claudeFable5.sysml. live: each guard's last line as section 55.")
+
+# ================================================================ 60. the fifty-seventh publish: the eleventh held Decision - the verifier's receipt is read against the ladder that ended
+# The queue after sprint 755 (D0538): the ten of the fifty-sixth page still wait and one held process change joins them -
+# check_receipt.py runs keel verify --wait, then holds the receipt's LADDER line, rung verdicts and TOUCHED RECEIPT counts to
+# verify-receipt.toml and touched-receipt.toml, refusing a receipt that says the ladder did not end, describes another run,
+# or disagrees with the files. The check's own probe table (pure over fixtures, no ladder needed) is run here.
+_cr60_path = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "check_receipt.py")
+_cr60 = read(_cr60_path) or ""
+_ok60p, _out60p = run([sys.executable, _cr60_path, "--probe"], timeout=120)
+_probe_lines60 = [l for l in (_out60p or "").splitlines() if l.startswith("probe: known-")]
+_fx60 = [f for f in os.listdir(_fx_dir59) if "sprint743" in f or f == "positive-rendered-killed-while-ended.txt"] if os.path.isdir(_fx_dir59) else []
+_skill60 = read(os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_tv60 = read(os.path.join(REPO, ".engine", "skills", "test-verify", "SKILL.md")) or ""
+_proc60 = read(os.path.join(REPO, ".engine", "processes", "delegated-ceremony.sysml")) or ""
+_agent60 = read(os.path.join(REPO, ".claude", "agents", "verifier.md")) or ""
+_s755 = read(os.path.join(REPO, ".tracking", "delivery", "sprint755_verifierReceiptIsCheckedAgainstTheLadder.sysml")) or ""
+_ok60o, _out60o = run([KEEL, "show", "open-issues", "."], timeout=120)
+_open60 = set(re.findall(r"\bissue\d+\b", _out60o or "")) if _ok60o else None
+_iss60 = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+_ok60q, _out60q = run([KEEL, "show", "authority-queue", "."], timeout=120)
+try:
+    _aq60 = json.loads(_out60q) if _ok60q else None
+except ValueError:
+    _aq60 = None
+_dec_rows60 = [r for r in ((_aq60 or {}).get("awaiting") or []) if r.get("kind") == "decisionAcceptance"]
+_need_rows60 = [r for r in ((_aq60 or {}).get("awaiting") or []) if r.get("kind") == "needAcceptance"]
+fact("elevenHeldTheReceiptReadAgainstTheLadder", {
+    "held": _held58("d0538"),
+    "queue": {"exit0": _ok60q, "count": (_aq60 or {}).get("count"),
+              "decisionRows": sorted(r["item"] for r in _dec_rows60), "needRows": len(_need_rows60)},
+    "check": {"docstringNamesIssue": "(issue603," in _cr60 and "D0538)" in _cr60,
+              "pureSignature": "def refusals(receipt_text, wait_text, wait_exit, ladder, touched):" in _cr60,
+              "runsWait": "def run_wait(keel, root):" in _cr60,
+              "passLine": "the receipt agrees with the ladder that ended at=" in _cr60,
+              "refusedLine": "check_receipt: REFUSED (" in _cr60,
+              "fixtures": len(_fx60),
+              "probeExit0": _ok60p, "probeRows": len(_probe_lines60),
+              "probeEveryPairHolds": "probe: every pair holds." in (_out60p or ""),
+              "probePositive743": next((l for l in _probe_lines60 if "positive-sprint743-killed-while-ended" in l), None),
+              "probeNegative743": next((l for l in _probe_lines60 if "negative-sprint743-rendered-fail" in l), None),
+              "probeOtherRun": next((l for l in _probe_lines60 if "positive-sprint743-other-run-quoted" in l), None)},
+    "skill": {"ceremonySectionListed": "## What the receipt check refuses (references/check_receipt.py, D0538)" in _skill60,
+              "verifierBriefRunsIt": "references/check_receipt.py <ABS SCRATCH PATH>/verifier-receipt.txt --root . --keel <KEEL>" in _skill60,
+              "testVerifyStepSeven": "### 7. The receipt is checked against the ladder that ended before you return (D0538)" in _tv60,
+              "processTriggerNamesIt": "check_receipt.py has passed it against the ladder that ended (D0538)" in _proc60,
+              "agentNamesIt": "check_receipt.py" in _agent60},
+    "sprint755": {"exists": bool(_s755),
+                  "chartered": "#CharteredBy dependency from verifierReceiptIsCheckedAgainstTheLadderStory to d0538;" in _s755,
+                  "gateResults": len(re.findall(r"GateR\d+ : TestResult", _s755)),
+                  "gatePasses": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::pass", _s755)),
+                  "gateProposed": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::proposed", _s755)),
+                  "storyDodPass": bool(re.search(r"part storyVerifierReceiptIsCheckedAgainstTheLadderDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _s755)),
+                  "dodOnBacklog": bool(re.search(r"part dcVerifierReceiptIsCheckedAgainstTheLadderDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _bl)),
+                  "retroNamesIssues": all(n in _s755 for n in ("issue665", "issue666"))},
+    "issue603": {"declared": bool(re.search(r"part issue603 : Issue\b", _corpus58)),
+                 "open": ("issue603" in _open60) if _open60 is not None else None, "openIssuesExit0": _ok60o},
+    "retroIssues": {n: {"declared": bool(re.search(r"part issue" + n + r" : Issue\b", _iss60)),
+                        "resolver": (re.search(r"#Resolves dependency from (\w+) to issue" + n + ";", _iss60) or [None, None])[1]}
+                    for n in ("665", "666")},
+    "live": {"processChange": _guard55("process-change"), "issues": _guard55("issues")},
+}, "the eleventh held Decision, the queue's rows, the receipt check's probe run, the sprint's results, the resolved issue and the two retro issues",
+     _DEC_HOW + " fork/options/recommended/held/derivedFrom/dependsOn as section 58. queue: `" + KEEL + " show authority-queue .` run here - awaiting "
+     "rows by kind. check: literal phrases in .engine/skills/delegated-ceremony/references/check_receipt.py; fixtures = the sprint 743 files and the "
+     "rendered-killed one in its fixtures directory; probe* = `python check_receipt.py --probe` run here (pure over the fixtures: no ladder is launched) - "
+     "the `probe: known-` lines counted and three quoted, exit 0 and the final `every pair holds` line. skill: literal phrases in the delegated-ceremony "
+     "and test-verify SKILL.md files, the delegated-ceremony process file's dcyDispatchRecorder trigger and .claude/agents/verifier.md. sprint755: the "
+     "delivery file's #CharteredBy edge, GateR results by verdict, the story DoD result; the DoD result in backlog.sysml; the retro naming issue665 and "
+     "issue666. issue603: declared anywhere under .tracking or the decisions, and whether `" + KEEL + " show open-issues .` still lists it. retroIssues: "
      "the `part issueNNN : Issue` declaration and the `#Resolves` edge beside it in issues-claudeFable5.sysml. live: each guard's last line as section 55.")
 
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
