@@ -6856,6 +6856,60 @@ fact("nineHeldAndTheNeedsNobodyAsked", {
      ".engine/skills/decision-surfacing/SKILL.md. sprint752: the delivery file's GateR results; the DoD result in backlog.sysml. issue661 as "
      "section 34. live: each guard's last line as section 55.")
 
+# ================================================================ 59. the fifty-sixth publish: the tenth held Decision - the recorder's report is read against the tree
+# The queue after sprint 754 (D0537): the nine of the fifty-fifth page still wait and one held process change joins them -
+# check_report.py counts the TestResult parts the tree gained since HEAD and refuses a report claiming fewer. The check
+# itself is exercised here (its probe table, run over this tree) and the sprint's own results are read from their files.
+_cr59_path = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "check_report.py")
+_cr59 = read(_cr59_path) or ""
+_ok59p, _out59p = run([sys.executable, _cr59_path, "--probe", "--root", REPO], timeout=120)
+_probe_lines59 = [l for l in (_out59p or "").splitlines() if l.startswith("probe: known-")]
+_fx_dir59 = os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "references", "fixtures")
+_skill59 = read(os.path.join(REPO, ".engine", "skills", "delegated-ceremony", "SKILL.md")) or ""
+_s754 = read(os.path.join(REPO, ".tracking", "delivery", "sprint754_recorderReportAccountsForEveryTreeWrite.sysml")) or ""
+_ok59o, _out59o = run([KEEL, "show", "open-issues", "."], timeout=120)
+_open59 = set(re.findall(r"\bissue\d+\b", _out59o or "")) if _ok59o else None
+_iss59 = read(os.path.join(REPO, ".tracking", "issues-claudeFable5.sysml")) or ""
+fact("tenHeldTheReportReadAgainstTheTree", {
+    "held": _held58("d0537"),
+    "queue": {"exit0": _ok58q, "count": (_aq58 or {}).get("count"),
+              "decisionRows": sorted(r["item"] for r in _dec_rows58), "needRows": len(_need_rows58)},
+    "check": {"docstringSaysNine": "Nine refusals" in _cr59,
+              "gainedFunction": "def results_gained(root):" in _cr59,
+              "pureTakesGained": "def refusals(report_text, declared, owed=None, gained=None):" in _cr59,
+              "refusalNamesUnclaimed": "unclaimed:" in _cr59 and "(issue602, D0537)" in _cr59,
+              "passLineCountsGained": "TestResult part(s) the tree gained since HEAD covered by WROTE lines" in _cr59,
+              "fixtures": len([f for f in os.listdir(_fx_dir59) if f.endswith(".txt")]) if os.path.isdir(_fx_dir59) else None,
+              "probeExit0": _ok59p, "probeRows": len(_probe_lines59),
+              "probeEveryPairHolds": "probe: every pair holds." in (_out59p or ""),
+              "probePositive741": next((l for l in _probe_lines59 if "positive-sprint741" in l), None),
+              "probeNegative741": next((l for l in _probe_lines59 if "negative-sprint741" in l), None)},
+    "skill": {"refusalNineListed": "9." in _skill59 and "gained since HEAD" in _skill59,
+              "ruleSeven": bool(re.search(r"\(7\) a write that lands after a refused attempt is a WROTE\s+line", _skill59)),
+              "probePairNamed": "positive-sprint741-landed-write-filed-refused.txt" in _skill59 and "negative-sprint741-eight-written.txt" in _skill59},
+    "sprint754": {"exists": bool(_s754),
+                  "chartered": "#CharteredBy dependency from recorderReportAccountsForEveryTreeWriteStory to d0537;" in _s754,
+                  "gateResults": len(re.findall(r"GateR\d+ : TestResult", _s754)),
+                  "gatePasses": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::pass", _s754)),
+                  "gateProposed": len(re.findall(r"GateR\d+ : TestResult \{[^\n]*VerdictKind::proposed", _s754)),
+                  "storyDodPass": bool(re.search(r"part storyRecorderReportAccountsForEveryTreeWriteDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _s754)),
+                  "dodOnBacklog": bool(re.search(r"part dcRecorderReportAccountsForEveryTreeWriteDoDR1 : TestResult \{[^\n]*VerdictKind::pass", _bl)),
+                  "retroNamesIssue663": "issue663" in _s754},
+    "issue602": {"declared": bool(re.search(r"part issue602 : Issue\b", _corpus58)),
+                 "open": ("issue602" in _open59) if _open59 is not None else None, "openIssuesExit0": _ok59o},
+    "retroIssues": {n: {"declared": bool(re.search(r"part issue" + n + r" : Issue\b", _iss59)),
+                        "resolver": (re.search(r"#Resolves dependency from (\w+) to issue" + n + ";", _iss59) or [None, None])[1]}
+                    for n in ("663", "664")},
+    "live": {"processChange": _guard55("process-change"), "issues": _guard55("issues")},
+}, "the tenth held Decision, the queue's rows, the check's probe run over this tree, the sprint's results, the resolved issue and the two retro issues",
+     _DEC_HOW + " fork/options/recommended/held/derivedFrom/dependsOn as section 58. queue: the same `" + KEEL + " show authority-queue .` run as "
+     "section 58. check: literal phrases in .engine/skills/delegated-ceremony/references/check_report.py; fixtures = .txt files in its fixtures "
+     "directory; probe* = `python check_report.py --probe --root <repo>` run here - the `probe: known-` lines counted and the sprint 741 pair quoted, "
+     "exit 0 and the final `every pair holds` line. skill: literal phrases in .engine/skills/delegated-ceremony/SKILL.md. sprint754: the delivery "
+     "file's #CharteredBy edge, GateR results by verdict, the story DoD result; the DoD result in backlog.sysml; the retro naming issue663. "
+     "issue602: declared anywhere under .tracking or the decisions, and whether `" + KEEL + " show open-issues .` still lists it. retroIssues: "
+     "the `part issueNNN : Issue` declaration and the `#Resolves` edge beside it in issues-claudeFable5.sysml. live: each guard's last line as section 55.")
+
 # every fact above reads the WORKING TREE while `tree` names HEAD; when the two differ the page must say so
 _DIRTY_HOW = ("`git status --porcelain --untracked-files=all`: lines beginning with a change code other than `??` are "
               "tracked files with uncommitted edits, `??` lines are untracked files. Every file-reading fact in this "
