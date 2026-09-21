@@ -37,4 +37,20 @@ package ProjectIntake20260920 {
         :>> text = "Research alternative harnesses like this. We're talking bazel and GitHub actions, but surely there are sandbox container setups for AI agents. Any strongly considering custom processes and verification workflows? Other strengths we should integrate? Investigate 50 alternative tools, noting what has gained some following recently";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-20"; :>> channel = StatementChannel::chat;
     }
+
+    part st185 : Statement {
+        :>> id = "0836a4b1-7366-499d-9c1d-d0f4f11a3df4";
+        :>> title = "Direction: the tool-owns-the-task work is a keel subsystem/mode, possibly a totally separate project because it is architecturally distinct";
+        :>> createdAt = "2026-09-20"; :>> createdBy = "claudeFable5";
+        :>> text = "Yes I meant a keel subsystem/mode, though I might make it a totally separate project because I feel like it's quite distinct architecturally.";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-20"; :>> channel = StatementChannel::chat;
+    }
+
+    part st186 : Statement {
+        :>> id = "012caff1-5cc2-414f-953f-d7b43a93c217";
+        :>> title = "Direction: runner daemons claim leased steps (option ii) wherever feasible";
+        :>> createdAt = "2026-09-20"; :>> createdBy = "claudeFable5";
+        :>> text = "I think (ii) is right where feasible.";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-20"; :>> channel = StatementChannel::chat;
+    }
 }
