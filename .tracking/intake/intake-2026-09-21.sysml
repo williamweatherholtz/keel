@@ -15,4 +15,12 @@ package ProjectIntake20260921 {
         :>> sourceUrl = "https://github.com/williamweatherholtz/keel/issues/97";
         :>> sourceTrust = SourceTrust::untrusted;
     }
+
+    part st188 : Statement {
+        :>> id = "cec6b687-c859-4372-a636-edb511524215";
+        :>> title = "Direction: browser is the only human surface, a runner-facing CLI protocol is fine; research runner-daemon best practice in existing frameworks and 50 forum threads of user-identified weaknesses, then set ourselves apart";
+        :>> createdAt = "2026-09-21"; :>> createdBy = "claudeFable5";
+        :>> text = "browser only for the user, runner-facing (i.e. CLI, yes?) protocol is fine too.  as far as what the runner daemon actually is, etc., do some more research for best practices with existing frameworks, lookup complaints from 50 threads in forums to see user-identified weaknesses of their approach, and let's set ourselves apart.";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-21"; :>> channel = StatementChannel::chat;
+    }
 }
