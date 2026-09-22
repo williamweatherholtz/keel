@@ -1,0 +1,27 @@
+// D0552 (status: the `status` field below is the truth) — briefStatesTheDelineatingFacts: a decision brief gives, per ask, the verified facts that separate the options and the cost of each, with no scaffolding prose about choosing, no placeholders or asides, answered asks removed from the page, and a recommendation only where the facts do not already carry it
+// Recorded via `keel record decision` (D0105 RMWX axis; issue054). Acceptance is a separate explicit
+// human gate (method=confirmation, D0106): flip status + add the d0552Accept event on sign-off.
+package Decision0552 {
+    private import EngineElement::*;
+    private import EngineWork::*;
+    private import EngineVerification::*;
+    private import EngineRelationships::*;
+
+    // #ProspectiveChange (D0070) - this Decision governs a process/schema change; the co-committed
+    // change rides the process-change guard's hard lock.
+    #ProspectiveChange part d0552 : Decision {
+        :>> id = "6d9cab2c-c911-4c43-9456-f7ce3fa164cf";
+        :>> title = "briefStatesTheDelineatingFacts: a decision brief gives, per ask, the verified facts that separate the options and the cost of each, with no scaffolding prose about choosing, no placeholders or asides, answered asks removed from the page, and a recommendation only where the facts do not already carry it";
+        :>> createdAt = "2026-09-22";
+        :>> createdBy = "claudeFable5";
+        :>> status = DecisionStatus::accepted;
+        :>> context = "The human, 2026-09-22 (st195), on the runner-direction brief: 'The commentary in the artifact is currently inane. You're giving me prose telling me that it's time to choose, instead of just giving me context so i can actually do so. I'm trying to make decisions here, not follow a process. Your job is to follow a process, though - the process of making relevant content plain, picking a few metrics that are relevant to drive decision making (not just numbers for numbers sake), and clearly illustrate the consequential facts that delineate a decision. I don't need as much of a recommendation if you can identify the relevant information'. Earlier the same day, st193: no placeholders, parentheticals or inserted comments on the page; st194: a line of compressed design vocabulary was unreadable. The asi-templates skill's standing direction asked for a strong logical recommendation; the human's newer words shift the weight to the facts. The skill file under .engine/skills is a process definition under the D0070 lock, so the paragraph cannot land without a marked Decision.";
+        :>> decision = "The asi-templates skill's executive-brief section gains the human's 2026-09-22 words and the shape they ask for: per ask, three to five verified facts that separate the options; an option table with what each gives and what each costs; one line on what would change the answer; no scaffolding words about choosing; no placeholders or asides in controls; an ask the human has answered leaves the page; a recommendation is optional once the facts carry the decision. The runner-direction brief is rebuilt to that shape - three open asks, four answered ones listed once with the human's word - and republished at its URL. No checker clause changes in this Decision; the per-ask note clause (D0550) already holds the controls.";
+        :>> rationale = "A page that tells the reader it is time to choose spends their attention on the process; a page that gives the facts that separate the options spends it on the choice. The human said which one they want in their own words, and the earlier standing direction's recommendation clause was written before there was a panel whose verified findings could carry a decision without one. Recording the words in the skill puts the shape where every future brief reads it.";
+        :>> consequences = "The skill paragraph lands in .engine/skills/asi-templates/SKILL.md and its .claude mirror; the runner-direction brief version 4 carries three tabs of facts and an answered table; the standing decision page's next republish reads the same paragraph. The checker's existing clauses are unchanged.";
+    }
+
+    // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
+    verification d0552Accept : Test { :>> id = "23531edf-645c-4045-8b92-e2fae064d7b9"; :>> method = VerificationMethod::confirmation; :>> procedureText = "Their words, st195 (chat, 2026-09-22), the direction this skill paragraph and the rebuilt brief carry out - their words, verbatim: “The commentary in the artifact is currently inane. You're giving me prose telling me that it's time to choose, instead of just giving me context so i can actually do so. I'm trying to make decisions here, not follow a process. Your job is to follow a process, though - the process of making relevant content plain, picking a few metrics that are relevant to drive decision making (not just numbers for numbers sake), and clearly illustrate the consequential facts that delineate a decision. I don't need as much of a recommendation if you can identify the relevant information” WARN: read-back - the quoted words do not name d0552 (D0201 B); recorded as given (D0423)."; }
+    part d0552AcceptR1 : TestResult { :>> id = "7630f555-7cc2-4b7a-831e-fa1dbc948912"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "9675a3a5"; :>> judgedAt = "2026-09-22"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
+}

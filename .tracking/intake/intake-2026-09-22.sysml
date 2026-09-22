@@ -55,4 +55,12 @@ package ProjectIntake20260922 {
         :>> text = "and i have no idewa what you're geting at ''One verb:... '' what.are.you.talking.about. lol";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
     }
+
+    part st195 : Statement {
+        :>> id = "01282730-d370-4d54-9df3-29eabe97410f";
+        :>> title = "Correction: the brief gives process prose instead of the facts that delineate each decision; the job is plain relevant content, a few decision-driving metrics, the consequential facts per option, less recommendation";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "The commentary in the artifact is currently inane.  You're giving me prose telling me that it's time to choose, instead of just giving me context so i can actually do so.  I'm trying to make decisions here, not follow a process.  Your job is to follow a process, though - the process of making relevant content plain, picking a few metrics that are relevant to drive decision making (not just numbers for numbers sake), and clearly illustrate the consequential facts that delineate a decision.  I don't need as much of a recommendation if you can identify the relevant information";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
 }

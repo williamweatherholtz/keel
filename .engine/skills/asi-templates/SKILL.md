@@ -77,6 +77,16 @@ recommendation to guide decision making."* And, on what the diagrams must carry:
 logical decisions here, so I want diagrams relating to the logic. how do things works today and how
 would the change affect them? I don't want administrative changes ... I want downstream impact."*
 
+And, 2026-09-22, on a page that narrated the choosing instead of informing it (D0552): *"You're giving me prose
+telling me that it's time to choose, instead of just giving me context so i can actually do so. I'm trying to make
+decisions here, not follow a process. Your job is to follow a process, though - the process of making relevant
+content plain, picking a few metrics that are relevant to drive decision making (not just numbers for numbers
+sake), and clearly illustrate the consequential facts that delineate a decision. I don't need as much of a
+recommendation if you can identify the relevant information."* So per ask: three to five verified facts that
+separate the options, an option table (what it gives, what it costs), one line on what would change it. No
+scaffolding words ("Decides it", "Mine", "True", "choose on the tabs"), no placeholders or asides in controls, and
+an ask the human has answered leaves the page. A recommendation is optional once the facts carry the decision.
+
 **The rule the whole surface hangs on: the brief is a pyramid whose nodes are exhibit titles.** Delete
 every graphic and the remaining sentences still decide it. Delete every sentence and the graphics say
 nothing. If either half fails, the brief is not finished.
