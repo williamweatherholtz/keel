@@ -328,6 +328,16 @@ def check_brief(path: Path, ceiling: int | None = None, raw: str | None = None,
     if tabs and len(re.findall(r'role="tab"[^>]*aria-selected="true"', markup)) != 1:
         fail("exactly one tab must start selected")
 
+    # 3b'. one note field per ask, inside its tab (D0550): a shared note below the tabs reads as a note on every
+    # ask, and the digest then attaches it to none - the human's words on one fork arrived under the whole page
+    # (2026-09-22). The count of note fields equals the count of panels, and every note sits inside a panel.
+    notes = re.findall(r'<textarea[^>]*data-d="note"', markup)
+    panel_bodies = re.findall(r'<[a-z]+[^>]*role="tabpanel"[^>]*>([\s\S]*?)</section>', markup)
+    inside = sum(len(re.findall(r'<textarea[^>]*data-d="note"', pb)) for pb in panel_bodies)
+    if panels and (len(notes) != len(panels) or inside != len(notes)):
+        fail(f"notes and asks disagree: {len(notes)} note field(s), {inside} inside a tab, {len(panels)} tabs - one note per ask, "
+             "inside its tab, so feedback attaches to one answer (D0550)")
+
     # 3c. no implementation duration in anything the reader reads (D0405); a date is not a duration
     dur = DURATION_RE.search(field_text(prose))
     if dur:
@@ -632,7 +642,8 @@ def budgets_probe() -> int:
 
 
 def _brief_fixture(title: str, ask: str, filler_words: int = 0, panels: int = 1, tabs: int | None = None,
-                   selected: int = 1, panel_words: int = 0, extra: str = "", charset: bool = True) -> str:
+                   selected: int = 1, panel_words: int = 0, extra: str = "", charset: bool = True,
+                   shared_note: bool = False) -> str:
     """A minimal tabbed page that satisfies every brief clause, for the self-test to vary: `panels` asks each
     in its own panel, `tabs` tab buttons (defaults to panels), `selected` of them selected, `panel_words` of
     filler inside every panel, `extra` markup inside the first panel."""
@@ -646,13 +657,15 @@ def _brief_fixture(title: str, ask: str, filler_words: int = 0, panels: int = 1,
     body = "".join(
         f'<section role="tabpanel"><p>{pf}</p>{extra if i == 0 else ""}{fig}{fig}'
         f'<div class="opts" data-records="d000{i}"><label><input type="radio" name="a{i}" value="x">x</label>'
-        f'<label><input type="radio" name="a{i}" value="y">y</label></div></section>'
+        f'<label><input type="radio" name="a{i}" value="y">y</label></div>'
+        f'{"" if shared_note else "<label class=\"note-row\">Note<textarea data-d=\"note\"></textarea></label>"}</section>'
         for i in range(panels))
+    shared = '<label class="note-row">Note<textarea data-d="note"></textarea></label>' if shared_note else ""
     meta = '<meta charset="utf-8">' if charset else ""
     return (f'{meta}<title>Brief</title><meta name="viewport" content="width=device-width">'
             f'<style>:root{{}} @media (prefers-color-scheme: dark){{}} [data-theme="dark"]{{}}</style>'
             f'<h1 data-digest="title">{title}</h1><button data-copy></button>'
-            f'<div class="ask"><p>{ask}</p></div><p>{filler}</p>{strip}{body}'
+            f'<div class="ask"><p>{ask}</p></div><p>{filler}</p>{strip}{body}{shared}'
             f'<div class="copy-bottom"><button data-copy></button></div>'
             f'<footer data-digest="provenance">Computed on 2026-09-08.</footer>'
             f'<script>const s = "answers: ";</script>')
@@ -699,6 +712,9 @@ def self_test() -> int:
         ("two 300-word tabs pass the ceiling per tab", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", panels=2, panel_words=300), per_tab=True), []),
         ("the same page fails the ceiling summed", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", panels=2, panel_words=300), per_tab=False), ["reader prose: 6"]),
         ("a 460-word tab fails per tab, naming it", check_brief(p, ceiling=450, raw=fx("The page waits.", "Accept.", panels=2, panel_words=460), per_tab=True), ["tab 1: ", "tab 2: "]),
+        # D0550: one note per ask inside its tab; a single shared note below the tabs is refused
+        ("a shared note below two tabs refused", check_brief(p, ceiling=None, raw=fx("The page waits.", "Accept.", panels=2, shared_note=True)), ["notes and asks disagree: 1 note field(s), 0 inside a tab, 2 tabs"]),
+        ("one note inside each of two tabs passes", check_brief(p, ceiling=None, raw=fx("The page waits.", "Accept.", panels=2)), []),
         # issue659: the draft store keyed on the title is refused; keyed on the published set it passes
         ("title-keyed draft store refused", check_brief(p, ceiling=None, raw=fx("The page waits.", "Accept.", extra="<script>var key='keel-brief:'+document.title;</script>")), ["draft store is keyed on document.title"]),
         ("set-keyed draft store passes", check_brief(p, ceiling=None, raw=fx("The page waits.", "Accept.", extra="<script>var _pg=document.querySelector('.page[data-set]');var key=_pg?'keel-brief:'+_pg.getAttribute('data-set'):null;</script>")), []),

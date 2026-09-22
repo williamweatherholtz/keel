@@ -111,6 +111,7 @@ exhibit titles has the argument.
 | 6 | **Why this wins / when the runner-up wins** | Beats the named alternative on the stated criterion; the runner-up as a conditional, not a rival | ≤ 90 words | `tests/exec_summary` |
 | 7 | **What would change my mind** | One falsifiable condition per ask | ≤ 30 words each | `tests/exec_summary` |
 | 8 | **Provenance strip** | How every number was measured, by whom, when, against which tree | ≤ 60 words | `check_templates.py --brief` |
+| 9 | **Notes** | One note field per ask, inside its tab, keyed to the ask; the digest emits each beneath its own answer, never once for the page (D0550) | one per tab | `check_templates.py --brief` |
 
 **The budgets are held, not hoped (issue413, 2026-09-08).** `python scripts/check_templates.py --brief
 <page>` refuses a page whose headline, ask or provenance strip is over budget, naming the count. Three

@@ -23,4 +23,20 @@ package ProjectIntake20260922 {
         :>> text = "critique this direction with a panel, make an artifact, and convince me this is the right direction.";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
     }
+
+    part st191 : Statement {
+        :>> id = "73d5fec2-abc3-4034-8a36-95843daff308";
+        :>> title = "Direction for slice one: a cleanly deterministic versus non-deterministic handoff - clear inputs to the agent, keel tests the output, failed output feeds back to the agent, minimal context for agents, as much munging as possible programmatic and out of AI context";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "for slice one: critical we get this right.  the handoff and interface needs to be cleanly determinstic vs non-detemrinistic.  e.g. make it clear what the inputs to the agent are, then test its output.  if the output fails (as measured by keel), then the agent gets feedback and tweaks.  i want minimal overhead context for agents, so as much munging programatically out-of-ai-context";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
+
+    part st192 : Statement {
+        :>> id = "e97712c2-01c4-4601-9551-51082f07fb71";
+        :>> title = "Correction: the brief's comment field must be unique per tab so feedback attaches to one ask";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "fix artifact permanently so the comment section is unique per tab.  today, it's shared and i can't uniquely give feedback properly";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
 }
