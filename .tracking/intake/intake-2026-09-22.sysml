@@ -39,4 +39,20 @@ package ProjectIntake20260922 {
         :>> text = "fix artifact permanently so the comment section is unique per tab.  today, it's shared and i can't uniquely give feedback properly";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
     }
+
+    part st193 : Statement {
+        :>> id = "bd094b16-8b87-4bbc-b070-9746d4a2fb21";
+        :>> title = "Correction: no placeholders, parentheticals or inserted comments on human-facing surfaces; cleaner is better";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "''optional, on this ask only''.  Remove the parentheticals.  Don't insert distracting comments; support smooth UX and use cases.  Stop trying to add verbose data everywhere; cleaner is better.";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
+
+    part st194 : Statement {
+        :>> id = "a0acd8c5-0c65-441d-b1af-79c496b32bf4";
+        :>> title = "Correction: the brief's slice-one 'What changes' line was unreadable jargon; say what the command does in plain words";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "and i have no idewa what you're geting at ''One verb:... '' what.are.you.talking.about. lol";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
 }
