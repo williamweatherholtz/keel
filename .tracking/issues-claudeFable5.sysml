@@ -2733,4 +2733,26 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcReceiptStdoutIsHeldToTheLaunch to issue670;
+
+    part issue671 : Issue {
+        :>> id = "a16ba38e-1196-466e-9a61-043f5e141993";
+        :>> title = "A read-only panelist wrote the repository root during round 3 of the runner-direction panel and reversed it; the only control was a sentence in its dispatch prompt";
+        :>> createdAt = "2026-09-22";
+        :>> createdBy = "claudeFable5";
+        :>> description = "During round 3 of the runner-direction panel (D0542) the operations pessimist, dispatched read-only by a prose brief ('READ-ONLY. Write NOTHING under the repository'), ran a probe whose git clone failed at checkout and, because the command chain's cd never executed, its next step ran in the repository root: it set skip-worktree on .claude/settings.json and deleted the file. The panelist reversed both in the same turn and disclosed it; git ls-files -v shows H and git status --porcelain matched the session's opening snapshot when the author checked. The control was a sentence in a dispatch prompt. The verifier and recorder subagents of D0425 have a ledgered control for the same class (verifier:tree-written); panelists have none, and the adversarial-panel-review process dispatches them into the real tree. Recurrable: any read-only agent given the repository root and a shell can write to it by accident.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcPanelistsAreDispatchedIntoAnIsolatedTree to issue671;
+
+    part issue672 : Issue {
+        :>> id = "19aa1c44-e768-42c9-9977-3473a63368ba";
+        :>> title = "The panel tally regex counted two round-2 reports as zero findings because they spelled severities differently; the direction stated 26 MAJOR and 31 MINOR where the reports held 36 and 35";
+        :>> createdAt = "2026-09-22";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The round tally for the runner-direction panel (scratchpad/panel_tally.py, D0542) counted a panelist's findings only when a line began with an enumerator followed by [SEVERITY]; two round-2 reports wrote their severities as '[MAJOR - a BLOCKER by ...]' and '(MAJOR)', so both tallied as zero and revision 3 of the direction stated 26 MAJOR and 31 MINOR where the true counts were 36 and 35. The facts pedant re-counted by hand and found it; the tally was corrected to accept either bracket form anywhere on an enumerated line and re-run over all three rounds. Recurrable: a panel report format that is only asked for in prose will be met in several spellings, and a count computed by a regex over prose is a stored answer that can disagree with the reports it summarises.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Low;
+    }
+    #Resolves dependency from dcPanelTallyReadsAMachineTrailer to issue672;
 }
