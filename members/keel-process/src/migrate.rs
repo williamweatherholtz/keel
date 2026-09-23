@@ -819,7 +819,7 @@ fn step_removed_types(root: &Path, w: &Working) -> StepPlan {
         let Some(content) = w.read(&path) else { continue };
         for (i, line) in content.lines().enumerate() {
             // issue377: scan the line with its prose blanked; report the ORIGINAL line.
-            let scan = without_string_literals(line);
+            let scan = without_line_comment(&without_string_literals(line));
             for (ty, advice) in REMOVED_TYPES {
                 if types_as(&scan, ty) {
                     plan.blockers.push(Blocker {
@@ -1620,12 +1620,20 @@ pub fn parse_attempts(text: &str) -> Vec<UpdateAttempt> {
     out
 }
 
+/// The line up to its `//` comment, for the removed-types scan (issue675). Applied after
+/// `without_string_literals`, so a `//` inside a literal is already gone and the first `//` left is
+/// a comment. The `// RAN: <evidence>` line the write API emits is prose: evidence beginning "Task"
+/// put `: Task` on the line and read as a typing colon.
+fn without_line_comment(line: &str) -> String {
+    line.find("//").map_or(line, |at| &line[..at]).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         clean_args, declared_parts, discount_tolerated, drop_processstep_order, is_engine_dev_only, remap_engine_path, retype_instances,
         step_engine_resync, step_process_as_action, step_processstep_order, step_release_as_occurrence, step_removed_types, step_resync_record,
-        strip_order_assignment, tolerated_paths, types_as, without_string_literals, FileEdit, Path, StepPlan, Working,
+        strip_order_assignment, tolerated_paths, types_as, without_line_comment, without_string_literals, FileEdit, Path, StepPlan, Working,
     };
 
     /// D0388 probe pair for the resync record, chosen before the real tree was read.
@@ -1756,6 +1764,38 @@ mod tests {
         assert!(reasons.iter().any(|r| r.contains("`RiskLevel`")), "a real enum value still blocks: {reasons:?}");
         // Escaped quotes inside a literal do not end it early.
         assert_eq!(without_string_literals("a = \"x \\\" : Agent\" : Real"), "a = \"\" : Real");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// issue675: the `// RAN: <evidence>` line `keel record result` writes is a comment, not schema.
+    /// Evidence beginning `Task DoD` put `: Task` on the line and blocked keel-next's move to 0.5.2 on
+    /// four of the writer's own lines. The other arm: a real annotation before a trailing comment, and
+    /// a `//` inside a string literal, still leave the schema visible.
+    #[test]
+    fn a_removed_type_named_inside_a_line_comment_is_prose_not_schema() {
+        let dir = std::env::temp_dir().join(format!("keel-migrate-comment-{}", std::process::id()));
+        let tracking = dir.join(".tracking");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&tracking).unwrap();
+        std::fs::write(
+            tracking.join("b.sysml"),
+            "package B {\n    action def W {\n        action w;\n        // RAN: Task DoD (method analyze). // RAN: grep -c x -> 4 ; level RiskLevel::high\n    }\n}\n",
+        )
+        .unwrap();
+        let w = Working::new();
+        let comment = step_removed_types(&dir, &w);
+        assert!(
+            comment.blockers.is_empty(),
+            "a removed type NAMED IN A COMMENT must not block: {:?}",
+            comment.blockers.iter().map(|b| &b.reason).collect::<Vec<_>>()
+        );
+        std::fs::write(tracking.join("b.sysml"), "package B {\n    part a : Agent; // an agent\n}\n").unwrap();
+        let schema = step_removed_types(&dir, &w);
+        assert!(
+            schema.blockers.iter().any(|b| b.reason.contains("`Agent`")),
+            "a real `: Agent` annotation before a comment still blocks"
+        );
+        assert_eq!(without_line_comment(&without_string_literals("a = \"http://x\" : Real // : Agent")), "a = \"\" : Real ");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

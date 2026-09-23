@@ -2777,4 +2777,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRetroGuardReadsTheTreesItemNames to issue674;
+
+    part issue675 : Issue {
+        :>> id = "a828978f-5d0c-4f9e-8f7f-ca565790e41e";
+        :>> title = "keel migrate reads a // RAN: comment as a removed-type annotation, so the write API's own evidence line blocks a downstream tree's migration";
+        :>> createdAt = "2026-09-23";
+        :>> createdBy = "claudeFable5";
+        :>> description = "keel migrate refuses a healthy downstream tree because its removed-types scanner reads line comments as schema. without_string_literals (members/keel-process/src/migrate.rs:792) blanks string literals (issue377) but leaves // comments, and types_as treats any colon before a removed type name as a typing colon. The write API itself emits '// RAN: <evidence>' lines (members/keel-write/src/write.rs:892); evidence beginning 'Task DoD' puts ': Task' on the line. On 2026-09-23 the published 0.5.2 binary's keel migrate . --dry-run over keel-next reported four BLOCKED lines, .tracking/backlog.sysml:11, 15, 19 and 23, each the RAN comment of a task keel record result wrote, and refused to move the tree onto the engine it was scaffolded from. keel's writer output blocks keel's migrator; no override surface exists, so the only workaround is editing authored evidence, which is not one. Same class as issue377 and issue673: green in keel because keel's own RAN lines never begin with a removed type name, red on an adopter. Resolver: dcMigrateScannerSkipsLineComments.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcMigrateScannerSkipsLineComments to issue675;
 }
