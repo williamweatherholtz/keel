@@ -2766,4 +2766,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcIdGuardChargesOnlyAuthoredSurfaces to issue673;
+
+    part issue674 : Issue {
+        :>> id = "1485fce5-22b8-4595-a9e4-449dd9e5e3fa";
+        :>> title = "retro-backlog recognises items by keel's dc, issue and d0 prefixes, so a downstream project's own task names read as no item at all";
+        :>> createdAt = "2026-09-22";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The retro-backlog guard recognises a tracked item in a retro's text only by three spellings of keel's own naming convention: a task whose name begins with dc followed by an uppercase letter, an Issue spelled issue followed by digits, and a Decision spelled d0 or D0 followed by digits (members/keel-model/src/textscan.rs:137-138). A downstream project whose tasks follow its own convention is invisible to the guard: in keel-next on 2026-09-22 the retro of sprint 1 named the task nxNeedsPracticeIsResearched, added in the same commit and declared as an action in .tracking/backlog.sysml, and the guard refused the commit with 'it names no item at all' twice, once for the finding clause and once for the 'no further item' clause. The retro passed only after it also named d0002. The rule the guard enforces is right; its reading of what an item is belongs to this repository's naming, not to the model. The task set the guard should read is the set of `action` declarations under the project's action defs and the `part issueNNN` and `dNNNN` declarations, computed from the tree, not a prefix list. Same class as issue673 and lens C's finding that verification points inward: green here by construction, red on an adopter. Resolver: dcRetroGuardReadsTheTreesItemNames.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRetroGuardReadsTheTreesItemNames to issue674;
 }

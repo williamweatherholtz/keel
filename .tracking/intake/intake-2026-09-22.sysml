@@ -71,4 +71,12 @@ package ProjectIntake20260922 {
         :>> text = "Ok I want to make a separate project and kickoff a new version of keel that aligns with this new direction. More than a fork, a different idea. But we've done a ton here, I might end up liking it better anyway, etc. But for now I want a hard split.\n\nDo a panel to prep all the critical knowlrdge. pointing out the most valuable directors we've gone in keel, most valuable processes, lessons learned from mistakes, critical insights and direction with keel, not able research and ideal next build specs, etc. etc.\n\nWe'll seed the new project with this (and probably with keel itself), so make it easy to decouple eventually. I'll want to rip keel out eventually, or maybe just when I deploy the new direction.\n\nI want a tool first, custom process centric, AI harness, that can be self hosted to allow remote control, auth, proper artifact ingestion pipeline, as well as the other 15 key features in keel next gen.\n\nMaybe you make a clean need, use case, requirement, and code architectural tree design that serves as a scaffold for the new project?";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
     }
+
+    part st197 : Statement {
+        :>> id = "416ab0dd-2cf7-431e-a374-3773c4c96e2b";
+        :>> title = "Question: the tech stack for keel-next - Rust; which database for SysML v2 data; was SQL researched; is the needs architecture mature; how do the needs, use cases and requirements look";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "Let's talk best tech stack for the client arch. I lean Rust always, for its robustness. What kind of db works for storing the data we need? The data should effectively be sysmlv2 representations. Did we do research and found a normal SQL db works well in this application? Anyway, I want to dig into the tech stack a little because I feel like the needs architecture is fairly mature already. Or maybe that's ignorant because this is a legitimately new project?\n\nHow does our architecture look? By which I mean high level needs, use cases, requirements, etc.?";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
 }
