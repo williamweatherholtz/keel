@@ -1023,7 +1023,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "keel-actor"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "getrandom 0.3.4",
  "keel-fs",
@@ -1033,7 +1033,7 @@ dependencies = [
 
 [[package]]
 name = "keel-args"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-fs",
  "keel-git",
@@ -1041,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "keel-cli"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "cucumber",
  "getrandom 0.3.4",
@@ -1074,14 +1074,14 @@ dependencies = [
 
 [[package]]
 name = "keel-fs"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-parser",
 ]
 
 [[package]]
 name = "keel-git"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-fs",
  "keel-perf",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "keel-github"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-fs",
  "keel-git",
@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "keel-guards"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-actor",
  "keel-args",
@@ -1121,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "keel-hooks"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-actor",
  "keel-args",
@@ -1138,7 +1138,7 @@ dependencies = [
 
 [[package]]
 name = "keel-issues"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-actor",
  "keel-args",
@@ -1152,11 +1152,11 @@ dependencies = [
 
 [[package]]
 name = "keel-json"
-version = "0.5.1"
+version = "0.5.2"
 
 [[package]]
 name = "keel-model"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "getrandom 0.3.4",
  "keel-actor",
@@ -1174,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "keel-parser"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "cucumber",
  "hex",
@@ -1187,11 +1187,11 @@ dependencies = [
 
 [[package]]
 name = "keel-perf"
-version = "0.5.1"
+version = "0.5.2"
 
 [[package]]
 name = "keel-process"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "include_dir",
  "keel-actor",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "keel-schema"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "include_dir",
  "keel-fs",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "keel-serve"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "async-stream",
  "axum",
@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "keel-suite"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-actor",
  "keel-args",
@@ -1261,7 +1261,7 @@ dependencies = [
 
 [[package]]
 name = "keel-view"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-actor",
  "keel-args",
@@ -1281,7 +1281,7 @@ dependencies = [
 
 [[package]]
 name = "keel-write"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "keel-actor",
  "keel-args",
