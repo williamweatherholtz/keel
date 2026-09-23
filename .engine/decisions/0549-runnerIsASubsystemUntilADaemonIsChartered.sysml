@@ -1,4 +1,4 @@
-// D0549 (PROPOSED — NOT YET ACCEPTED) — runnerIsASubsystemUntilADaemonIsChartered: slice one lands inside keel as a schema change and one verb, and separation into its own project is decided only if the daemon slice is ever chartered
+// D0549 (status: the `status` field below is the truth) — runnerIsASubsystemUntilADaemonIsChartered: slice one lands inside keel as a schema change and one verb, and separation into its own project is decided only if the daemon slice is ever chartered
 // Recorded via `keel record decision` (D0105 RMWX axis; issue054). Acceptance is a separate explicit
 // human gate (method=confirmation, D0106): flip status + add the d0549Accept event on sign-off.
 package Decision0549 {
@@ -13,10 +13,14 @@ package Decision0549 {
         :>> title = "runnerHome: slice one lands inside keel as a schema change and one verb, and separation into its own project is decided only if the daemon slice is ever chartered";
         :>> createdAt = "2026-09-22";
         :>> createdBy = "claudeFable5";
-        :>> status = DecisionStatus::proposed;
+        :>> status = DecisionStatus::accepted;
         :>> context = "The human said in st185: 'Yes I meant a keel subsystem/mode, though I might make it a totally separate project because I feel like it's quite distinct architecturally.' Slice one of the panelled direction (D0542) is a schema CR on ProcessStep plus one CliCommand - a subsystem by construction. About a third of the issue ledger - 223 of 667 by the value critic's classification, the 80 unclassed an estimate - is keel the product: parser, adoption and view surfaces untouched by any runner protocol. Separating later is the project-migration process (D0275); separating now leaves that third behind with a smaller team. The question becomes live only if a daemon (slice two) is chartered on its recorded trigger.";
         :>> decision = "OPTION A (recommended): slice one lands in this repository; the subsystem-or-project question is asked again at slice two's trigger, and separation, if chosen then, is a governed project migration. OPTION B: a separate project now, adopting the engine as a downstream, with two backlogs from the first day.";
         :>> rationale = "Architectural distinctness is real - the human named it - but slice one has no daemon, lease server or proxy, and the two things it changes are in this repository's frozen core and CLI surface. Splitting a backlog before the first run exists spends the human's attention on a boundary nothing yet crosses. B is honest about the distinctness; A defers the cost to the moment it is paid.";
         :>> consequences = "Under A: no new repository; the slice-one CR is chartered here; the question is re-asked in the daemon's charter. Under B: a new project is introduced under the introduction process, the schema change lands upstream first, and the ledger's product third stays here. COST under A: nothing now; the question is re-asked in the daemon's charter. COST under B: a new repository introduced under the introduction process, two backlogs from the first day, and the schema change landing upstream first.";
     }
+
+    // acceptance event (D0121 review-queue sign-off; D0066/D0106 — human-judged, not fabricated)
+    verification d0549Accept : Test { :>> id = "01eac0c7-a851-46c6-ab9e-ef25bc658b54"; :>> method = VerificationMethod::confirmation; :>> procedureText = "Their words, st196 (chat, 2026-09-22): a separate project now, a hard split - OPTION B of this fork - their words, verbatim: “Ok I want to make a separate project and kickoff a new version of keel that aligns with this new direction. More than a fork, a different idea. But we've done a ton here, I might end up liking it better anyway, etc. But for now I want a hard split.”"; }
+    part d0549AcceptR1 : TestResult { :>> id = "8744940e-7e4e-4149-915e-4848d17e600b"; :>> outcome = VerdictKind::pass; :>> judgedAgainst = "bfc654d5"; :>> judgedAt = "2026-09-22"; :>> judgedBy = "wweatherholtz"; :>> createdBy = "claudeFable5"; }
 }

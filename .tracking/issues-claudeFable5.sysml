@@ -2755,4 +2755,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Low;
     }
     #Resolves dependency from dcPanelTallyReadsAMachineTrailer to issue672;
+
+    part issue673 : Issue {
+        :>> id = "e2a1d3b2-9b65-468b-8768-d6ab639ea5cb";
+        :>> title = "id-is-a-uuid charges the engine's own non-v4 ids to a fresh adoption on its first commit: 151 violations, zero authored, no HEAD";
+        :>> createdAt = "2026-09-22";
+        :>> createdBy = "claudeFable5";
+        :>> description = "On a fresh repository with no commit, `keel gate guard` reports the id-is-a-uuid guard red with 151 violations, every one of them in a file the engine shipped by `keel init`: 11 in .engine/views/viewpoint-registry.sysml, 8 in .engine/rules/rules.sysml, 8 in .engine/processes/knowledge-graph-memory.sysml, and the rest across the other process files; zero under .tracking. The guard's rule is that an id ADDED in the working tree must be an RFC 4122 v4 UUID, and with no HEAD every id is added, so the engine's own non-v4 ids are charged to the project as if it had authored them. Observed 2026-09-22 in the sibling repository keel-next, scaffolded by `keel init . --profile strict` at engine 0.5.1 from a copy of the working build at bfc654d5; the first commit's pre-commit hook would refuse on this guard, so the first commit of every fresh adoption is either refused or made with SKIP_KEEL=1. The init smoke test asserts a fresh scaffold passes every guard but does not run the guard in a repository with no HEAD, so it could not see this. The class is the one lens C names as verification pointing inward: a guard green here by construction because the engine's ids exist at HEAD, red on every adopter's first commit. Resolver: dcIdGuardChargesOnlyAuthoredSurfaces.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcIdGuardChargesOnlyAuthoredSurfaces to issue673;
 }

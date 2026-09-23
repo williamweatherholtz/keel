@@ -63,4 +63,12 @@ package ProjectIntake20260922 {
         :>> text = "The commentary in the artifact is currently inane.  You're giving me prose telling me that it's time to choose, instead of just giving me context so i can actually do so.  I'm trying to make decisions here, not follow a process.  Your job is to follow a process, though - the process of making relevant content plain, picking a few metrics that are relevant to drive decision making (not just numbers for numbers sake), and clearly illustrate the consequential facts that delineate a decision.  I don't need as much of a recommendation if you can identify the relevant information";
         :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
     }
+
+    part st196 : Statement {
+        :>> id = "89d0684c-0f1b-4404-b55c-7b1112c1f8bc";
+        :>> title = "Direction: a separate project for the next keel - a hard split; a panel to harvest the critical knowledge; seed it with the harvest and probably keel itself, decouplable; a tool-first custom-process-centric self-hosted AI harness with remote control, auth and artifact ingestion; a clean need, use case, requirement and code architecture scaffold";
+        :>> createdAt = "2026-09-22"; :>> createdBy = "claudeFable5";
+        :>> text = "Ok I want to make a separate project and kickoff a new version of keel that aligns with this new direction. More than a fork, a different idea. But we've done a ton here, I might end up liking it better anyway, etc. But for now I want a hard split.\n\nDo a panel to prep all the critical knowlrdge. pointing out the most valuable directors we've gone in keel, most valuable processes, lessons learned from mistakes, critical insights and direction with keel, not able research and ideal next build specs, etc. etc.\n\nWe'll seed the new project with this (and probably with keel itself), so make it easy to decouple eventually. I'll want to rip keel out eventually, or maybe just when I deploy the new direction.\n\nI want a tool first, custom process centric, AI harness, that can be self hosted to allow remote control, auth, proper artifact ingestion pipeline, as well as the other 15 key features in keel next gen.\n\nMaybe you make a clean need, use case, requirement, and code architectural tree design that serves as a scaffold for the new project?";
+        :>> saidBy = "wweatherholtz"; :>> saidAt = "2026-09-22"; :>> channel = StatementChannel::chat;
+    }
 }
