@@ -198,7 +198,7 @@ package ProjectBaselines {
         :>> title = "v0.5.3 - keel migrate reads a comment as prose, so a downstream tree moves onto the engine it was scaffolded from";
         :>> createdAt = "2026-09-23";
         :>> createdBy = "claudeFable5";
-        :>> commit = "36057f44";  // the last content commit; corrected to the tagged commit once the tag exists (issue311)
+        :>> commit = "df044902";  // the TAGGED commit (v0.5.3 at df044902; issue311: recording preceded tagging by one commit)
         :>> tag = "v0.5.3";
         :>> purpose = "The published 0.5.2 binary refused to migrate keel-next: its removed-types scanner read the // RAN: evidence comments keel record result writes, and evidence beginning with Task read as a typing colon (issue675). The scan now drops a // line comment after blanking string literals, so a downstream tree whose recorded evidence names a retired type can take the engine resync.";
     }
