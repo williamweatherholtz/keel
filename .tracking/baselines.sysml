@@ -188,7 +188,7 @@ package ProjectBaselines {
         :>> title = "v0.5.2 - a project keel init scaffolded after v0.5.1 gets a published binary that gates its engine";
         :>> createdAt = "2026-09-23";
         :>> createdBy = "claudeFable5";
-        :>> commit = "a1bfae89";  // the last content commit; corrected to the tagged commit once the tag exists (issue311)
+        :>> commit = "bb1882d2";  // the TAGGED commit (v0.5.2 at bb1882d2; issue311: recording preceded tagging by one commit)
         :>> tag = "v0.5.2";
         :>> purpose = "keel-next was scaffolded by a build 39 commits past v0.5.1 and pinned engine 0.5.1, so the only published binary its pin can fetch fails guard cli-surface-declared on its own .engine (the sitting-coverage synopsis D0510 rewrote): no downloaded, checksum-verified keel could gate that tree. This cut publishes the engine it carries: D0510's sitting review by analysis, the members restructure (D0513, D0532), the verifier receipt rendered from files (D0533) and the runner-direction record (D0540 to D0555).";
     }
