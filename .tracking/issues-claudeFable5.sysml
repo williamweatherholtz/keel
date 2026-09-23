@@ -2788,4 +2788,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcMigrateScannerSkipsLineComments to issue675;
+
+    part issue676 : Issue {
+        :>> id = "144ff2cd-ef79-4eb9-8e7b-02c4c15f7be2";
+        :>> title = "The in-loop hooks and pre-commit run a loose .keel/bin binary ahead of the verified pinned cache, and never check a checksum";
+        :>> createdAt = "2026-09-23";
+        :>> createdBy = "claudeFable5";
+        :>> description = "The generated in-loop hooks (.claude/settings.json, every keel-owned hook command) and the rendered .githooks/pre-commit resolve the keel binary in this order: KEEL_BIN, then a loose .keel/bin/keel or .keel/bin/keel.exe, then .keel/bin/<pin>/keel-*, then PATH. None of them compares a checksum; only keelw does. So a binary dropped at the loose slot, which D0391 also uses for keel's own self-build copy, wins over the verified pinned cache and runs every gate unverified and unannounced. On 2026-09-23 in keel-next a local dev build copied to .keel/bin/keel.exe ran the turn gate in place of the pinned 0.5.1 release; its SHA-256 (8b905aa9...) did not match the release entry (2b377a6a...), and nothing said so until keelw was run by hand. A pin that is verified only when someone calls the wrapper is not a pin for the controls that matter most. Resolver: dcHooksResolveThePinnedBinaryVerified.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcHooksResolveThePinnedBinaryVerified to issue676;
 }
