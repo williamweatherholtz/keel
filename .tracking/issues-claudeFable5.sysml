@@ -2810,4 +2810,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcRetroNamesAnyDeclaredItem to issue677;
+
+    part issue678 : Issue {
+        :>> id = "592ffe06-98fa-4936-b3bf-81f1c9919ebf";
+        :>> title = "A fork written as options in one Decision cannot be resolved in serve, and decision prose renders as run-ons";
+        :>> createdAt = "2026-09-24";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found by keel-next at 1df0920, from the human's words of 2026-09-24 (st219 in that tree): 'your decisions have options but no way to actually accept those options. why? and format the text better - it's all run-ons in the keel review pan when i'm lookin gat decisions'. Two defects in one experience. First, a Decision whose decision field lays out OPTION A, OPTION B, OPTION C and DO NOTHING (keel-next D0002, and keel's own fork decisions in the same shape) is presented in serve with one accept and one reject, so the human cannot resolve it there; the only path is words in chat naming the option, which serve does not offer and the decision text does not say. Either the Decision model carries options the human chooses among, or the authoring guidance and a rule refuse a fork in one Decision and require one proposal with the alternatives as context. Second, a decision recorded through keel record decision --from with one paragraph per field renders as one run-on block in the review pane; 394 of keel's 554 reference decisions carry paragraph breaks as escaped newlines, which the pane renders, but nothing in the record verb or the authoring skill tells a downstream author to write them, and the pane does not split long fields itself.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcDecisionIsOneProposalInParagraphs to issue678;
 }
