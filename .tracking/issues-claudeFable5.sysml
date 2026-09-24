@@ -2799,4 +2799,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::Medium;
     }
     #Resolves dependency from dcHooksResolveThePinnedBinaryVerified to issue676;
+
+    part issue677 : Issue {
+        :>> id = "fa391c7b-3a90-4edd-9833-1a991636fe59";
+        :>> title = "retro-backlog reads only dc-prefixed task names, so a downstream project's retro can never name the item that tracks its finding";
+        :>> createdAt = "2026-09-24";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found by keel-next at 1538a4c, sprint 8. The retro named the backlog item the same commit added, nxSchemaMeasurementsRunOnADag, and the retro-backlog guard failed with 'names no item at all', because named_items in members/keel-guards/src/sprints.rs recognizes only issueNNN, d0NNN and task names beginning with dc, and added_items reads `action dcX;` declarations the same way. The retro passed once it also named d0004, which is the wrong thing to be rewarded for: the Decision is not what tracks the finding. Every downstream project names its tasks by its own prefix, so for them this guard can never be satisfied by the item that actually tracks the finding, and its two other exits (a Decision, or an issue) are what they will reach for. The guard should read the declared action names from the tree's backlog, whatever their prefix.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::Medium;
+    }
+    #Resolves dependency from dcRetroNamesAnyDeclaredItem to issue677;
 }
