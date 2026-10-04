@@ -2831,5 +2831,6 @@ package IssuesClaudeFable5 {
         :>> discoveredInField = false;
         :>> severity = Severity::High;
     }
+    // BESIDE (keel-next's sprint 37 review, round 8, F37): the description above counts three writes "allowed by the pre-write hook" where the ledger bears two pre-write windows; the third write, a Python patch run from Bash, passed the pre-bash hook unread and reached no pre-write hook at all, as the description's next sentence says. The record stands as written; this line says which hook each write met.
     #Resolves dependency from dcOverrideConsumedOnAnyToolsWrite to issue679;
 }
