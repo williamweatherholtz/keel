@@ -2821,4 +2821,15 @@ package IssuesClaudeFable5 {
         :>> severity = Severity::High;
     }
     #Resolves dependency from dcDecisionIsOneProposalInParagraphs to issue678;
+
+    part issue679 : Issue {
+        :>> id = "b0e53baa-b998-4999-a11e-6305b7492e9b";
+        :>> title = "An armed override is consumed by no tool but the sed path, and a python write to a locked fact surface passes the pre-bash hook";
+        :>> createdAt = "2026-10-04";
+        :>> createdBy = "claudeFable5";
+        :>> description = "Found by keel-next at 6525fb3 (its sprint 37 review, round 6 F26 and round 7 F32). On 2026-10-04 three writes to .tracking/backlog.sysml under an armed override were allowed by the pre-write hook (the ledger's pre-write lines 41799 to 41814 and 42020 to 42423: allow, no deny, no override-consumed), so the override stood armed after each write and no obligation was recorded; on 2026-10-03 the same hook had denied under api-owned-surface, then allowed and consumed within a second of the arming. Two writes were the Edit tool's with the override armed; one was a Python patch run from Bash, which the pre-bash hook, refusing sed over a fact surface, does not read as a write. The downstream project removed the stale arming by hand and recorded the writes as its issue009 for a human's review.";
+        :>> discoveredInField = false;
+        :>> severity = Severity::High;
+    }
+    #Resolves dependency from dcOverrideConsumedOnAnyToolsWrite to issue679;
 }
