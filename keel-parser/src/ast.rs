@@ -176,6 +176,11 @@ pub struct AllocateEdge {
 pub struct DependencyAnnotation {
     /// The marker name (e.g. `DependsOn`, `OrderingOnly`).
     pub marker: String,
+    /// The optional identification before `from` (`dependency derive_50511 from A to B;`): the OMG
+    /// textual grammar's `'dependency' ( Identification? 'from' )?` (GH#72). A downstream emitter
+    /// carries its source relationship id here; `None` for the unnamed form every edge in this
+    /// repository uses.
+    pub name: Option<String>,
     pub from: String,
     pub to: String,
     pub span: Span,

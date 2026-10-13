@@ -722,30 +722,59 @@ fn parse_hash_item(
         }));
     }
     p.advance(); // consume 'dependency'
+    let name = parse_dependency_identification(p, filename)?;
     p.expect(&TokenKind::From, filename)?;
-    let (from, _) = p.expect_ident(filename)?;
+    let from = expect_qualified_name(p, filename)?;
     p.expect(&TokenKind::To, filename)?;
-    let (to, _) = p.expect_ident(filename)?;
+    let to = expect_qualified_name(p, filename)?;
     let end = p.current_span();
     p.expect(&TokenKind::Semicolon, filename)?;
     Ok(Some(Item::Dependency(DependencyAnnotation {
-        marker, from, to,
+        marker, name, from, to,
         span: Span { start: s.start, end: end.start },
     })))
+}
+
+/// The optional identification between `dependency` and `from` (GH#72): the OMG textual grammar reads
+/// `'dependency' ( Identification? 'from' )?`, so `dependency derive_50511 from A to B;` is vanilla
+/// `SysML` v2. A plain identifier is the name; `from` is a keyword, so the unnamed form is untouched.
+fn parse_dependency_identification(p: &mut Parser, filename: &str) -> Result<Option<String>, ParseError> {
+    if matches!(p.peek(), TokenKind::Ident(_)) {
+        let (name, _) = p.expect_ident(filename)?;
+        return Ok(Some(name));
+    }
+    Ok(None)
+}
+
+/// A dependency endpoint is a `QualifiedName` in the OMG grammar (`client += [Element|QualifiedName]`),
+/// so `from Shadow::WDG_FLD_1::WDG_WREQ_2 to Shadow::WDG_WREQ_1` is as vanilla as `from a to b` (GH#72:
+/// an emitter that writes its edges root-qualified was refused at the first `::`). The segments are
+/// kept as the full `A::B::C` text, as `FlowEdge` keeps a dotted feature path: the fact stays intact
+/// and a consumer takes the last segment, which is the item it knows.
+fn expect_qualified_name(p: &mut Parser, filename: &str) -> Result<String, ParseError> {
+    let (mut name, _) = p.expect_ident(filename)?;
+    while p.eat(&TokenKind::ColonColon) {
+        let (segment, _) = p.expect_ident(filename)?;
+        name.push_str("::");
+        name.push_str(&segment);
+    }
+    Ok(name)
 }
 
 /// Bare (marker-less) `dependency from X to Y;` - the base-SysML plain dependency (D0196).
 fn parse_bare_dependency(p: &mut Parser, filename: &str) -> Result<Option<Item>, ParseError> {
     let s = p.current_span();
     p.advance(); // consume 'dependency'
+    let name = parse_dependency_identification(p, filename)?;
     p.expect(&TokenKind::From, filename)?;
-    let (from, _) = p.expect_ident(filename)?;
+    let from = expect_qualified_name(p, filename)?;
     p.expect(&TokenKind::To, filename)?;
-    let (to, _) = p.expect_ident(filename)?;
+    let to = expect_qualified_name(p, filename)?;
     let end = p.current_span();
     p.expect(&TokenKind::Semicolon, filename)?;
     Ok(Some(Item::Dependency(DependencyAnnotation {
         marker: String::new(),
+        name,
         from,
         to,
         span: Span { start: s.start, end: end.start },
@@ -1004,7 +1033,7 @@ mod tests {
     fn empty_package() {
         let pkg = parse_src("package Foo {}");
         assert_eq!(pkg.name, "Foo");
-        assert!(pkg.items.is_empty());
+        assert_eq!(pkg.items.len(), 0, "an empty package holds no items");
     }
 
     #[test]
@@ -1103,8 +1132,48 @@ mod tests {
         let pkg = parse_src("package P { #DependsOn dependency from a to b; }");
         let Item::Dependency(d) = &pkg.items[0] else { panic!("expected Dependency") };
         assert_eq!(d.marker, "DependsOn");
+        assert_eq!(d.name, None, "the unnamed form carries no identification");
         assert_eq!(d.from, "a");
         assert_eq!(d.to, "b");
+    }
+
+    /// GH#72: `dependency derive_50511 from A to B;` is the OMG grammar's `Identification? 'from'`.
+    /// Before this read, the parser refused at the name: `expected From, got Ident("derive_50511")`.
+    #[test]
+    fn a_named_dependency_reads_the_identification_before_from() {
+        let pkg = parse_src("package P { dependency derive_50511 from LOGDC2_PRD_Rqmts_105 to LOGDC2_SYSRQ_418; }");
+        let Item::Dependency(d) = &pkg.items[0] else { panic!("expected Dependency") };
+        assert_eq!(d.marker, "");
+        assert_eq!(d.name.as_deref(), Some("derive_50511"));
+        assert_eq!(d.from, "LOGDC2_PRD_Rqmts_105");
+        assert_eq!(d.to, "LOGDC2_SYSRQ_418");
+    }
+
+    #[test]
+    fn a_marked_dependency_reads_the_identification_too() {
+        let pkg = parse_src("package P { #DependsOn dependency edge_7 from a to b; }");
+        let Item::Dependency(d) = &pkg.items[0] else { panic!("expected Dependency") };
+        assert_eq!(d.marker, "DependsOn");
+        assert_eq!(d.name.as_deref(), Some("edge_7"));
+        assert_eq!((d.from.as_str(), d.to.as_str()), ("a", "b"));
+    }
+
+    /// GH#72, second half: the endpoints are `QualifiedName`s. Penumbra's emitter writes every edge
+    /// root-qualified, and the parser stopped at the first `::` with `expected To, got ColonColon`.
+    #[test]
+    fn a_dependency_endpoint_may_be_a_qualified_name() {
+        let pkg = parse_src("package P { dependency derive_7 from Shadow::WDG_FLD_1::WDG_FLD_2::WDG_WREQ_2 to Shadow::WDG_FLD_1::WDG_WREQ_1; }");
+        let Item::Dependency(d) = &pkg.items[0] else { panic!("expected Dependency") };
+        assert_eq!(d.name.as_deref(), Some("derive_7"));
+        assert_eq!(d.from, "Shadow::WDG_FLD_1::WDG_FLD_2::WDG_WREQ_2");
+        assert_eq!(d.to, "Shadow::WDG_FLD_1::WDG_WREQ_1");
+    }
+
+    #[test]
+    fn a_dependency_still_needs_from_after_its_name() {
+        let tokens = tokenize("package P { dependency derive_1 LOGDC2_A to LOGDC2_B; }", "test").expect("lex failed");
+        let err = parse(tokens, "test");
+        assert!(err.is_err(), "a name followed by an endpoint is not a dependency: {err:?}");
     }
 
     #[test]
