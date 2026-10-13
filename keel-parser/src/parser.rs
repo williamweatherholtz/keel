@@ -679,22 +679,20 @@ fn parse_import(p: &mut Parser, filename: &str) -> Result<Import, ParseError> {
 
 fn parse_satisfy(p: &mut Parser, filename: &str) -> Result<SatisfyEdge, ParseError> {
     let s = p.current_span(); p.advance(); // consume 'satisfy'
-    let (need, _) = p.expect_ident(filename)?;
+    let need = expect_qualified_name(p, filename)?;
     p.expect(&TokenKind::By, filename)?;
-    let (by, _) = p.expect_ident(filename)?;
-    let end = p.current_span();
-    p.expect(&TokenKind::Semicolon, filename)?;
-    Ok(SatisfyEdge { need, by, span: Span { start: s.start, end: end.start } })
+    let by = expect_qualified_name(p, filename)?;
+    let (attributes, members, span) = parse_relationship_body(p, filename, s)?;
+    Ok(SatisfyEdge { need, by, attributes, members, span })
 }
 
 fn parse_allocate(p: &mut Parser, filename: &str) -> Result<AllocateEdge, ParseError> {
     let s = p.current_span(); p.advance(); // consume 'allocate'
-    let (sr, _) = p.expect_ident(filename)?;
+    let sr = expect_qualified_name(p, filename)?;
     p.expect(&TokenKind::To, filename)?;
-    let (to, _) = p.expect_ident(filename)?;
-    let end = p.current_span();
-    p.expect(&TokenKind::Semicolon, filename)?;
-    Ok(AllocateEdge { sr, to, span: Span { start: s.start, end: end.start } })
+    let to = expect_qualified_name(p, filename)?;
+    let (attributes, members, span) = parse_relationship_body(p, filename, s)?;
+    Ok(AllocateEdge { sr, to, attributes, members, span })
 }
 
 fn parse_hash_item(
@@ -727,11 +725,9 @@ fn parse_hash_item(
     let from = expect_qualified_name(p, filename)?;
     p.expect(&TokenKind::To, filename)?;
     let to = expect_qualified_name(p, filename)?;
-    let end = p.current_span();
-    p.expect(&TokenKind::Semicolon, filename)?;
+    let (attributes, members, span) = parse_relationship_body(p, filename, s)?;
     Ok(Some(Item::Dependency(DependencyAnnotation {
-        marker, name, from, to,
-        span: Span { start: s.start, end: end.start },
+        marker, name, from, to, attributes, members, span,
     })))
 }
 
@@ -761,6 +757,24 @@ fn expect_qualified_name(p: &mut Parser, filename: &str) -> Result<String, Parse
     Ok(name)
 }
 
+/// The `RelationshipBody` that closes a `satisfy`, `allocate` or `dependency` statement in the OMG
+/// grammar: `;` or `{ ... }`. An emitter that carries its source's relationship id on the edge writes
+/// `allocate A to B { attribute sourceRelationshipId : String = "8"; }`, which was refused at the `{`
+/// (GH#72's follow-on). The body is read as an instance body is - `:>>` assignments and member
+/// features - so the fact survives the parse instead of being skipped.
+fn parse_relationship_body(
+    p: &mut Parser,
+    filename: &str,
+    start: Span,
+) -> Result<(Vec<Attribute>, Vec<MemberFeature>, Span), ParseError> {
+    if matches!(p.peek(), TokenKind::LBrace) {
+        return parse_attribute_body(p, filename, start);
+    }
+    let end = p.current_span();
+    p.expect(&TokenKind::Semicolon, filename)?;
+    Ok((Vec::new(), Vec::new(), Span { start: start.start, end: end.start }))
+}
+
 /// Bare (marker-less) `dependency from X to Y;` - the base-SysML plain dependency (D0196).
 fn parse_bare_dependency(p: &mut Parser, filename: &str) -> Result<Option<Item>, ParseError> {
     let s = p.current_span();
@@ -770,14 +784,15 @@ fn parse_bare_dependency(p: &mut Parser, filename: &str) -> Result<Option<Item>,
     let from = expect_qualified_name(p, filename)?;
     p.expect(&TokenKind::To, filename)?;
     let to = expect_qualified_name(p, filename)?;
-    let end = p.current_span();
-    p.expect(&TokenKind::Semicolon, filename)?;
+    let (attributes, members, span) = parse_relationship_body(p, filename, s)?;
     Ok(Some(Item::Dependency(DependencyAnnotation {
         marker: String::new(),
         name,
         from,
         to,
-        span: Span { start: s.start, end: end.start },
+        attributes,
+        members,
+        span,
     })))
 }
 
@@ -1174,6 +1189,67 @@ mod tests {
         let tokens = tokenize("package P { dependency derive_1 LOGDC2_A to LOGDC2_B; }", "test").expect("lex failed");
         let err = parse(tokens, "test");
         assert!(err.is_err(), "a name followed by an endpoint is not a dependency: {err:?}");
+    }
+
+    #[test]
+    fn an_allocate_reads_qualified_endpoints_and_a_relationship_body() {
+        let pkg = parse_src(
+            r#"package P { allocate S::F1::R1 to S::R5 { attribute sourceRelationshipId : String = "8"; } }"#,
+        );
+        let Item::Allocate(a) = &pkg.items[0] else { panic!("expected Allocate") };
+        assert_eq!(a.sr, "S::F1::R1");
+        assert_eq!(a.to, "S::R5");
+        assert_eq!(a.members.len(), 1, "the body's attribute member is read, not skipped");
+        assert_eq!(a.members[0].name, "sourceRelationshipId");
+        assert_eq!(a.members[0].type_name.as_deref(), Some("String"));
+        assert_eq!(pkg.skipped.len(), 0, "nothing in the body is recorded as unread");
+    }
+
+    #[test]
+    fn a_satisfy_reads_qualified_endpoints_and_a_relationship_body() {
+        let pkg = parse_src(
+            r#"package P { satisfy S::R5 by S::F1::F2::R2 { attribute sourceRelationshipId : String = "9"; } }"#,
+        );
+        let Item::Satisfy(s) = &pkg.items[0] else { panic!("expected Satisfy") };
+        assert_eq!(s.need, "S::R5");
+        assert_eq!(s.by, "S::F1::F2::R2");
+        assert_eq!(s.members.len(), 1);
+        assert_eq!(pkg.skipped.len(), 0);
+    }
+
+    #[test]
+    fn a_dependency_reads_a_relationship_body_too() {
+        let pkg = parse_src(r#"package P { #DependsOn dependency d1 from a to b { :>> note = "x"; } }"#);
+        let Item::Dependency(d) = &pkg.items[0] else { panic!("expected Dependency") };
+        assert_eq!(d.name.as_deref(), Some("d1"));
+        assert_eq!(d.attributes.len(), 1);
+        assert_eq!(d.attributes[0].name, "note");
+    }
+
+    #[test]
+    fn an_edge_with_neither_semicolon_nor_body_is_refused() {
+        let tokens = tokenize("package P { allocate a to b allocate c to d; }", "test").expect("lex failed");
+        let err = parse(tokens, "test").expect_err("a bare edge needs `;` or `{`");
+        assert!(err.to_string().contains("expected Semicolon"), "{err}");
+    }
+
+    #[test]
+    fn a_verification_objective_with_verify_members_parses_clean() {
+        let pkg = parse_src(
+            r#"package P {
+                verification T1 : Case {
+                    :>> sourceKey = "T-1";
+                    objective {
+                        verify S::F1::R1 { attribute sourceRelationshipId : String = "5001"; }
+                        verify S::F1::F2::R3 { attribute sourceRelationshipId : String = "5002"; }
+                    }
+                }
+            }"#,
+        );
+        let Item::Verification(v) = &pkg.items[0] else { panic!("expected Verification") };
+        assert_eq!(v.name, "T1");
+        assert_eq!(v.attributes.len(), 1);
+        assert_eq!(pkg.skipped.len(), 0, "the objective block is a member whose body is discarded, not an unread statement");
     }
 
     #[test]

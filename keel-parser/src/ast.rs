@@ -155,19 +155,31 @@ pub struct Succession {
     pub span: Span,
 }
 
-/// A `satisfy needName by srName;` edge.
+/// A `satisfy needName by srName;` edge. Each endpoint is a `QualifiedName` kept as its full
+/// `A::B::C` text, and the statement may close with a `RelationshipBody` instead of `;`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SatisfyEdge {
     pub need: String,
     pub by: String,
+    /// The `RelationshipBody` of the OMG grammar when it is `{ ... }` rather than `;`: the `:>>`
+    /// assignments and the member features (`attribute sourceRelationshipId : String = "8";`) read as
+    /// an instance body is read. Empty for the `;` form every edge in this repository uses.
+    pub attributes: Vec<Attribute>,
+    pub members: Vec<MemberFeature>,
     pub span: Span,
 }
 
-/// An `allocate srName to componentName;` edge.
+/// An `allocate srName to componentName;` edge. Each endpoint is a `QualifiedName` kept as its full
+/// `A::B::C` text, and the statement may close with a `RelationshipBody` instead of `;`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllocateEdge {
     pub sr: String,
     pub to: String,
+    /// The `RelationshipBody` of the OMG grammar when it is `{ ... }` rather than `;`: the `:>>`
+    /// assignments and the member features (`attribute sourceRelationshipId : String = "8";`) read as
+    /// an instance body is read. Empty for the `;` form every edge in this repository uses.
+    pub attributes: Vec<Attribute>,
+    pub members: Vec<MemberFeature>,
     pub span: Span,
 }
 
@@ -183,6 +195,11 @@ pub struct DependencyAnnotation {
     pub name: Option<String>,
     pub from: String,
     pub to: String,
+    /// The `RelationshipBody` of the OMG grammar when it is `{ ... }` rather than `;`: the `:>>`
+    /// assignments and the member features (`attribute sourceRelationshipId : String = "8";`) read as
+    /// an instance body is read. Empty for the `;` form every edge in this repository uses.
+    pub attributes: Vec<Attribute>,
+    pub members: Vec<MemberFeature>,
     pub span: Span,
 }
 
