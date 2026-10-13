@@ -202,4 +202,14 @@ package ProjectBaselines {
         :>> tag = "v0.5.3";
         :>> purpose = "The published 0.5.2 binary refused to migrate keel-next: its removed-types scanner read the // RAN: evidence comments keel record result writes, and evidence beginning with Task read as a typing colon (issue675). The scan now drops a // line comment after blanking string literals, so a downstream tree whose recorded evidence names a retired type can take the engine resync.";
     }
+
+    part release054 : Release {
+        :>> id = "183f7ff9-c820-43a9-8c5e-d375170483b4";
+        :>> title = "v0.6.0 - keel-parser reads a named dependency, QualifiedName endpoints and a RelationshipBody on satisfy, allocate and dependency; keel land refuses a flag before the push; the rust 1.99 clippy repairs";
+        :>> createdAt = "2026-10-13";
+        :>> createdBy = "claudeFable5";
+        :>> commit = "294e975e";  // the merge of pull request 101 (the content); corrected to the tagged commit once the tag exists, as release053 was
+        :>> tag = "v0.6.0";
+        :>> purpose = "A downstream emitter writes its edges root-qualified with the source relationship id as the dependency name and an attribute body on allocate and satisfy - all vanilla SysML v2 - and 0.5.3 refused every one of them (GH#72, GH#100), so its 155 MB model could not be validated at all; and keel land --help ran the landing and pushed (GH#73). 0.6.0 reads the three forms (DependencyAnnotation, SatisfyEdge and AllocateEdge gain name/attributes/members - a struct change, hence the minor), refuses any flag on land before the gate or the push, and carries the 69 mechanical repairs for the lints rust 1.99 added under pedantic and nursery, which had kept main red at the clippy step since 2026-10-04. KEEL_API_VERSION stays 2.0.0: no read shape changed.";
+    }
 }
