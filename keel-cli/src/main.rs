@@ -165,7 +165,18 @@ fn main() {
         Some("version" | "--version" | "-V") => cmd_version(rest),
         Some("init") => cmd_init(rest),
         Some("sync") => keel_cli::sync::cmd_sync(&repo_arg(rest)),
-        Some("land") => keel_cli::sync::cmd_land(&repo_arg(rest), 3),
+        // GH#73: `land` is the one command whose effect leaves the machine, and `keel land --help`
+        // once pushed the branch instead of printing usage - `repo_arg` skipped the flag and the
+        // landing ran. A leading `-` is refused BEFORE anything is gated or pushed, exactly as
+        // `positional_arg` refuses it for `init`; `land` reads no flags at all.
+        Some("land") => rest.iter().find(|a| a.starts_with('-')).map_or_else(
+            || keel_cli::sync::cmd_land(&repo_arg(rest), 3),
+            |flag| {
+                eprintln!("error: `{flag}` looks like a flag, not a path - `keel land` reads no flags; nothing was pushed.");
+                eprintln!("usage: keel land [ROOT]");
+                2
+            },
+        ),
         Some("migrate") => cmd_migrate(rest),
         // D0138: what has this project ADOPTED — declared, not inferred from file presence.
         Some("process") => keel_cli::process_cmd::cmd(rest, &find_repo_root().unwrap_or_else(|| PathBuf::from("."))),
