@@ -502,16 +502,49 @@ pub fn grandfathered_under(root: &Path, decision: &str) -> Option<std::collectio
 /// A sibling of [`grandfathered_under`], which reads `part`/`requirement` names only: a Test is
 /// declared with `verification`, so the charter-time set never held one. `None` when the introduction
 /// commit cannot be resolved; the caller says what it does with an unresolved boundary.
+///
+/// A decision that is ON DISK under `.engine/decisions` but has no introduction commit yet is one this
+/// tree is taking right now - a downstream project running `keel migrate`, whose pre-commit gate runs
+/// this guard before the migrate commit exists (GH#103). The population at that introduction is what
+/// the working tree declares at this moment, so that set is the grandfather set; `None` stays for a
+/// decision this tree has never seen and for a git that cannot answer.
 #[must_use]
 pub fn grandfathered_verifications_under(root: &Path, decision: &str) -> Option<std::collections::HashSet<String>> {
     keel_perf::perf::add(&keel_perf::perf::GF_CALLS, 1);
-    let commit = decision_intro_commit(root, decision)?;
-    Some(
-        git_lines(root, &["grep", "-hoE", "verification [A-Za-z0-9_]+ :", &commit, "--", ".tracking", ".engine"])
-            .iter()
-            .filter_map(|l| l.split_whitespace().nth(1).map(String::from))
-            .collect(),
-    )
+    let names = |lines: &[String]| -> std::collections::HashSet<String> {
+        lines.iter().filter_map(|l| l.split_whitespace().nth(1).map(String::from)).collect()
+    };
+    if let Some(commit) = decision_intro_commit(root, decision) {
+        return Some(names(&git_lines(root, &["grep", "-hoE", "verification [A-Za-z0-9_]+ :", &commit, "--", ".tracking", ".engine"])));
+    }
+    if !decision_on_disk(root, decision) {
+        return None;
+    }
+    let mut lines = Vec::new();
+    let mut files = keel_model::corpus::collect_sysml(&root.join(".tracking"));
+    files.extend(keel_model::corpus::collect_sysml(&root.join(".engine")));
+    for path in &files {
+        let Ok(text) = keel_model::corpus::read_to_string(path) else { continue };
+        for line in text.lines() {
+            let t = line.trim_start();
+            if let Some(rest) = t.strip_prefix("verification ") {
+                let name: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+                if !name.is_empty() && rest[name.len()..].trim_start().starts_with(':') {
+                    lines.push(format!("verification {name} :"));
+                }
+            }
+        }
+    }
+    Some(names(&lines))
+}
+
+/// `dNNNN` has a file `.engine/decisions/NNNN-*.sysml` in the working tree (committed or not).
+fn decision_on_disk(root: &Path, decision: &str) -> bool {
+    let digits = decision.trim_start_matches('d');
+    let Ok(entries) = std::fs::read_dir(root.join(".engine").join("decisions")) else { return false };
+    entries
+        .flatten()
+        .any(|e| e.file_name().to_string_lossy().starts_with(&format!("{digits}-")))
 }
 
 // ── the resolver ──────────────────────────────────────────────────────────────
@@ -717,5 +750,27 @@ mod tests {
         let text = "part d0070AcceptR1 : TestResult {\n  :>> outcome = VerdictKind::pass;\n  :>> judgedAgainst = \"abc1234\";\n}";
         assert_eq!(acceptance_judged_against(text, "d0070"), Some("abc1234".to_string()));
         assert_eq!(acceptance_judged_against(text, "d9999"), None);
+    }
+
+    /// GH#103: a tree that holds a decision's file with no commit that introduced it (a downstream
+    /// `keel migrate`, gated before its own commit) grandfathers what the working tree declares; a
+    /// decision the tree has never seen still resolves to nothing.
+    #[test]
+    fn an_uncommitted_decision_grandfathers_the_working_trees_verifications() {
+        let dir = std::env::temp_dir().join(format!("keel-govern-boundary-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = dir.as_path();
+        std::fs::create_dir_all(root.join(".engine/decisions")).unwrap();
+        std::fs::create_dir_all(root.join(".tracking")).unwrap();
+        std::fs::write(
+            root.join(".tracking/sprints.sysml"),
+            "package P {\n    verification sittingReview20260821 : Test { :>> method = VerificationMethod::confirmation; }\n    verification otherDoD : Test {}\n}\n",
+        )
+        .unwrap();
+        assert_eq!(grandfathered_verifications_under(root, "d0510"), None, "a decision the tree has never seen");
+        std::fs::write(root.join(".engine/decisions/0510-sitting-review.sysml"), "package Decision0510 { part d0510 : Decision {} }\n").unwrap();
+        let set = grandfathered_verifications_under(root, "d0510").expect("the decision is on disk, so the boundary resolves");
+        assert!(set.contains("sittingReview20260821") && set.contains("otherDoD"), "{set:?}");
+        assert_eq!(set.len(), 2);
     }
 }
