@@ -130,7 +130,7 @@ mod verdict_tests {
     fn the_reason_is_the_failing_lines_in_order() {
         let text = "[guard:a] PASS — 1 scanned, 0 warning(s), 0 violation(s)\n  ERROR x is wrong\n[guard:b] FAIL — 1 scanned, 0 warning(s), 1 violation(s)\n[guard:c] PASS — 2 scanned, 1 warning(s), 0 violation(s)\n[guard] FAILED — 1 warning(s) across 1 guard(s)";
         assert_eq!(failing_lines(text), vec!["  ERROR x is wrong", "[guard:b] FAIL — 1 scanned, 0 warning(s), 1 violation(s)"]);
-        assert!(failing_lines("[guard:a] PASS — 1 scanned, 0 warning(s), 0 violation(s)\n[guard] ALL PASS").is_empty());
+        assert_eq!(failing_lines("[guard:a] PASS — 1 scanned, 0 warning(s), 0 violation(s)\n[guard] ALL PASS").len(), 0);
     }
 }
 

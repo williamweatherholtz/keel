@@ -1311,9 +1311,9 @@ mod tests {
         // D0113: a schema/process/workflow change with no co-committed doc = warn; with a doc = clean.
         let warn = doc_sync_warnings(&[".engine/processes/foo.sysml".to_string(), "keel-cli/src/x.rs".to_string()]);
         assert_eq!(warn.len(), 1, "definitional change + no doc must warn: {warn:?}");
-        assert!(doc_sync_warnings(&[".engine/processes/foo.sysml".to_string(), "CLAUDE.md".to_string()]).is_empty());
-        assert!(doc_sync_warnings(&[".engine/schema/core.sysml".to_string(), ".engine/docs/guide.md".to_string()]).is_empty());
-        assert!(doc_sync_warnings(&[".tracking/backlog.sysml".to_string()]).is_empty()); // nothing definitional
+        assert_eq!(doc_sync_warnings(&[".engine/processes/foo.sysml".to_string(), "CLAUDE.md".to_string()]).len(), 0);
+        assert_eq!(doc_sync_warnings(&[".engine/schema/core.sysml".to_string(), ".engine/docs/guide.md".to_string()]).len(), 0);
+        assert_eq!(doc_sync_warnings(&[".tracking/backlog.sysml".to_string()]).len(), 0); // nothing definitional
     }
 
     #[test]

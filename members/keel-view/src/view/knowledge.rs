@@ -1119,7 +1119,8 @@ pub fn recall_for_prompt(root: &Path, prompt: &str, budget: usize) -> Result<Str
             has_identifier = true;
             // An identifier is not a guess about relevance: weight it as the rarest possible term.
             for (n, field, fw) in seeds_scored(&model, tok) {
-                *score.entry(n.clone()).or_insert(0.0) += idf(corpus, 1) * fw;
+                let slot = score.entry(n.clone()).or_insert(0.0);
+                *slot = idf(corpus, 1).mul_add(fw, *slot);
                 how.entry(n).or_insert_with(|| format!("identifier `{tok}` / {}", field.label()));
             }
             matched.push(tok.clone());
@@ -1139,7 +1140,8 @@ pub fn recall_for_prompt(root: &Path, prompt: &str, budget: usize) -> Result<Str
             how.entry(n).or_insert_with(|| format!("word `{tok}`"));
         }
         for (n, field, fw) in alias_hits {
-            *score.entry(n.clone()).or_insert(0.0) += w * fw;
+            let slot = score.entry(n.clone()).or_insert(0.0);
+            *slot = w.mul_add(fw, *slot);
             how.entry(n).or_insert_with(|| format!("word `{tok}` / {}", field.label()));
         }
     }
@@ -1381,7 +1383,7 @@ mod tests {
         let (kept, dropped) = query_terms("gate hook land push view");
         let words: Vec<&str> = kept.iter().map(|(t, _)| t.as_str()).collect();
         assert_eq!(words, vec!["gate", "hook", "land", "push", "view"]);
-        assert!(dropped.is_empty());
+        assert_eq!(dropped.len(), 0);
         // a corpus where `that` and `this` are in most bodies and `hook` in one
         let mut model = Model { items: HashMap::new(), edges: Vec::new() };
         for i in 0..100u32 {

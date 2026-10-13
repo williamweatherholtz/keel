@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn parse_commands_absent_key_is_empty() {
         // A reverify.toml with no `commands` key => no-op (empty), not an error.
-        assert!(parse_commands("# just a comment\n").unwrap().is_empty());
+        assert_eq!(parse_commands("# just a comment\n").unwrap().len(), 0);
     }
 
     #[test]

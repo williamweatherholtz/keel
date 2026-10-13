@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn unchanged_criterion_is_not_drift() {
         let same = "verification fooDoD : Test { :>> procedureText = \"same\"; }\npart fooDoDR1 : TestResult { :>> outcome = VerdictKind::pass; }";
-        assert!(criterion_drift_core(same, same).is_empty());
+        assert_eq!(criterion_drift_core(same, same).len(), 0);
     }
 
     #[test]
@@ -144,11 +144,11 @@ mod tests {
         // No result yet -> the criterion is still being authored, not drifting away from evidence.
         let old = "verification fooDoD : Test { :>> procedureText = \"old\"; }";
         let new = "verification fooDoD : Test { :>> procedureText = \"new\"; }";
-        assert!(criterion_drift_core(old, new).is_empty());
+        assert_eq!(criterion_drift_core(old, new).len(), 0);
     }
 
     #[test]
     fn new_file_has_no_drift() {
-        assert!(criterion_drift_core("", "verification x : Test { }").is_empty());
+        assert_eq!(criterion_drift_core("", "verification x : Test { }").len(), 0);
     }
 }

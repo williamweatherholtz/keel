@@ -224,8 +224,8 @@ mod tests {
     fn ids_on_reads_every_uuid_on_an_added_line() {
         let line = "+        part xDoDR1 : TestResult { :>> id = \"9393c050-ba83-482d-ac3d-51ce0630c4b6\"; :>> outcome = VerdictKind::pass; }";
         assert_eq!(ids_on(line), vec!["9393c050-ba83-482d-ac3d-51ce0630c4b6".to_string()]);
-        assert!(ids_on("+  :>> id = \"short\";").is_empty());
-        assert!(ids_on("+  no id here").is_empty());
+        assert_eq!(ids_on("+  :>> id = \"short\";").len(), 0);
+        assert_eq!(ids_on("+  no id here").len(), 0);
     }
 
     #[test]

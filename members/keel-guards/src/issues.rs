@@ -439,7 +439,7 @@ mod taint_tests {
     #[test]
     fn a_plan_and_unbuilt_work_are_not_violations() {
         let edges = taint_edges(CHAIN);
-        assert!(taint_violations(&["st9".to_string()], &edges, &HashMap::new(), &HashSet::new()).is_empty());
+        assert_eq!(taint_violations(&["st9".to_string()], &edges, &HashMap::new(), &HashSet::new()).len(), 0);
     }
 
     /// The acceptance Test's own text says whether anyone read it.

@@ -213,10 +213,10 @@ mod tests {
         assert_eq!(candidates(&g, &["members\\mid\\Cargo.toml".to_owned()]), vec!["mid"], "a mid edit reaches nothing below it");
         assert_eq!(candidates(&g, &["other/src/x.rs".to_owned()]), vec!["other"]);
         // Known-negative: a path no member owns that is not code contributes nothing; one that IS code reaches all.
-        assert!(candidates(&g, &[".tracking/backlog.sysml".to_owned()]).is_empty());
+        assert_eq!(candidates(&g, &[".tracking/backlog.sysml".to_owned()]).len(), 0);
         assert_eq!(candidates(&g, &["Cargo.lock".to_owned()]), vec!["leaf", "mid", "other"]);
         assert_eq!(candidates(&g, &[".engine/schema/core.sysml".to_owned(), "other/src/x.rs".to_owned()]), vec!["leaf", "mid", "other"]);
-        assert!(candidates(&g, &[]).is_empty());
+        assert_eq!(candidates(&g, &[]).len(), 0);
     }
 
     #[test]
@@ -225,7 +225,7 @@ mod tests {
         assert_eq!(scope(&g, "mid"), vec!["members/leaf", "members/mid"]);
         assert_eq!(scope(&g, "leaf"), vec!["members/leaf"]);
         assert_eq!(scope(&g, "other"), vec!["other"]);
-        assert!(scope(&g, "nobody").is_empty());
+        assert_eq!(scope(&g, "nobody").len(), 0);
         assert_eq!(owner(&g, "members/mid/src/a.rs").map(|m| m.name.as_str()), Some("mid"));
         assert_eq!(owner(&g, "members/middle/src/a.rs"), None, "a prefix is not a directory");
         assert_eq!(owner(&g, "other"), Some(&g[2]), "the directory itself is owned");

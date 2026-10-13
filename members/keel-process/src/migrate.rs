@@ -1145,14 +1145,13 @@ fn rollback_after_failure(root: &Path, sha: Option<&String>, written: usize, kee
             let _ = std::fs::remove_file(marker_path(root));
             eprintln!("  ROLLED BACK: {written} written file(s) discarded; .engine/, .tracking/, .claude/ and CLAUDE.md restored to {sha}.");
             eprintln!("  The tree is as it was before this run. Nothing is half-migrated.");
-            1
         }
         Err(e) => {
             eprintln!("  ROLLBACK FAILED ({e}) — this tree IS partially migrated after {written} file(s).");
             eprintln!("  Restore by hand: git checkout {sha} -- .engine .tracking .claude CLAUDE.md && git clean -fd -- .engine .tracking .claude");
-            1
         }
     }
+    1
 }
 
 /// If a previous run was interrupted, restore before doing anything else. Returns a note to print.

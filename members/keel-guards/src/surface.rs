@@ -1162,7 +1162,7 @@ mod source_reference_tests {
     fn citations_are_read_in_their_shapes_and_the_identifier_is_the_nearest_in_reach() {
         let cites = |l: &str| source_citations(l).iter().map(|c| (c.file.clone(), c.from, c.to)).collect::<Vec<_>>();
         assert_eq!(cites("at `migrate.rs:664-666` and members/keel-process/src/migrate.rs:805, ./x.rs:3."), vec![("migrate.rs".to_string(), 664, 666), ("members/keel-process/src/migrate.rs".to_string(), 805, 805), ("x.rs".to_string(), 3, 3)]);
-        assert!(cites("target/release/build/x.rs:3, facts.py:12, guards.rs: the module, x.rs:12abc, .rs:4").is_empty());
+        assert_eq!(cites("target/release/build/x.rs:3, facts.py:12, guards.rs: the module, x.rs:12abc, .rs:4").len(), 0);
         let line = "`Refusal::SelfBuild` is returned by `check_preconditions` (`migrate.rs:805-807`) before `keel_git::gitx::git()` runs";
         let c = &source_citations(line)[0];
         assert_eq!(cited_identifier(line, (c.start, c.end), Some("`other_fn` above")).as_deref(), Some("check_preconditions"));
@@ -1286,7 +1286,7 @@ mod cli_surface_declared_tests {
         assert_eq!(authored.len(), 1, "{authored:?}");
         assert_eq!((authored[0].part.as_str(), authored[0].synopsis.as_str()), ("cliX2", "s"));
         let m = [mirror("x", "governance", "writes")];
-        assert!(cli_surface_violations(&authored, &m, &["x"], &[]).is_empty());
+        assert_eq!(cli_surface_violations(&authored, &m, &["x"], &[]).len(), 0);
 
         let without = parse_cli_facts(&format!("{old}\n{new}\n"));
         assert_eq!(without.len(), 2);
@@ -1305,7 +1305,7 @@ mod cli_surface_declared_tests {
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].contains("invocation differs") && v[0].contains("--words"), "{v:?}");
         let level = [keel_schema::cli_facts::CliFact { invocation: "<d> (--words TEXT | --note TEXT)", ..mirror("accept", "governance", "writes") }];
-        assert!(cli_surface_violations(&authored, &level, &["accept"], &[]).is_empty());
+        assert_eq!(cli_surface_violations(&authored, &level, &["accept"], &[]).len(), 0);
     }
 
     #[test]
@@ -1349,7 +1349,7 @@ mod cli_surface_declared_tests {
     #[test]
     fn decision_ids_are_cited_as_whole_tokens_only() {
         assert_eq!(decision_ids_cited("D0356 then d0345, D0356 again"), vec!["d0356", "d0345"]);
-        assert!(decision_ids_cited("dcOneClick keeld0001 d03561 D035 d-0356").is_empty());
+        assert_eq!(decision_ids_cited("dcOneClick keeld0001 d03561 D035 d-0356").len(), 0);
         assert_eq!(decision_ids_cited("(D0201 B)"), vec!["d0201"]);
     }
 

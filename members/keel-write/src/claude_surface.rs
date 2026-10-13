@@ -773,7 +773,7 @@ mod tests {
         // deploy the file and the finding is gone
         std::fs::create_dir_all(skills.join("fixture").join("references")).expect("mkdir");
         std::fs::write(skills.join("fixture").join("references").join("missing.md"), "now present\n").expect("write");
-        assert!(unresolved_skill_references(&skills).is_empty());
+        assert_eq!(unresolved_skill_references(&skills).len(), 0);
         let _ = std::fs::remove_dir_all(&root);
     }
 
