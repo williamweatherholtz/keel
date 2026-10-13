@@ -496,7 +496,7 @@ mod amendment_tests {
         assert!(w[0].contains("kgInjection") && w[0].contains("knowledge-graph-memory.sysml") && w[0].contains("D0244"), "{}", w[0]);
         // the same commit touching the definition is the amendment reaching it: silent
         let staged = vec![d.0.clone(), ".engine/processes/knowledge-graph-memory.sysml".to_string()];
-        assert!(amendment_warnings(&[d], &staged, &kg()).is_empty());
+        assert_eq!(amendment_warnings(&[d], &staged, &kg()).len(), 0);
     }
 
     /// The stated residual, armed so it cannot be forgotten: D0243's own sentence names NOTHING and is
@@ -514,7 +514,7 @@ mod amendment_tests {
     fn a_plain_word_process_name_is_not_an_anchor() {
         let anchors = vec![ProcessAnchors { file: ".engine/processes/migration.sysml".to_string(), names: vec!["migration".to_string(), "migration".to_string(), "mgExpand".to_string()] }];
         let d = (".engine/decisions/0281-x.sysml".to_string(), "This is step 5 of the migration plan.".to_string());
-        assert!(amendment_warnings(std::slice::from_ref(&d), std::slice::from_ref(&d.0), &anchors).is_empty());
+        assert_eq!(amendment_warnings(std::slice::from_ref(&d), std::slice::from_ref(&d.0), &anchors).len(), 0);
         let d = (".engine/decisions/0281-y.sysml".to_string(), "The mgExpand step now also copies the pin.".to_string());
         let w = amendment_warnings(std::slice::from_ref(&d), std::slice::from_ref(&d.0), &anchors);
         assert_eq!(w.len(), 1, "a camelCase step name still anchors: {w:?}");
@@ -647,6 +647,6 @@ mod unmeasured_path_tests {
             unmeasured_path_decisions(&texts),
             vec![("d0901".to_string(), "land/push/refuse".to_string()), ("d0906".to_string(), "land/push".to_string())]
         );
-        assert!(unmeasured_path_decisions(&[]).is_empty());
+        assert_eq!(unmeasured_path_decisions(&[]).len(), 0);
     }
 }

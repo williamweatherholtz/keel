@@ -409,7 +409,7 @@ mod gate_order_tests {
         let proc = dir.join(".engine/processes/p.sysml");
         let unbound = "package P {\n    action p : Process { :>> purpose = \"p\"; }\n    action s : ProcessStep {\n        :>> actionText = \"x\";\n        :>> owner = Owner::ai;\n    }\n}\n";
         std::fs::write(&proc, unbound).expect("write");
-        assert!(gate_order(&dir).is_empty());
+        assert_eq!(gate_order(&dir).len(), 0);
         let bound = unbound.replace("        :>> owner = Owner::ai;\n", "        :>> owner = Owner::ai;\n        :>> checkedBy = \"gate:b\";\n");
         std::fs::write(&proc, bound).expect("write");
         assert_eq!(gate_order(&dir), ["A", "B"]);

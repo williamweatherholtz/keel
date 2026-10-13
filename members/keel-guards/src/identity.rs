@@ -1416,7 +1416,7 @@ mod parallel_tests {
             "-    part c : Issue { :>> id = \"a608di4d-1f56-4c8a-bc91-1f48f5i4h111\"; }\n",
         );
         assert_eq!(added_non_v4_ids(diff), vec![(".tracking/x.sysml".to_string(), "eh5h6i7g-8f9e-0j1h-2i3d-4e5f6g7h8i9d".to_string())]);
-        assert!(added_non_v4_ids("").is_empty());
+        assert_eq!(added_non_v4_ids("").len(), 0);
         // an untracked file is scanned whole, comments skipped
         let fresh = "package Q {\n    // :>> id = \"zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz\"\n    part u : Issue { :>> id = \"0069b38f-a2cd-44f8-1750-8c6ea975cd34\"; }\n    part v : Issue { :>> id = \"5a6bb71c-66d8-497b-90c1-0b544f47c758\"; }\n}\n";
         assert_eq!(non_v4_ids_in(".tracking/new.sysml", fresh), vec![(".tracking/new.sysml".to_string(), "0069b38f-a2cd-44f8-1750-8c6ea975cd34".to_string())]);

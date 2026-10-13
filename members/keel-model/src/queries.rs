@@ -668,7 +668,7 @@ mod narrowing_tests {
         // computed (the D0138 lesson).
         let mut only_accepted = HashMap::new();
         only_accepted.insert("d0001".to_string(), with_status("Decision", "DecisionStatus::accepted"));
-        assert!(proposed_decisions(&Model { items: only_accepted, edges: Vec::new() }).is_empty());
+        assert_eq!(proposed_decisions(&Model { items: only_accepted, edges: Vec::new() }).len(), 0);
     }
 
     #[test]

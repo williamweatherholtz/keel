@@ -886,9 +886,9 @@ verification storyDoD : Test {{ :>> method = VerificationMethod::test; :>> proce
         // Naming the delivered task is what every retro does; it tracks nothing.
         assert_eq!(check(&nothing_added, &[], &sprint("FINDING: piping hung the kernel. Delivered dcTheWork.")).len(), 1);
         // Naming an item THIS COMMIT ADDS -> clean.
-        assert!(check(&added_issue073, &[], &sprint("FINDING: piping hung the kernel - tracked as issue073.")).is_empty());
+        assert_eq!(check(&added_issue073, &[], &sprint("FINDING: piping hung the kernel - tracked as issue073.")).len(), 0);
         // Explicitly justified as needing none -> clean. The obligation is a STATED choice.
-        assert!(check(&nothing_added, &["dcPreBashAdvisory".to_string()], &sprint("AVOIDABLE-ISSUE 1: x — no new item, already guarded by dcPreBashAdvisory.")).is_empty());
+        assert_eq!(check(&nothing_added, &["dcPreBashAdvisory".to_string()], &sprint("AVOIDABLE-ISSUE 1: x — no new item, already guarded by dcPreBashAdvisory.")).len(), 0);
         // A retro with no findings language still gets examined; it names nothing and justifies
         // nothing, so it is a violation — a retro that records no finding and no reason is exactly
         // the empty ceremony D0131 exists to prevent.
@@ -956,10 +956,10 @@ mod retro_tie_tests {
     fn a_finding_whose_named_item_this_commit_adds_is_clean() {
         let text = sprint_with_retro("FINDING: the counter was wrong; recorded as issue188 with a resolver.");
         let added = vec!["issue188".to_string()];
-        assert!(retro_backlog_violations(&added, &[], &[("s.sysml".to_string(), text)]).is_empty());
+        assert_eq!(retro_backlog_violations(&added, &[], &[("s.sysml".to_string(), text)]).len(), 0);
         let text = sprint_with_retro("LESSON: shell mangling again - now tracked as dcAuthorViaWriteTool.");
         let added = vec!["dcAuthorViaWriteTool".to_string()];
-        assert!(retro_backlog_violations(&added, &[], &[("s.sysml".to_string(), text)]).is_empty());
+        assert_eq!(retro_backlog_violations(&added, &[], &[("s.sysml".to_string(), text)]).len(), 0);
     }
 
     /// The obligation is a STATED choice, not always-an-item: an explicit justification is clean.
@@ -969,11 +969,11 @@ mod retro_tie_tests {
         // checkable; the phrase alone is no longer enough (issue364, D0293).
         let text = sprint_with_retro("FINDING: a one-off typo; no new item - dcPostEditGate already catches this class.");
         let known = vec!["dcPostEditGate".to_string()];
-        assert!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text)]).is_empty());
+        assert_eq!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text)]).len(), 0);
         // ...and a Decision counts as the tracking item too.
         let text = sprint_with_retro("no new item - already tracked: the stale help is recorded in d0283.");
         let known = vec!["d0283".to_string()];
-        assert!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text)]).is_empty());
+        assert_eq!(retro_backlog_violations(&[], &known, &[("s.sysml".to_string(), text)]).len(), 0);
     }
 
     /// issue364, second shape: a retro whose text contains the word "verification" was cut in half by the
@@ -1011,7 +1011,7 @@ mod retro_tie_tests {
     #[test]
     fn a_justification_that_names_a_real_item_passes_form_and_leaves_relevance_to_the_reader() {
         let text = sprint_with_retro("no new item - already tracked: that gap belongs to issue336.");
-        assert!(retro_backlog_violations(&[], &["issue336".to_string()], &[("s.sysml".to_string(), text)]).is_empty());
+        assert_eq!(retro_backlog_violations(&[], &["issue336".to_string()], &[("s.sysml".to_string(), text)]).len(), 0);
     }
 
     /// Only the RETRO gate is examined — a `DoD` or review gate mentioning a finding-like word is not a
@@ -1022,18 +1022,18 @@ mod retro_tie_tests {
 verification storyXDoD : Test { :>> method = VerificationMethod::test; :>> procedureText = \"FINDING: not a retro.\"; }
 }
 ";
-        assert!(retro_texts(no_retro).is_empty());
-        assert!(retro_backlog_violations(&[], &[], &[("s.sysml".to_string(), no_retro.to_string())]).is_empty());
+        assert_eq!(retro_texts(no_retro).len(), 0);
+        assert_eq!(retro_backlog_violations(&[], &[], &[("s.sysml".to_string(), no_retro.to_string())]).len(), 0);
     }
 
     /// Word boundaries on the item tokens, as before.
     #[test]
     fn prose_lookalikes_do_not_count_as_items() {
-        assert!(named_items("the dc motor issue was discussed at length").is_empty());
-        assert!(named_items("reproduced changes").is_empty());
+        assert_eq!(named_items("the dc motor issue was discussed at length").len(), 0);
+        assert_eq!(named_items("reproduced changes").len(), 0);
         assert_eq!(named_items("tracked as dcFooBar"), vec!["dcFooBar"]);
         assert_eq!(named_items("see issue123"), vec!["issue123"]);
-        assert!(named_items("tissue42 is not an item").is_empty());
+        assert_eq!(named_items("tissue42 is not an item").len(), 0);
     }
 
     /// issue424: a Decision named the way every document in this repository names one - `D0388` - is
@@ -1043,7 +1043,7 @@ verification storyXDoD : Test { :>> method = VerificationMethod::test; :>> proce
     fn a_decision_named_in_uppercase_is_read_as_its_real_name() {
         assert_eq!(named_items("already tracked by D0388 and its probe rule"), vec!["d0388"]);
         assert_eq!(named_items("d0388 twice: D0388"), vec!["d0388", "d0388"]);
-        assert!(named_items("Issue 42 and the DC team and ID0388").is_empty());
+        assert_eq!(named_items("Issue 42 and the DC team and ID0388").len(), 0);
         assert_eq!(named_items("tracked in issue424 (D0131)"), vec!["issue424", "d0131"]);
     }
 

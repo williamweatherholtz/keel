@@ -506,7 +506,7 @@ mod tests {
         assert_eq!(super::proposals_in_text(&ai_later, &human, &[]).iter().filter(|p| p.judged).count(), 0);
         // a tree of passes proposes nothing
         let passes = six_proposals().replace("VerdictKind::proposed", "VerdictKind::pass");
-        assert!(super::proposals_in_text(&passes, &human, &[]).is_empty());
+        assert_eq!(super::proposals_in_text(&passes, &human, &[]).len(), 0);
         // the rule parses a share and a count, and refuses a share past 100
         assert_eq!(super::SamplingRule::parse(&toml::Value::String("50%".into())), Some(super::SamplingRule::Share(50)));
         assert_eq!(super::SamplingRule::parse(&toml::Value::Integer(3)), Some(super::SamplingRule::Count(3)));

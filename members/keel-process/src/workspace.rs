@@ -389,6 +389,6 @@ mod tests {
         assert!(events.iter().all(|e| e.contains("DELETED engine path")), "{events:?}");
 
         // A commit touching neither is not a keystone event, or every commit would need a signature.
-        assert!(unowned_keystone_events(&["README.md".to_string()], &["docs/x.md".to_string()]).is_empty());
+        assert_eq!(unowned_keystone_events(&["README.md".to_string()], &["docs/x.md".to_string()]).len(), 0);
     }
 }

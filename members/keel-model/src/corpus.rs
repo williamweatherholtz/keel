@@ -305,7 +305,7 @@ mod tests {
     fn an_absent_directory_is_not_remembered() {
         let d = fresh_dir("absent");
         let later = d.join("later");
-        assert!(collect_sysml(&later).is_empty());
+        assert_eq!(collect_sysml(&later).len(), 0);
         std::fs::create_dir_all(&later).expect("mk");
         std::fs::write(later.join("x.sysml"), "package X;").expect("write");
         assert_eq!(collect_sysml(&later).len(), 1);

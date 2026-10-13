@@ -1055,7 +1055,7 @@ mod binds_to_text_tests {
         let rebound = format!("{head}
     part d1AcceptR2 : TestResult {{ :>> judgedAgainst = \"bbb2222\"; :>> notes = \"REBOUND\"; }}");
         assert_eq!(latest_acceptance_sha(&rebound, "d1"), Some("bbb2222".to_string()), "the re-binding is the new baseline");
-        assert!(drifted_fields(head, head).is_empty());
+        assert_eq!(drifted_fields(head, head).len(), 0);
         // formatting between `+`-joined segments is not signed text
         let joined_a = ":>> consequences = \"Pros: a, \"\n        + \"b.\";";
         let joined_b = ":>> consequences = \"Pros: a, \"\r\n            + \"b.\";";
@@ -1170,7 +1170,7 @@ mod direction_cited_tests {
         assert!(human_spans("keel accept <d> --words '<their words>' --by <human>").is_empty(), "a usage line is not a citation");
         assert!(human_spans("the sprint kept the 'their words' shape.").is_empty(), "a mention with no quote after it");
         assert!(human_spans("their words: 'ok'").is_empty(), "under eight characters is not read as a quote");
-        assert!(human_spans("no citation here at all").is_empty());
+        assert_eq!(human_spans("no citation here at all").len(), 0);
         assert_eq!(quoted_field(":>> text = \"say \\\"hi\\\" now\"; :>> x = \"y\";", "text").as_deref(), Some("say \\\"hi\\\" now"));
     }
 

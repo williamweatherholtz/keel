@@ -668,7 +668,7 @@ mod custom_harness_routed_tests {
         // a name the manifests no longer declare is stale, under the crate it was routed for
         let renamed = "cargo nextest run --workspace -E 'not (binary(cli_bdd) | binary(old_bdd))'\ncargo test -p keel-cli --test cli_bdd --test old_bdd\n";
         let (missing, stale) = custom_harness_drift(renamed, &one);
-        assert!(missing.is_empty());
+        assert_eq!(missing.len(), 0);
         assert_eq!(stale, vec!["keel-cli::old_bdd", "?::old_bdd"]);
     }
 

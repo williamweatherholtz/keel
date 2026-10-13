@@ -445,9 +445,9 @@ mod fork_options_tests {
         );
         // A single option is NOT a fork: the ordinary Sign button stays.
         std::fs::write(dir.join("one.sysml"), "OPTION A (only one)").expect("write");
-        assert!(fork_options(&dir, "one.sysml").is_empty());
+        assert_eq!(fork_options(&dir, "one.sysml").len(), 0);
         // No options at all.
         std::fs::write(dir.join("none.sysml"), "an ordinary decision text").expect("write");
-        assert!(fork_options(&dir, "none.sysml").is_empty());
+        assert_eq!(fork_options(&dir, "none.sysml").len(), 0);
     }
 }

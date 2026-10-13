@@ -97,3 +97,46 @@ fn land_refuses_to_push_a_workspace_carrying_a_broken_project() {
         "the clean tree must actually have been pushed"
     );
 }
+
+/// GH#73: `keel land --help` once pushed the current branch instead of printing usage - a
+/// documentation probe became the one effect that leaves the machine. Driven against a real bare
+/// remote for the same reason as the gate test above: the evidence is the remote's refs.
+#[test]
+fn land_refuses_a_flag_before_touching_the_remote() {
+    let base = std::env::temp_dir().join(format!("keel_land_flag_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let _cleanup = Tmp(base.clone());
+    let remote = base.join("remote.git");
+    let work = base.join("work");
+    std::fs::create_dir_all(&work).expect("mkdir");
+    Command::new("git").args(["init", "-q", "--bare"]).arg(&remote).output().expect("init bare");
+    Command::new("git").args(["init", "-q"]).arg(&work).output().expect("init work");
+    git(&work, &["config", "user.email", "t@test.invalid"]);
+    git(&work, &["config", "user.name", "t"]);
+    git(&work, &["remote", "add", "origin", remote.to_str().unwrap()]);
+    std::fs::create_dir_all(work.join("alpha")).expect("mkdir project");
+    let out = keel()
+        .args(["init", work.join("alpha").to_str().unwrap(), "--profile", "guided"])
+        .output()
+        .expect("run keel init");
+    assert!(out.status.success(), "init failed: {}", String::from_utf8_lossy(&out.stderr));
+    git(&work, &["add", "-A"]);
+    git(&work, &["commit", "-q", "--no-verify", "-m", "one project"]);
+    git(&work, &["branch", "-M", "main"]);
+    // An UNPUSHED branch: the exact state in which the probe once created a remote branch.
+    git(&work, &["checkout", "-q", "-b", "probe"]);
+    let refs_before = git(&work, &["ls-remote", "origin"]);
+
+    for flag in ["--help", "-h", "--bogus"] {
+        let out = keel().args(["land", flag]).current_dir(work.join("alpha")).output().expect("run keel land");
+        let said = String::from_utf8_lossy(&out.stderr).to_string() + &String::from_utf8_lossy(&out.stdout);
+        assert_eq!(out.status.code(), Some(2), "`keel land {flag}` must exit 2 with usage, got:\n{said}");
+        assert!(said.contains("usage: keel land"), "the refusal must print usage:\n{said}");
+        assert!(said.contains("nothing was pushed"), "the refusal must say nothing was pushed:\n{said}");
+        assert!(!said.contains("pushing"), "the landing must not have started:\n{said}");
+    }
+
+    let refs_after = git(&work, &["ls-remote", "origin"]);
+    assert_eq!(refs_after, refs_before, "the remote's refs must be byte-identical: a flag probe reached it");
+    assert!(!refs_after.contains("refs/heads/probe"), "the unpushed branch must not exist on the remote:\n{refs_after}");
+}

@@ -417,7 +417,7 @@ package ProbeIssueResolution {
         assert!(!a.is_declared());
         assert!(a.is_process_active("issue-resolution"));
         assert_eq!(a.guard_state("issues"), GuardState::Active("issue-resolution".into()));
-        assert!(a.errors.is_empty());
+        assert_eq!(a.errors.len(), 0);
     }
 
     #[test]

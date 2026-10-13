@@ -1823,7 +1823,7 @@ mod tests {
     verification t : Test { :>> method = VerificationMethod::test; }
 }
 ".to_string()];
-        assert!(super::external_references(&clean, &schema).is_empty());
+        assert_eq!(super::external_references(&clean, &schema).len(), 0);
     }
 
     /// THE CONTROL for issue241: the catalogue reports every DECLARED process, not the

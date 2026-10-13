@@ -1358,8 +1358,8 @@ mod family_cell_tests {
     #[test]
     fn a_file_without_the_column_claims_nothing() {
         let no_column = "| Guard | What it enforces |\n|---|---|\n| `doc-guard-count` | the count has one home |\n";
-        assert!(guard_family_claims(no_column).is_empty());
-        assert!(family_cell_violations("x/guards.md", no_column).is_empty());
+        assert_eq!(guard_family_claims(no_column).len(), 0);
+        assert_eq!(family_cell_violations("x/guards.md", no_column).len(), 0);
         assert!(family_cell_violations("x/guards.md", "this project enforces 999 forward guards\n").is_empty(), "the cursor.rs fixture stays a count-only red");
     }
 
@@ -1373,7 +1373,7 @@ mod family_cell_tests {
         assert!(!claims.is_empty(), "guards.md declares the Family column (issue584)");
         let missing: Vec<&str> = GUARD_NAMES.iter().copied().filter(|g| !claims.iter().any(|(_, n, c)| n == g && Some(c.as_str()) == family_of(g))).collect();
         assert!(missing.is_empty(), "guards with no row carrying their dispatching family: {missing:?}");
-        assert!(family_cell_violations(".engine/docs/guards.md", &md).is_empty());
+        assert_eq!(family_cell_violations(".engine/docs/guards.md", &md).len(), 0);
         assert!(FAMILIES.iter().all(|f| root.join("members/keel-guards/src").join(format!("{}.rs", f.name)).exists()), "a family's name is its module file");
     }
 }
@@ -1498,14 +1498,14 @@ mod stpa_currency_tests {
     #[test]
     fn runs_accumulate_and_a_full_walk_is_silent() {
         let computed = structure(&[("cmdRecord", "agent", "model"), ("hookStop", "hooks", "agent-turn")]);
-        assert!(currency_warnings(2, &set(&["cmdRecord", "hookStop"]), &computed).is_empty());
+        assert_eq!(currency_warnings(2, &set(&["cmdRecord", "hookStop"]), &computed).len(), 0);
     }
 
     /// No recorded run: the project never adopted the process; nothing is owed and nothing is said.
     #[test]
     fn a_project_with_no_run_hears_nothing() {
         let computed = structure(&[("cmdRecord", "agent", "model")]);
-        assert!(currency_warnings(0, &HashSet::new(), &computed).is_empty());
+        assert_eq!(currency_warnings(0, &HashSet::new(), &computed).len(), 0);
     }
 }
 

@@ -1628,7 +1628,7 @@ mod tests {
         assert_eq!(run, vec!["b_reads_repo".to_string(), LIB.to_string(), "z_new".to_string()]);
         // A code edit: the code moved - everything runs.
         let (run, skipped) = split_plain(&set, &self_reading, &observed, &keys("c3", "t1"));
-        assert!(skipped.is_empty());
+        assert_eq!(skipped.len(), 0);
         assert_eq!(run, set);
     }
 
@@ -1683,7 +1683,7 @@ mod tests {
         assert!(!is_unattributed_source("members/keel-git/Cargo.toml"));
         assert_eq!(module_stem("members/src/x.rs"), None);
         assert_eq!(workspace_members("[workspace]\nmembers = [\n    \"keel-parser\",\n    \"members/keel-git\",\n    \"keel-cli\",\n]\nresolver = \"2\"\n"), vec!["keel-parser", "members/keel-git", "keel-cli"]);
-        assert!(workspace_members("[package]\nname = \"x\"\n").is_empty());
+        assert_eq!(workspace_members("[package]\nname = \"x\"\n").len(), 0);
         assert_eq!(test_name("keel-cli/tests/land_gate.rs"), Some("land_gate".to_string()));
         assert_eq!(test_name("keel-cli/tests/common/mod.rs"), None);
     }
@@ -1722,7 +1722,7 @@ mod tests {
         let got = touched_tests(&tests, &["sync".to_string()], &["unrelated".to_string()]);
         assert_eq!(got, vec!["land_gate".to_string(), "unrelated".to_string()]);
         // known negative: a module nothing names -> empty
-        assert!(touched_tests(&tests, &["orient".to_string()], &[]).is_empty());
+        assert_eq!(touched_tests(&tests, &["orient".to_string()], &[]).len(), 0);
     }
 
     /// Known-positive: the shape `keel accept` writes. Known-negatives: the token named in the decision
@@ -1806,7 +1806,7 @@ mod tests {
     fn custom_harness_targets_are_read_from_the_manifest() {
         let manifest = "[package]\nname = \"keel-cli\"\n\n[[bin]]\nname = \"keel\"\nharness = false\n\n[[test]]\nname = \"cli_bdd\"\nharness = false\n\n[[test]]\nharness = false\nname = \"orient_bdd\"\n\n[[test]]\nname = \"plain\"\n\n[[test]]\nname = \"write_bdd\"\nharness = false  # cucumber\n";
         assert_eq!(custom_harness_tests(manifest), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
-        assert!(custom_harness_tests("[package]\nname = \"x\"\n").is_empty());
+        assert_eq!(custom_harness_tests("[package]\nname = \"x\"\n").len(), 0);
         // keel-cli's manifest declares exactly these three; keel-parser's four are CI's to route (guard custom-harness-routed, issue542).
         let real = std::fs::read_to_string(keel_fs::test_support::repo_root().join("keel-cli").join("Cargo.toml")).unwrap();
         assert_eq!(custom_harness_tests(&real), vec!["cli_bdd".to_string(), "orient_bdd".to_string(), "write_bdd".to_string()]);
@@ -1822,7 +1822,7 @@ mod tests {
         assert_eq!(failing_binaries(two), vec!["a_gate".to_string(), "b_gate".to_string()]);
         let lib = "error: test failed, to rerun pass `--lib`\nerror: 2 targets failed:\n    `--lib`\n    `--test a_gate`\n";
         assert_eq!(failing_binaries(lib), vec!["a_gate".to_string(), "lib".to_string()]);
-        assert!(failing_binaries("test result: ok. 1 passed; 0 failed\n     Running tests/other.rs (x)\n").is_empty());
+        assert_eq!(failing_binaries("test result: ok. 1 passed; 0 failed\n     Running tests/other.rs (x)\n").len(), 0);
     }
 
     /// The set is what the WORKING TREE changed, not what HEAD did (issue463): with HEAD equal to the

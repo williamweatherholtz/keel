@@ -830,6 +830,6 @@ mod tests {
         // A contraction inside an ASCII-quoted span still does not close it (the D0205 incident stays fixed).
         assert_eq!(quoted_spans("Their words, verbatim: 'yep let's go now' (chat)"), vec!["yep let's go now".to_string()]);
         // An unclosed opener yields nothing rather than swallowing the rest of the note.
-        assert!(quoted_spans("they said 'ok and moved on, no closing quote").is_empty());
+        assert_eq!(quoted_spans("they said 'ok and moved on, no closing quote").len(), 0);
     }
 }

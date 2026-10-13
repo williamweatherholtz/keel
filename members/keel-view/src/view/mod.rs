@@ -3770,7 +3770,7 @@ mod tests {
         assert!(!p.is_target_type("Issue"));
         assert_eq!(p.required_lenses("Need"), ["completeness", "correctness", "testability"]);
         assert_eq!(p.required_lenses("Decision"), ["completeness", "correctness", "feasibility"]);
-        assert!(p.required_lenses("Issue").is_empty());
+        assert_eq!(p.required_lenses("Issue").len(), 0);
         assert_eq!(p.target_types().count(), 3);
     }
 
@@ -4875,7 +4875,7 @@ mod tests {
         ];
         assert!(inversion_pairs(&ready, &HashSet::new()).is_empty(), "severity-ordered frontier must be clean");
         // Two >= High items may outrank each other freely — relative order among them is judgment.
-        assert!(inversion_pairs(&[("a".to_string(), sev("High")), ("b".to_string(), sev("Critical"))], &HashSet::new()).is_empty());
+        assert_eq!(inversion_pairs(&[("a".to_string(), sev("High")), ("b".to_string(), sev("Critical"))], &HashSet::new()).len(), 0);
     }
 
     #[test]
@@ -4926,7 +4926,7 @@ mod tests {
         items.insert(rn, ri);
         let (rn2, ri2) = result_for("aTest", "pass");
         items.insert(rn2, ri2);
-        assert!(thin_attestation_list(&Model { items, edges: Vec::new() }).is_empty());
+        assert_eq!(thin_attestation_list(&Model { items, edges: Vec::new() }).len(), 0);
     }
 
     #[test]

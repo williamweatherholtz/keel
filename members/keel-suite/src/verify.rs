@@ -886,8 +886,8 @@ mod tests {
     #[test]
     fn the_probe_value_is_not_mistaken_for_a_root() {
         assert_eq!(own_args(&args(&["--probe", "cargo test a,cargo test b", ".", "--no-receipt"])), vec![".".to_owned()]);
-        assert!(own_args(&args(&["--probe", "x,y"])).is_empty());
-        assert!(own_args(&args(&["--probe-from", "pair.txt"])).is_empty());
+        assert_eq!(own_args(&args(&["--probe", "x,y"])).len(), 0);
+        assert_eq!(own_args(&args(&["--probe-from", "pair.txt"])).len(), 0);
     }
 
     /// The receipt round-trips: the rung stopped at, every rung's verdict, exit and seconds.

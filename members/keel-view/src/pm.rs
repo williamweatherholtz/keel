@@ -558,7 +558,7 @@ mod tests {
         assert_eq!(sample.last().copied(), Some(30000));
         assert!(!sample.contains(&99999), "another event's fire is not in the stop sample");
         assert_eq!(latency(&sample).1, 28000, "p90 by nearest rank over the window: the 23rd of 25");
-        assert!(recent_event_ms(&root, "stop", 0).is_empty());
+        assert_eq!(recent_event_ms(&root, "stop", 0).len(), 0);
         assert!(recent_event_ms(&keel_fs::scratch("keel-pm-no-ledger-here"), "stop", 25).is_empty(), "no ledger = empty sample");
     }
 
