@@ -465,9 +465,14 @@ pub fn commit_date(repo: &Path, sha: &str) -> Option<String> {
 /// `.engine/decisions` (when the rule landed). `None` if not yet committed (e.g. staged-only).
 #[must_use]
 pub fn decision_intro_commit(root: &Path, decision: &str) -> Option<String> {
-    git_lines(root, &["log", "--format=%H", "--reverse", "-S", &format!("part {decision} :"), "--", ".engine/decisions"])
-        .into_iter()
-        .next()
+    // A downstream tree holds the engine's decisions under `.engine/reference/decisions` (keel init
+    // and keel migrate place them there, GH#106), so the introduction is looked for in both homes.
+    git_lines(
+        root,
+        &["log", "--format=%H", "--reverse", "-S", &format!("part {decision} :"), "--", ".engine/decisions", ".engine/reference/decisions"],
+    )
+    .into_iter()
+    .next()
 }
 
 /// Assurance-element names (`part`/`requirement` defs in `.tracking` + `.engine/decisions`) present
@@ -538,11 +543,14 @@ pub fn grandfathered_verifications_under(root: &Path, decision: &str) -> Option<
     Some(names(&lines))
 }
 
-/// `dNNNN` has a file `.engine/decisions/NNNN-*.sysml` in the working tree (committed or not).
+/// `dNNNN` has a file `NNNN-*.sysml` under `.engine/decisions` or, in a downstream tree, under
+/// `.engine/reference/decisions` (committed or not).
 fn decision_on_disk(root: &Path, decision: &str) -> bool {
     let digits = decision.trim_start_matches('d');
-    let Ok(entries) = std::fs::read_dir(root.join(".engine").join("decisions")) else { return false };
-    entries
+    [root.join(".engine").join("decisions"), root.join(".engine").join("reference").join("decisions")]
+        .iter()
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flatten()
         .flatten()
         .any(|e| e.file_name().to_string_lossy().starts_with(&format!("{digits}-")))
 }
@@ -772,5 +780,11 @@ mod tests {
         let set = grandfathered_verifications_under(root, "d0510").expect("the decision is on disk, so the boundary resolves");
         assert!(set.contains("sittingReview20260821") && set.contains("otherDoD"), "{set:?}");
         assert_eq!(set.len(), 2);
+        // a downstream tree holds it under .engine/reference/decisions instead (GH#106)
+        std::fs::remove_file(root.join(".engine/decisions/0510-sitting-review.sysml")).unwrap();
+        assert_eq!(grandfathered_verifications_under(root, "d0510"), None);
+        std::fs::create_dir_all(root.join(".engine/reference/decisions")).unwrap();
+        std::fs::write(root.join(".engine/reference/decisions/0510-sitting-review.sysml"), "package Decision0510 { part d0510 : Decision {} }\n").unwrap();
+        assert_eq!(grandfathered_verifications_under(root, "d0510").map(|s| s.len()), Some(2));
     }
 }
