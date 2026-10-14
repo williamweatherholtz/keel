@@ -212,4 +212,14 @@ package ProjectBaselines {
         :>> tag = "v0.6.0";
         :>> purpose = "A downstream emitter writes its edges root-qualified with the source relationship id as the dependency name and an attribute body on allocate and satisfy - all vanilla SysML v2 - and 0.5.3 refused every one of them (GH#72, GH#100), so its 155 MB model could not be validated at all; and keel land --help ran the landing and pushed (GH#73). 0.6.0 reads the three forms (DependencyAnnotation, SatisfyEdge and AllocateEdge gain name/attributes/members - a struct change, hence the minor), refuses any flag on land before the gate or the push, and carries the 69 mechanical repairs for the lints rust 1.99 added under pedantic and nursery, which had kept main red at the clippy step since 2026-10-04. KEEL_API_VERSION stays 2.0.0: no read shape changed.";
     }
+
+    part release055 : Release {
+        :>> id = "8b8fe599-24c9-425c-888b-25b8d7d72cb1";
+        :>> title = "v0.6.1 - a decision on disk with no introduction commit grandfathers the working tree, so a downstream migrate can commit (GH#103)";
+        :>> createdAt = "2026-10-13";
+        :>> createdBy = "claudeFable5";
+        :>> commit = "cd36878e";  // the content commit on main; the tag goes on the release commit that follows, as release053 and release054
+        :>> tag = "v0.6.1";
+        :>> purpose = "The first downstream tree to take v0.6.0 by keel migrate could not commit it: guard sitting-review-method grandfathers the confirmation-method sitting reviews present at D0510's introduction commit, and in a tree that is taking D0510 right now there is no such commit yet, so the boundary did not resolve and the guard reported every pre-existing sitting review as a violation at the migrate's own pre-commit gate (GH#103). 0.6.1: a decision that is on disk under .engine/decisions with no introduction commit grandfathers what the working tree declares at that moment; None stays for a decision the tree has never seen or a git that cannot answer. One unit test; no other behaviour changes; KEEL_API_VERSION stays 2.0.0. The 0.6.0 wrapper entry is recorded from that run's published SHA256SUMS.";
+    }
 }
