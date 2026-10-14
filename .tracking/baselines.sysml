@@ -208,7 +208,7 @@ package ProjectBaselines {
         :>> title = "v0.6.0 - keel-parser reads a named dependency, QualifiedName endpoints and a RelationshipBody on satisfy, allocate and dependency; keel land refuses a flag before the push; the rust 1.99 clippy repairs";
         :>> createdAt = "2026-10-13";
         :>> createdBy = "claudeFable5";
-        :>> commit = "294e975e";  // the merge of pull request 101 (the content); corrected to the tagged commit once the tag exists, as release053 was
+        :>> commit = "ba93a58d";  // the merge commit the tag v0.6.0 points at  // the merge of pull request 101 (the content); corrected to the tagged commit once the tag exists, as release053 was
         :>> tag = "v0.6.0";
         :>> purpose = "A downstream emitter writes its edges root-qualified with the source relationship id as the dependency name and an attribute body on allocate and satisfy - all vanilla SysML v2 - and 0.5.3 refused every one of them (GH#72, GH#100), so its 155 MB model could not be validated at all; and keel land --help ran the landing and pushed (GH#73). 0.6.0 reads the three forms (DependencyAnnotation, SatisfyEdge and AllocateEdge gain name/attributes/members - a struct change, hence the minor), refuses any flag on land before the gate or the push, and carries the 69 mechanical repairs for the lints rust 1.99 added under pedantic and nursery, which had kept main red at the clippy step since 2026-10-04. KEEL_API_VERSION stays 2.0.0: no read shape changed.";
     }
@@ -218,7 +218,7 @@ package ProjectBaselines {
         :>> title = "v0.6.1 - a decision on disk with no introduction commit grandfathers the working tree, so a downstream migrate can commit (GH#103)";
         :>> createdAt = "2026-10-13";
         :>> createdBy = "claudeFable5";
-        :>> commit = "cd36878e";  // the content commit on main; the tag goes on the release commit that follows, as release053 and release054
+        :>> commit = "44e68dba";  // the merge commit the tag v0.6.1 points at
         :>> tag = "v0.6.1";
         :>> purpose = "The first downstream tree to take v0.6.0 by keel migrate could not commit it: guard sitting-review-method grandfathers the confirmation-method sitting reviews present at D0510's introduction commit, and in a tree that is taking D0510 right now there is no such commit yet, so the boundary did not resolve and the guard reported every pre-existing sitting review as a violation at the migrate's own pre-commit gate (GH#103). 0.6.1: a decision that is on disk under .engine/decisions with no introduction commit grandfathers what the working tree declares at that moment; None stays for a decision the tree has never seen or a git that cannot answer. One unit test; no other behaviour changes; KEEL_API_VERSION stays 2.0.0. The 0.6.0 wrapper entry is recorded from that run's published SHA256SUMS.";
     }
@@ -228,7 +228,7 @@ package ProjectBaselines {
         :>> title = "v0.6.2 - the decision lookups read .engine/reference/decisions, so a downstream tree resolves D0510's boundary (GH#106)";
         :>> createdAt = "2026-10-13";
         :>> createdBy = "claudeFable5";
-        :>> commit = "ef5a649e";  // the content commit on main; the tag goes on the release commit that follows, as release053 and release054
+        :>> commit = "b80a716f";  // the merge commit the tag v0.6.2 points at
         :>> tag = "v0.6.2";
         :>> purpose = "The first downstream migrate onto 0.6.1 still failed guard sitting-review-method: a downstream tree holds the engine's decisions under .engine/reference/decisions (keel init and migrate place them there), and both decision_intro_commit and the 0.6.1 on-disk fallback read .engine/decisions only, so D0510's boundary never resolved there, before or after the migrate commit (GH#106). 0.6.2: both lookups read .engine/reference/decisions beside .engine/decisions; the GH#103 unit test is extended with the downstream layout. No other behaviour changes; KEEL_API_VERSION stays 2.0.0. The 0.6.1 wrapper entry is recorded from that run's published SHA256SUMS.";
     }
