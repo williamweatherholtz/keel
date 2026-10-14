@@ -222,4 +222,14 @@ package ProjectBaselines {
         :>> tag = "v0.6.1";
         :>> purpose = "The first downstream tree to take v0.6.0 by keel migrate could not commit it: guard sitting-review-method grandfathers the confirmation-method sitting reviews present at D0510's introduction commit, and in a tree that is taking D0510 right now there is no such commit yet, so the boundary did not resolve and the guard reported every pre-existing sitting review as a violation at the migrate's own pre-commit gate (GH#103). 0.6.1: a decision that is on disk under .engine/decisions with no introduction commit grandfathers what the working tree declares at that moment; None stays for a decision the tree has never seen or a git that cannot answer. One unit test; no other behaviour changes; KEEL_API_VERSION stays 2.0.0. The 0.6.0 wrapper entry is recorded from that run's published SHA256SUMS.";
     }
+
+    part release056 : Release {
+        :>> id = "47ac6489-9280-4da1-8594-463c522b8c6d";
+        :>> title = "v0.6.2 - the decision lookups read .engine/reference/decisions, so a downstream tree resolves D0510's boundary (GH#106)";
+        :>> createdAt = "2026-10-13";
+        :>> createdBy = "claudeFable5";
+        :>> commit = "ef5a649e";  // the content commit on main; the tag goes on the release commit that follows, as release053 and release054
+        :>> tag = "v0.6.2";
+        :>> purpose = "The first downstream migrate onto 0.6.1 still failed guard sitting-review-method: a downstream tree holds the engine's decisions under .engine/reference/decisions (keel init and migrate place them there), and both decision_intro_commit and the 0.6.1 on-disk fallback read .engine/decisions only, so D0510's boundary never resolved there, before or after the migrate commit (GH#106). 0.6.2: both lookups read .engine/reference/decisions beside .engine/decisions; the GH#103 unit test is extended with the downstream layout. No other behaviour changes; KEEL_API_VERSION stays 2.0.0. The 0.6.1 wrapper entry is recorded from that run's published SHA256SUMS.";
+    }
 }
